@@ -1,0 +1,8 @@
+config.json
+bin
+
+
+# other stuff
+.vscode
+bin
+obj
