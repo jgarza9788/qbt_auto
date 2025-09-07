@@ -267,7 +267,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
         {
             await process_autoTags(T);
             await process_autoCategories(T);
-            await process_autoCategories(T);
+            await process_autoScripts(T);
         }
 
         /// <summary>

@@ -42,7 +42,14 @@ Project 'qbt_auto' has the following package references
 
 ### RoadMap (features that i'll add soon) 
 * moving files
+* seed management 
+  * Seed - Radio Limit
+    * global
+    * no limit
+    * ratio , total min, inactive min
+  * Seed - Speed Limit 
 * plex support (maybe)
+
 
 ## Build and run
 ```
@@ -72,6 +79,8 @@ dotnet publish ./qbt_auto.csproj -c Release -r linux-x64 --self-contained true /
 * -c -config -configpath
 * -v -verbose
 
+## Run at intervals
+Run at intervals by adding the command to CRON (linux), or Windows Task Scheduler.
 
 ## config.json (example)
 ```json
