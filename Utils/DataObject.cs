@@ -15,6 +15,9 @@
  */
 
 using Json5Core;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Utils
 {
@@ -46,6 +49,28 @@ namespace Utils
             {
                 Console.WriteLine("File not found: " + FilePath);
             }
+        }
+
+        public object? getValue(string key, object? def = null)
+        {
+            if (data.TryGetValue(key, out var value))
+            {
+                return value;
+            }
+
+            return def;
+        }
+
+        public object? getValue(string[] keys, object? def = null)
+        {
+            foreach (string key in keys)
+            {
+                if (data.ContainsKey(key))
+                {
+                    return getValue(key);
+                }
+            }
+            return def;
         }
     }
 

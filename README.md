@@ -72,6 +72,10 @@ dotnet publish ./qbt_auto.csproj -c Release -r linux-x64 --self-contained true /
 ```
 /path/to/qbt_auto -h http://192.168.1.250:8080 -u jgarza9788@gmail.com -p 3832Langley -c config.json
 ```
+```
+# if the connection data is in the config file
+/path/to/qbt_auto -c config.json
+```
 ### inputs
 * -h -host -url
 * -u -user 
@@ -85,6 +89,13 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 ## config.json (example)
 ```json
 {
+  //optional - provide connection data in config
+  "qbt":{
+    "host": "http://###.###.#.###:####",
+    "user": "?????",
+    "pwd":  "*****"
+  },
+
   "autoTags": [
     {
       // Tag torrents smaller than 1 GB

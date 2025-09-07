@@ -15,12 +15,18 @@
  */
 
 
+using System;
+using System.Collections;
+
 using System.Net;
 using System.Text.RegularExpressions;
 using DynamicExpresso;
 using Utils;
 using QBittorrent.Client;
 using Json5Core;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using NLog.LayoutRenderers;
+using Microsoft.VisualBasic;
 
 namespace QbtAuto
 {
@@ -46,6 +52,9 @@ namespace QbtAuto
 
         private static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
 
+        private static Dictionary<string, object> driveData = new Dictionary<string, object>();
+
+        private static IReadOnlyList<TorrentInfo>? torrents;
 
 
         static async Task Main(string[] args)
@@ -75,10 +84,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
                 URL = AP.get(["host", "h", "url"]);
                 USER = AP.get(["user", "u"]);
-                Password = AP.get(["password","p","pwd"]);
-                ConfigPath = AP.get(["config","c","configpath"]);
+                Password = AP.get(["password", "p", "pwd"]);
+                ConfigPath = AP.get(["config", "c", "configpath"]);
 
-                string? v = AP.get(["v", "verbose"],"") ?? "";
+                string? v = AP.get(["v", "verbose"], "") ?? "";
                 if (
                     v.Contains('1', StringComparison.OrdinalIgnoreCase)
                     || v.Contains("TRUE", StringComparison.OrdinalIgnoreCase)
@@ -90,22 +99,32 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     verbose = true;
                 }
 
+                ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
+                DataObject config = new DataObject(ConfigPath);
+                logger.Info("Config loaded.");
+
+                //if these values are on in the args, they can be in the config
+                Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
+                if (qbt_login_data != null)
+                {
+                    URL ??= getData(qbt_login_data, ["host", "h", "url"]) as string;
+                    USER ??= getData(qbt_login_data, ["user", "u"]) as string;
+                    Password ??= getData(qbt_login_data, ["password", "p", "pwd"]) as string;
+                }
+
+                //maybe we'll just ask the user
                 EnsureParametersValid();
 
+                //print data
                 logger.Info($"URL: {URL}");
                 logger.Info($"USER: {USER}");
                 logger.Info($"Password: ******");
                 logger.Info($"ConfigPath: {ConfigPath}");
                 logger.Info($"verbose: {verbose}");
 
-                ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
-
-                DataObject config = new DataObject(ConfigPath);
-                logger.Info("Config loaded.");
-
-                autoTags = GetConfigList(config.data, "autoTags");
-                autoCategories = GetConfigList(config.data, "autoCategories");
-                autoScripts = GetConfigList(config.data, "autoScripts");
+                autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
+                autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
+                autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
 
                 it = new Interpreter()
                     .SetFunction("contains", (string t, string s) => t.Contains(s))
@@ -127,7 +146,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
                 logger.Info($"Connected to qBittorrent.");
 
-                IReadOnlyList<TorrentInfo> torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult() ;
+                torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
+
+                //getting the driveadata
+                driveData = Drives.getDriveData();
 
                 //used for debugging
                 /*
@@ -137,23 +159,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 #region verbose_for_testing
                 if (verbose)
                 {
-                    try
-                    {
-                        Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrents[0]));
-
-                        if (T != null)
-                        {
-                            foreach (var entry in T)
-                            {
-                                logger.Info($"{entry.Key} {entry.Value?.ToString()} {entry.Value?.GetType().ToString()}");
-                            }
-                        }
-
-                    }
-                    catch (Exception Ex)
-                    {
-                        logger.Error(Ex);
-                    }
+                    logKeys(torrents);
                 }
                 #endregion
 
@@ -184,7 +190,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     return process_autoScripts(T);
                 });
                 await Task.WhenAll(asTasks);
-                
+
                 //this will run all at once, however the log looks like 💩
                 /*
                 var task = torrents.Select(torrent =>
@@ -208,16 +214,63 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
         }
 
         /// <summary>
-        /// Helper method to safely get a list from the configuration dictionary.
+        /// this is only used when verbose is true
+        /// </summary>
+        /// <param name="torrents"></param>
+        /// <returns></returns>
+        public static void logKeys(IReadOnlyList<TorrentInfo> torrents)
+        {
+            logger.Info("**Keys from Qbittorrent**");
+            try
+            {
+                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrents[0]));
+
+                if (T != null)
+                {
+                    foreach (var entry in T)
+                    {
+                        logger.Info($"key=<{entry.Key}>\ttype={entry.Value?.GetType().ToString()}\texample={entry.Value?.ToString()}");
+                    }
+                }
+
+            }
+            catch (Exception Ex)
+            {
+                logger.Error(Ex);
+            }
+
+            logger.Info("**Keys from Drives**");
+            try
+            {
+                foreach (var entry in driveData)
+                {
+                    logger.Info($"key=<{entry.Key}>\ttype={entry.Value.GetType()}\texample={entry.Value}");
+                }
+            }
+            catch (Exception Ex)
+            {
+                logger.Error(Ex);
+            }
+        }    
+
+
+        /// <summary>
+        /// gets the data from a Dictionary
         /// </summary>
         /// <param name="dict"></param>
-        /// <param name="key"></param>
-        /// <returns></returns>
-        private static IEnumerable<object> GetConfigList(Dictionary<string, object> dict, string key)
+        /// <param name="def"></param>
+        /// <returns>object?</returns>
+        private static object? getData(Dictionary<string, object> dict, string[] keys, object? def = null)
         {
-            return dict.TryGetValue(key, out var value) && value is IEnumerable<object> list
-                ? list
-                : new List<object>();
+            foreach (string key in keys)
+            {
+                if (dict.TryGetValue(key, out object? value))
+                {
+                    return value;
+                }
+            }
+
+            return def;
         }
 
         /// <summary>
@@ -257,6 +310,38 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
             return criteria;
         }
+        private static string makeCriteria(Dictionary<string, object>[] Dicts, string criteria)
+        {
+            foreach (var Dict in Dicts)
+            {
+                foreach (var entry in Dict)
+                {
+                    try
+                    {
+                        string value = "";
+
+                        if (entry.Value is System.Collections.IList)
+                        {
+                            var enumerable = (entry.Value as System.Collections.IList)?.Cast<object>() ?? new List<object>();
+                            value = string.Join(",", enumerable);
+                        }
+                        else
+                        {
+                            value = entry.Value?.ToString() ?? "";
+                        }
+
+                        criteria = criteria.Replace($"<{entry.Key}>", value);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"**error** {entry.Key} {entry.Value?.ToString()} {criteria}");
+                        logger.Error(ex);
+                    }
+
+                }
+            }
+            return criteria;
+        }
 
         /// <summary>
         /// runs all the processes 
@@ -284,7 +369,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
                 {
                     string tag = tagDict["tag"].ToString() ?? "";
-                    string criteria = makeCriteria(T, tagDict["criteria"].ToString() ?? "");
+                    string criteria = makeCriteria(new[] { T, driveData }, tagDict["criteria"].ToString() ?? "");
 
                     string currentTags = T["Tags"] is IEnumerable<object> ctlist
                         ? string.Join(",", ctlist)
