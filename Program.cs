@@ -626,15 +626,6 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
                     logger.Info(logString);
 
-                    try
-                    {
-                        Directory.CreateDirectory(path);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, logString);
-                        continue;
-                    }
 
                     bool shouldMove = false;
                     try
@@ -647,21 +638,27 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         continue;
                     }
 
-                    try
+                    if (!Directory.Exists(path))
                     {
-                        if (shouldMove)
-                        {
-                            await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
-                            await qbt.SetLocationAsync(T["Hash"].ToString(), path);
-
-                            logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.Error(ex, logString);
+                        logger.Warn($"path does not exists,\n{logString}");
                         continue;
                     }
+
+                    try
+                        {
+                            if (shouldMove)
+                            {
+                                await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
+                                await qbt.SetLocationAsync(T["Hash"].ToString(), path);
+
+                                logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.Error(ex, logString);
+                            continue;
+                        }
 
 
 
