@@ -171,6 +171,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 #endregion
 
                 // Run process_autoTags for all torrents in parallel
+                
                 var atTasks = torrents.Select(torrent =>
                 {
                     Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
@@ -197,7 +198,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     return process_autoScripts(T);
                 });
                 await Task.WhenAll(asTasks);
-
+                
                 var amTasks = torrents.Select(torrent =>
                 {
                     Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
@@ -452,7 +453,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
                     string currentCategory = T["Category"]?.ToString() ?? "";
 
-                    var Progress = T["Progress"];
+                    double Progress = Convert.ToDouble(T["Progress"]);
                     string SavePath = T["SavePath"]?.ToString() ?? "";
                     char sep = SavePath.Contains('\\') ? '\\' : '/';
 
@@ -466,7 +467,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         ? category
                         : $"{parentDir}{sep}{category}";
 
-                    string logString = !verbose ? $"{T["Name"]} {category}" : $"Name:{T["Name"]}\nHash{T["Hash"]?.ToString()}\ncategory:{category}\ncriteria{criteria}";
+                    string logString = !verbose ? $"{T["Name"]} {category}" : $"Name:{T["Name"]}\nHash:{T["Hash"]?.ToString()}\ncategory:{category}\ncriteria{criteria}";
 
                     bool shouldHaveCategory = false;
                     try
@@ -492,7 +493,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
 
                                 //if it's done downloading, we will move the location
-                                if (Progress.Equals(1m))
+                                if (Progress.Equals(1.0))
                                 {
                                     await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
                                     await qbt.SetLocationAsync(T["Hash"].ToString(), newLocation);
@@ -607,26 +608,23 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
         {
             foreach (var autoMove in autoMoves)
             {
-                if (autoMove is IDictionary<string, object> movDict && movDict.ContainsKey("criteria"))
+                if (autoMove is IDictionary<string, object> movDict)
                 {
-                    var Progress = T["Progress"];
-                    if (!Progress.Equals(1m))
+                    double Progress = Convert.ToDouble(T["Progress"]);
+                    if (Progress < 1.0)
                     {
+                        logger.Info($"{T["Name"]} {Progress} - not complete yet");
                         continue;
                     }
 
-                    string path = makeCriteria(
-                        new[] { T, driveData },
-                        movDict["path"].ToString()
-                            ?? movDict["newpath"].ToString()
-                            ?? ""
-                            );
+                    string path = makeCriteria(new[] { T, driveData }, movDict["path"].ToString() ?? "");
                     string criteria = makeCriteria(new[] { T, driveData }, movDict["criteria"].ToString() ?? "");
 
                     char sep = path.Contains('\\') ? '\\' : '/';
 
                     // todo
-                    string logString = "";
+                    string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
+                    logger.Info(logString);
 
                     try
                     {
@@ -634,7 +632,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex);
+                        logger.Error(ex, logString);
                         continue;
                     }
 
@@ -645,7 +643,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex);
+                        logger.Error(ex, logString);
                         continue;
                     }
 
@@ -656,16 +654,16 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                             await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
                             await qbt.SetLocationAsync(T["Hash"].ToString(), path);
 
-                            logger.Info($"MovedTorrent :: {T["Name"]} => {path}");
+                            logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
                         }
                     }
                     catch (Exception ex)
-                    { 
+                    {
                         logger.Error(ex, logString);
                         continue;
                     }
 
-                    
+
 
                 }
             }
