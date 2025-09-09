@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ============================================================================
  *  Project:      qbt_auto
  *  File:         Program.cs
@@ -27,6 +27,7 @@ using Json5Core;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NLog.LayoutRenderers;
 using Microsoft.VisualBasic;
+using NLog;
 
 namespace QbtAuto
 {
@@ -43,8 +44,8 @@ namespace QbtAuto
 
         private static IEnumerable<object> autoTags = new List<object>();
         private static IEnumerable<object> autoCategories = new List<object>();
-
         private static IEnumerable<object> autoScripts = new List<object>();
+        private static IEnumerable<object> autoMoves = new List<object>();
 
         private static Interpreter it = new Interpreter();
 
@@ -103,8 +104,13 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 DataObject config = new DataObject(ConfigPath);
                 logger.Info("Config loaded.");
 
+                // if (verbose)
+                // {
+                //     logger.Info(config.ToString());
+                // }
+
                 //if these values are on in the args, they can be in the config
-                Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
+                    Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
                 if (qbt_login_data != null)
                 {
                     URL ??= getData(qbt_login_data, ["host", "h", "url"]) as string;
@@ -125,6 +131,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
                 autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
                 autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
+                autoMoves = config.getValue("autoMoves") as IEnumerable<object> ?? new List<object>();
 
                 it = new Interpreter()
                     .SetFunction("contains", (string t, string s) => t.Contains(s))
@@ -190,6 +197,15 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     return process_autoScripts(T);
                 });
                 await Task.WhenAll(asTasks);
+
+                var amTasks = torrents.Select(torrent =>
+                {
+                    Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
+                    if (T == null) return Task.CompletedTask;
+
+                    return process_autoMoves(T);
+                });
+                await Task.WhenAll(amTasks);
 
                 //this will run all at once, however the log looks like 💩
                 /*
@@ -386,6 +402,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     catch (Exception ex)
                     {
                         logger.Error(ex, logString);
+                        continue;
                     }
 
                     try
@@ -411,6 +428,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     catch (Exception ex)
                     {
                         logger.Error(ex, logString);
+                        continue;
                     }
                 }
             }
@@ -430,7 +448,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (autoCategory is IDictionary<string, object> catDict && catDict.ContainsKey("category"))
                 {
                     string category = catDict["category"].ToString() ?? "";
-                    string criteria = makeCriteria(T, catDict["criteria"].ToString() ?? "");
+                    string criteria = makeCriteria(new[] { T, driveData }, catDict["criteria"].ToString() ?? "");
 
                     string currentCategory = T["Category"]?.ToString() ?? "";
 
@@ -458,6 +476,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     catch (Exception ex)
                     {
                         logger.Error(ex, logString);
+                        continue;
                     }
 
                     string hash = T["Hash"]?.ToString() ?? "";
@@ -491,6 +510,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     catch (Exception ex)
                     {
                         logger.Error(ex, logString);
+                        continue;
                     }
                 }
             }
@@ -506,18 +526,17 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
             foreach (var autoScript in autoScripts)
             {
-                // Assuming autoCategory is a Dictionary<string, object>
                 if (autoScript is IDictionary<string, object> scrDict && scrDict.ContainsKey("script"))
                 {
                     
                     string name = scrDict["name"].ToString() ?? "";
-                    string criteria = makeCriteria(T, scrDict["criteria"].ToString() ?? "");
+                    string criteria = makeCriteria(new[] { T, driveData }, scrDict["criteria"].ToString() ?? "");
 
-                    string directory = makeCriteria(T, scrDict["directory"].ToString() ?? "");
+                    string directory = makeCriteria(new[] { T, driveData }, scrDict["directory"].ToString() ?? "");
                     char sep = directory.Contains('\\') ? '\\' : '/';
                     directory = directory + sep;
 
-                    string shebang = makeCriteria(T, scrDict["shebang"].ToString() ?? "");
+                    string shebang = makeCriteria(new[] { T, driveData }, scrDict["shebang"].ToString() ?? "");
                     if (shebang == "" && OperatingSystem.IsWindows())
                     {
                         shebang = "cmd.exe";
@@ -527,7 +546,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         shebang = "/bin/bang";
                     }
 
-                    string script = makeCriteria(T, scrDict["script"].ToString() ?? "");
+                    string script = makeCriteria(new[] { T, driveData }, scrDict["script"].ToString() ?? "");
                     long timeout = (long)scrDict["timeout"];
 
                     string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
@@ -567,8 +586,8 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                             }
                             else
                             {
-                                
-                                var r = await Utils.Cmd.SheBangCmdAsync(shebang,script, directory, (int)timeout);
+
+                                var r = await Utils.Cmd.SheBangCmdAsync(shebang, script, directory, (int)timeout);
                                 logger.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
 
                                 await File.WriteAllTextAsync($"{directory}{sep}{name}", "");
@@ -578,7 +597,76 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     catch (Exception ex)
                     {
                         logger.Error(ex, logString);
+                        continue;
                     }
+                }
+            }
+        }
+
+        private static async Task process_autoMoves(Dictionary<string, object> T)
+        {
+            foreach (var autoMove in autoMoves)
+            {
+                if (autoMove is IDictionary<string, object> movDict && movDict.ContainsKey("criteria"))
+                {
+                    var Progress = T["Progress"];
+                    if (!Progress.Equals(1m))
+                    {
+                        continue;
+                    }
+
+                    string path = makeCriteria(
+                        new[] { T, driveData },
+                        movDict["path"].ToString()
+                            ?? movDict["newpath"].ToString()
+                            ?? ""
+                            );
+                    string criteria = makeCriteria(new[] { T, driveData }, movDict["criteria"].ToString() ?? "");
+
+                    char sep = path.Contains('\\') ? '\\' : '/';
+
+                    // todo
+                    string logString = "";
+
+                    try
+                    {
+                        Directory.CreateDirectory(path);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex);
+                        continue;
+                    }
+
+                    bool shouldMove = false;
+                    try
+                    {
+                        shouldMove = it.Eval<bool>(criteria);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex);
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (shouldMove)
+                        {
+                            await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
+                            await qbt.SetLocationAsync(T["Hash"].ToString(), path);
+
+                            logger.Info($"MovedTorrent :: {T["Name"]} => {path}");
+                        }
+                    }
+                    catch (Exception ex)
+                    { 
+                        logger.Error(ex, logString);
+                        continue;
+                    }
+
+                    
+
                 }
             }
         }

@@ -51,6 +51,18 @@ namespace Utils
             }
         }
 
+        public override string ToString()
+        {
+            string s = "";
+
+            foreach (var entry in data)
+            {
+                s += $"{entry.Key} | {entry.Value}\n";
+            }
+
+            return s;
+        }
+
         public object? getValue(string key, object? def = null)
         {
             if (data.TryGetValue(key, out var value))
