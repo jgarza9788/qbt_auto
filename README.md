@@ -39,9 +39,9 @@ Project 'qbt_auto' has the following package references
 * tags
 * category 
 * running Scripts (cmd, bash, pwsh, etc )
+* moving files
 
 ### RoadMap (features that i'll add soon) 
-* moving files
 * seed management 
   * Seed - Radio Limit
     * global
@@ -72,6 +72,10 @@ dotnet publish ./qbt_auto.csproj -c Release -r linux-x64 --self-contained true /
 ```
 /path/to/qbt_auto -h http://192.168.1.250:8080 -u jgarza9788@gmail.com -p 3832Langley -c config.json
 ```
+```
+# if the connection data is in the config file
+/path/to/qbt_auto -c config.json
+```
 ### inputs
 * -h -host -url
 * -u -user 
@@ -85,6 +89,13 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 ## config.json (example)
 ```json
 {
+  //optional - provide connection data in config
+  "qbt":{
+    "host": "http://###.###.#.###:####",
+    "user": "?????",
+    "pwd":  "*****"
+  },
+
   "autoTags": [
     {
       // Tag torrents smaller than 1 GB
@@ -153,21 +164,32 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 
   "autoScripts":[
     {
-        "name": "unzip.done",
-        "criteria": "(\"<Progress>\" == \"1\") && ((\"Movies\" == \"<Category>\") || (\"Shows\" == \"<Category>\")) && match(\"<ContentPath>\",\"(Shows|Movies)\")",
-        "directory": "<ContentPath>",
-        //shebang should be ...
-        /*
-        /bin/bash (for linux)
-        /usr/bin/bash (for the user's custom's bash)
-        cmd.exe (for windows)
-        pwsh (if you use powershell)
-        ...or a custom
-        */
-        "shebang": "/bin/bash", 
-        "script": "unrar x -o- *.rar",
-        "timeout": 3000 //sec => 5hours
+      //a blank file named unzip.done will be placed to mark this is script was ran.
+      "name": "unzip.done",
+      "criteria": "(\"<Progress>\" == \"1\") && ((\"Movies\" == \"<Category>\") || (\"Shows\" == \"<Category>\")) && match(\"<ContentPath>\",\"(Shows|Movies)\")",
+      "directory": "<ContentPath>",
+      //shebang should be ...
+      /*
+      /bin/bash (for linux)
+      /usr/bin/bash (for the user's custom's bash)
+      cmd.exe (for windows)
+      pwsh (if you use powershell)
+      ...or a custom
+      */
+      "shebang": "/bin/bash", 
+      "script": "unrar x -o- *.rar", //this would require unrar to be installed
+      "timeout": 3000 //sec => 5hours
     },
-  ]
+  ],
+
+  //these will move a torrent if the criteria is met
+  "autoMoves":[
+    {
+      //<Category> will be replaced with the category from that torrent
+      "path": "/media/jgarza/H00/Torrents/<Category>",
+      // drive is less than 0.9 (90% full), active time is over 14 days, it's last active time is over 3 days ago, it was completed over 14, the category is Shows or Movies, and it's save path has S00 in it.
+      "criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
+    },
+    ]
 }
 ```
