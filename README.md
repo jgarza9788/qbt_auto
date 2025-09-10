@@ -12,10 +12,34 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
       \__|
 ```
 
-qbt_auto
+# qbt_auto
+
+![Release](https://img.shields.io/github/v/release/jgarza9788/qbt_auto?include_prereleases&label=latest)
+![License](https://img.shields.io/badge/license-FSL-blue)
+
+![Downloads](https://img.shields.io/github/downloads/jgarza9788/qbt_auto/total?label=downloads)
+![Last Commit](https://img.shields.io/github/last-commit/jgarza9788/qbt_auto)
+![Build](https://img.shields.io/github/actions/workflow/status/jgarza9788/qbt_auto/ci.yml?label=build)
+![Tests](https://github.com/jgarza9788/qbt_auto/actions/workflows/tests.yml/badge.svg)
+
+
+![C#](https://img.shields.io/badge/language-C%23-178600?logo=csharp)
+![.NET](https://img.shields.io/badge/.NET-9.0-blue?logo=dotnet)
+![qBittorrent](https://img.shields.io/badge/qBittorrent-automation-3D9AE8?logo=qbittorrent&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-white)
+
+![Stars](https://img.shields.io/github/stars/jgarza9788/qbt_auto?style=social)
+![Forks](https://img.shields.io/github/forks/jgarza9788/qbt_auto?style=social)
+![Contributors](https://img.shields.io/github/contributors/jgarza9788/qbt_auto)
+![Open Issues](https://img.shields.io/github/issues/jgarza9788/qbt_auto)
+
+
 ---
+
 This is a qBittorrent automation tool.
 It connects to a qBittorrent instance, loads a config file (config.json by default), and then automatically applies tags and categories to torrents based on rules you define in that config.
+
+
 
 ## Requirements
 
