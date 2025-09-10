@@ -14,25 +14,26 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
 # qbt_auto
 
-![Release](https://img.shields.io/github/v/release/jgarza9788/qbt_auto?include_prereleases&label=latest)
-![License](https://img.shields.io/badge/license-FSL-blue)
+![Release](https://img.shields.io/github/v/release/jgarza9788/qbt_auto?include_prereleases&label=latest&color=028ffa)
+![License](https://img.shields.io/badge/license-FSL-028ffa)
 
-![Downloads](https://img.shields.io/github/downloads/jgarza9788/qbt_auto/total?label=downloads)
-![Last Commit](https://img.shields.io/github/last-commit/jgarza9788/qbt_auto)
-![Build](https://img.shields.io/github/actions/workflow/status/jgarza9788/qbt_auto/ci.yml?label=build)
-![Tests](https://github.com/jgarza9788/qbt_auto/actions/workflows/tests.yml/badge.svg)
+![Downloads](https://img.shields.io/github/downloads/jgarza9788/qbt_auto/total?label=downloads&color=028ffa)
+![Last Commit](https://img.shields.io/github/last-commit/jgarza9788/qbt_auto?color=028ffa)
 
+<!--
+![Build](https://img.shields.io/github/actions/workflow/status/jgarza9788/qbt_auto/build.yml?label=build&color=028ffa)
+![Tests](https://img.shields.io/github/actions/workflow/status/jgarza9788/qbt_auto/tests.yml?label=tests&color=028ffa)
+-->
 
-![C#](https://img.shields.io/badge/language-C%23-178600?logo=csharp)
-![.NET](https://img.shields.io/badge/.NET-9.0-blue?logo=dotnet)
-![qBittorrent](https://img.shields.io/badge/qBittorrent-automation-3D9AE8?logo=qbittorrent&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-white)
+![C#](https://img.shields.io/badge/language-C%23-028ffa?logo=csharp)
+![.NET](https://img.shields.io/badge/.NET-9.0-028ffa?logo=dotnet)
+![qBittorrent](https://img.shields.io/badge/qBittorrent-automation-028ffa?logo=qbittorrent&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20Windows-028ffa)
 
-![Stars](https://img.shields.io/github/stars/jgarza9788/qbt_auto?style=social)
-![Forks](https://img.shields.io/github/forks/jgarza9788/qbt_auto?style=social)
-![Contributors](https://img.shields.io/github/contributors/jgarza9788/qbt_auto)
-![Open Issues](https://img.shields.io/github/issues/jgarza9788/qbt_auto)
-
+![Stars](https://img.shields.io/github/stars/jgarza9788/qbt_auto?style=social&color=028ffa)
+![Forks](https://img.shields.io/github/forks/jgarza9788/qbt_auto?style=social&color=028ffa)
+![Contributors](https://img.shields.io/github/contributors/jgarza9788/qbt_auto?color=028ffa)
+![Open Issues](https://img.shields.io/github/issues/jgarza9788/qbt_auto?color=028ffa)
 
 ---
 
@@ -43,7 +44,7 @@ It connects to a qBittorrent instance, loads a config file (config.json by defau
 
 ## Requirements
 
-* Server running qbttorrent, and access to it.
+* Server running qbittorrent, and access to it.
 
 ## Software Packages
 ```
@@ -74,23 +75,6 @@ Project 'qbt_auto' has the following package references
   * Seed - Speed Limit 
 * plex support (maybe)
 
-
-## Build and run
-```
-dotnet build "http://###.###.#.###:####" "UserName" "Password" "config.json"
-```
-
-## Build for Windows 🪟
-```
-dotnet publish ./qbt_auto.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./bin/win
-
-```
-
-## Build for Linux 🐧
-```
-dotnet publish ./qbt_auto.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ./bin/linux
-
-```
 
 ## Run 
 ```
@@ -216,4 +200,22 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
     },
     ]
 }
+```
+
+
+## Build and run
+```
+dotnet build "http://###.###.#.###:####" "UserName" "Password" "config.json"
+```
+
+## Build for Windows 🪟
+```
+dotnet publish ./qbt_auto.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o ./bin/win
+
+```
+
+## Build for Linux 🐧
+```
+dotnet publish ./qbt_auto.csproj -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true -o ./bin/linux
+
 ```
