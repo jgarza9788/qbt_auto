@@ -78,18 +78,19 @@ Project 'qbt_auto' has the following package references
 
 ## Run 
 ```
-/path/to/qbt_auto -h http://192.168.1.250:8080 -u jgarza9788@gmail.com -p 3832Langley -c config.json
+/path/to/qbt_auto -url http://192.168.1.250:8080 -u jgarza9788@gmail.com -p 3832Langley -c config.json
 ```
 ```
 # if the connection data is in the config file
 /path/to/qbt_auto -c config.json
 ```
 ### inputs
-* -h -host -url
+* -host -url -H (H upper case to not confuse with help)
 * -u -user 
 * -p -password -pwd
 * -c -config -configpath
 * -v -verbose
+* -h -help or -?
 
 ## Run at intervals
 Run at intervals by adding the command to CRON (linux), or Windows Task Scheduler.

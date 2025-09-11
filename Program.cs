@@ -80,10 +80,20 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
             try
             {
-
                 var AP = new ArgParser(args);
 
-                URL = AP.get(["host", "h", "url"]);
+                // for debugging
+                // logger.Info("args:");
+                // logger.Info(AP.getString());
+
+                if (AP.has(["help", "?", "h"]))
+                {
+                    logger.Info("qbt_auto | This is a qBittorrent automation tool");
+                    logger.Info("https://github.com/jgarza9788/qbt_auto/blob/master/README.md");
+                    return;
+                }
+
+                URL = AP.get(["host","H", "url"]);
                 USER = AP.get(["user", "u"]);
                 Password = AP.get(["password", "p", "pwd"]);
                 ConfigPath = AP.get(["config", "c", "configpath"]);
@@ -290,76 +300,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
             return def;
         }
 
-        /// <summary>
-        /// Replaces placeholders in the criteria string with actual values from the dictionary.
-        /// </summary>
-        /// <param name="Dict"></param>
-        /// <param name="criteria"></param>
-        /// <returns></returns>
-        private static string makeCriteria(Dictionary<string, object> Dict, string criteria)
-        {
-
-            foreach (var entry in Dict)
-            {
-                try
-                {
-                    string value = "";
-
-                    if (entry.Value is System.Collections.IList)
-                    {
-                        var enumerable = (entry.Value as System.Collections.IList)?.Cast<object>() ?? new List<object>();
-                        value = string.Join(",", enumerable);
-                    }
-                    else
-                    {
-                        value = entry.Value?.ToString() ?? "";
-                    }
-
-                    criteria = criteria.Replace($"<{entry.Key}>", value);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"**error** {entry.Key} {entry.Value?.ToString()} {criteria}");
-                    logger.Error(ex);
-                }
-
-            }
-
-            return criteria;
-        }
-        private static string makeCriteria(Dictionary<string, object>[] Dicts, string criteria)
-        {
-            foreach (var Dict in Dicts)
-            {
-                foreach (var entry in Dict)
-                {
-                    try
-                    {
-                        string value = "";
-
-                        if (entry.Value is System.Collections.IList)
-                        {
-                            var enumerable = (entry.Value as System.Collections.IList)?.Cast<object>() ?? new List<object>();
-                            value = string.Join(",", enumerable);
-                        }
-                        else
-                        {
-                            value = entry.Value?.ToString() ?? "";
-                        }
-
-                        criteria = criteria.Replace($"<{entry.Key}>", value);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"**error** {entry.Key} {entry.Value?.ToString()} {criteria}");
-                        logger.Error(ex);
-                    }
-
-                }
-            }
-            return criteria;
-        }
-
+        #region processing_methods
         /// <summary>
         /// runs all the processes 
         /// </summary>
@@ -370,6 +311,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
             await process_autoTags(T);
             await process_autoCategories(T);
             await process_autoScripts(T);
+            await process_autoMoves(T);
         }
 
         /// <summary>
@@ -386,7 +328,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
                 {
                     string tag = tagDict["tag"].ToString() ?? "";
-                    string criteria = makeCriteria(new[] { T, driveData }, tagDict["criteria"].ToString() ?? "");
+                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData });
 
                     string currentTags = T["Tags"] is IEnumerable<object> ctlist
                         ? string.Join(",", ctlist)
@@ -449,7 +391,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (autoCategory is IDictionary<string, object> catDict && catDict.ContainsKey("category"))
                 {
                     string category = catDict["category"].ToString() ?? "";
-                    string criteria = makeCriteria(new[] { T, driveData }, catDict["criteria"].ToString() ?? "");
+                    string criteria = Misc.Replacer(catDict["criteria"].ToString() ?? "", new[] { T, driveData } );
 
                     string currentCategory = T["Category"]?.ToString() ?? "";
 
@@ -531,13 +473,13 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 {
                     
                     string name = scrDict["name"].ToString() ?? "";
-                    string criteria = makeCriteria(new[] { T, driveData }, scrDict["criteria"].ToString() ?? "");
+                    string criteria = Misc.Replacer(scrDict["criteria"].ToString() ?? "", new[] { T, driveData });
 
-                    string directory = makeCriteria(new[] { T, driveData }, scrDict["directory"].ToString() ?? "");
+                    string directory = Misc.Replacer(scrDict["directory"].ToString() ?? "", new[] { T, driveData });
                     char sep = directory.Contains('\\') ? '\\' : '/';
                     directory = directory + sep;
 
-                    string shebang = makeCriteria(new[] { T, driveData }, scrDict["shebang"].ToString() ?? "");
+                    string shebang = Misc.Replacer(scrDict["shebang"].ToString() ?? "",new[] { T, driveData });
                     if (shebang == "" && OperatingSystem.IsWindows())
                     {
                         shebang = "cmd.exe";
@@ -547,7 +489,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         shebang = "/bin/bang";
                     }
 
-                    string script = makeCriteria(new[] { T, driveData }, scrDict["script"].ToString() ?? "");
+                    string script = Misc.Replacer(scrDict["script"].ToString() ?? "", new[] { T, driveData });
                     long timeout = (long)scrDict["timeout"];
 
                     string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
@@ -617,15 +559,13 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         continue;
                     }
 
-                    string path = makeCriteria(new[] { T, driveData }, movDict["path"].ToString() ?? "");
-                    string criteria = makeCriteria(new[] { T, driveData }, movDict["criteria"].ToString() ?? "");
+                    string path = Misc.Replacer(movDict["path"].ToString() ?? "", new[] { T, driveData });
+                    string criteria = Misc.Replacer(movDict["criteria"].ToString() ?? "", new[] { T, driveData });
 
                     char sep = path.Contains('\\') ? '\\' : '/';
 
                     // todo
                     string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
-                    logger.Info(logString);
-
 
                     bool shouldMove = false;
                     try
@@ -645,26 +585,26 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     }
 
                     try
+                    {
+                        if (shouldMove)
                         {
-                            if (shouldMove)
-                            {
-                                await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
-                                await qbt.SetLocationAsync(T["Hash"].ToString(), path);
+                            await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
+                            await qbt.SetLocationAsync(T["Hash"].ToString(), path);
 
-                                logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
-                            }
+                            logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
                         }
-                        catch (Exception ex)
-                        {
-                            logger.Error(ex, logString);
-                            continue;
-                        }
-
-
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, logString);
+                        continue;
+                    }
 
                 }
             }
         }
+
+        #endregion
 
         /// <summary>
         /// EnsureParametersValid
