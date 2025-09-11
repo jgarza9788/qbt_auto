@@ -199,6 +199,20 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       // drive is less than 0.9 (90% full), active time is over 14 days, it's last active time is over 3 days ago, it was completed over 14, the category is Shows or Movies, and it's save path has S00 in it.
       "criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
     },
+    ],
+
+    //addjust rates/speed for uploading and downloading
+    "autoSpeeds":[
+        {
+            /*
+            value in KB (kilobytes)
+            0 is unlimited
+            -1 is null or skip 
+            */
+            "uploadSpeed": 0,
+            "downloadSpeed": 0,
+            "criteria": "match(\"<Category>\",\"(Shows|Movies)\")",
+        }
     ]
 }
 ```
