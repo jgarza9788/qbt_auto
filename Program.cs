@@ -46,6 +46,7 @@ namespace QbtAuto
         private static IEnumerable<object> autoCategories = new List<object>();
         private static IEnumerable<object> autoScripts = new List<object>();
         private static IEnumerable<object> autoMoves = new List<object>();
+        private static IEnumerable<object> autoSpeeds = new List<object>();
 
         private static Interpreter it = new Interpreter();
 
@@ -142,6 +143,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
                 autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
                 autoMoves = config.getValue("autoMoves") as IEnumerable<object> ?? new List<object>();
+                autoSpeeds = config.getValue("autoSpeeds") as IEnumerable<object> ?? new List<object>();
 
                 it = new Interpreter()
                     .SetFunction("contains", (string t, string s) => t.Contains(s))
@@ -217,6 +219,15 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     return process_autoMoves(T);
                 });
                 await Task.WhenAll(amTasks);
+
+                var spdTasks = torrents.Select(torrent =>
+                {
+                    Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
+                    if (T == null) return Task.CompletedTask;
+
+                    return process_autoSpeeds(T);
+                });
+                await Task.WhenAll(spdTasks);
 
                 //this will run all at once, however the log looks like 💩
                 /*
@@ -592,6 +603,58 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                             await qbt.SetLocationAsync(T["Hash"].ToString(), path);
 
                             logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, logString);
+                        continue;
+                    }
+
+                }
+            }
+        }
+
+
+        private static async Task process_autoSpeeds(Dictionary<string, object> T)
+        {
+            foreach (var autoSpeed in autoSpeeds)
+            {
+                if (autoSpeed is IDictionary<string, object> spdDict)
+                {
+
+                    long uploadSpeed = Int64.Parse(spdDict["uploadSpeed"].ToString() ?? "-1") * 1024;
+                    long downloadSpeed = Int64.Parse(spdDict["uploadSpeed"].ToString() ?? "-1") * 1024;
+                    string criteria = Misc.Replacer(spdDict["criteria"].ToString() ?? "", new[] { T, driveData });
+
+                    string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\nuploadSpeed:{uploadSpeed}\ndownloadSpeed:{downloadSpeed}\ncriteria{criteria}";
+
+                    bool shouldChange = false;
+                    try
+                    {
+                        shouldChange = it.Eval<bool>(criteria);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, logString);
+                        continue;
+                    }
+
+                    try
+                    {
+                        if (shouldChange)
+                        {
+                            if (uploadSpeed >= 0)
+                            {
+                                await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), uploadSpeed);
+                                logger.Info($"Set uploadSpeed :: {T["Name"]} => {uploadSpeed} | {logString}");
+                            }
+                            if (downloadSpeed >= 0)
+                            {
+                                await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), downloadSpeed);
+                                logger.Info($"Set downloadSpeed :: {T["Name"]} => {downloadSpeed} | {logString}");
+                            }
+                            
                         }
                     }
                     catch (Exception ex)

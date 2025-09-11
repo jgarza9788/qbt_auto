@@ -71,7 +71,7 @@ namespace Utils
             {
                 String = Replacer(String, Dict);
 
-                logger.Info(String);
+                // logger.Info(String);
             }
             return String;
         }     
