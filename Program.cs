@@ -28,6 +28,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using NLog.LayoutRenderers;
 using Microsoft.VisualBasic;
 using NLog;
+using System.Reflection.PortableExecutable;
 
 namespace QbtAuto
 {
@@ -51,6 +52,9 @@ namespace QbtAuto
         private static Interpreter it = new Interpreter();
 
         private static QBittorrentClient? qbt;
+
+        private static Plex plex = new Plex();
+
 
         private static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
 
@@ -115,18 +119,30 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 DataObject config = new DataObject(ConfigPath);
                 logger.Info("Config loaded.");
 
-                // if (verbose)
-                // {
-                //     logger.Info(config.ToString());
-                // }
-
                 //if these values are on in the args, they can be in the config
-                    Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
+                Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
                 if (qbt_login_data != null)
                 {
                     URL ??= getData(qbt_login_data, ["host", "h", "url"]) as string;
                     USER ??= getData(qbt_login_data, ["user", "u"]) as string;
                     Password ??= getData(qbt_login_data, ["password", "p", "pwd"]) as string;
+                }
+
+                plex = new Plex(loadCacheFile:true);
+                Dictionary<string, object>? plex_login_data = getData(config.data, ["plex","Plex"]) as Dictionary<string, object>;
+                if (plex_login_data != null)
+                {
+                    plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
+                    plex.token = getData(plex_login_data, ["token"]) as string ?? "";
+
+                    try
+                    {
+                        await plex.LoadAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex,"unable to get data from plex, see error");
+                    }
                 }
 
                 //maybe we'll just ask the user
@@ -179,11 +195,13 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (verbose)
                 {
                     logKeys(torrents);
+
+
                 }
                 #endregion
 
                 // Run process_autoTags for all torrents in parallel
-                
+
                 var atTasks = torrents.Select(torrent =>
                 {
                     Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
@@ -267,7 +285,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 {
                     foreach (var entry in T)
                     {
-                        logger.Info($"key=<{entry.Key}>\ttype={entry.Value?.GetType().ToString()}\texample={entry.Value?.ToString()}");
+                        logger.Info($"\tkey=<{entry.Key}>\ttype={entry.Value?.GetType().ToString()}\texample={entry.Value?.ToString()}");
                     }
                 }
 
@@ -282,13 +300,28 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
             {
                 foreach (var entry in driveData)
                 {
-                    logger.Info($"key=<{entry.Key}>\ttype={entry.Value.GetType()}\texample={entry.Value}");
+                    logger.Info($"\tkey=<{entry.Key}>\ttype={entry.Value.GetType()}\texample={entry.Value}");
                 }
             }
             catch (Exception Ex)
             {
                 logger.Error(Ex);
             }
+
+            //plex items 
+            logger.Info("**Keys from Plex**");
+            if (plex.isLoaded)
+            { 
+                var pi = plex.items.First();
+                var plexdata = plex.getData(pi.Key);
+                foreach (var pd in plexdata)
+                {
+                    logger.Info($"\tkey=<{pd.Key}\ttype={pd.Value.GetType()}\texample={pd.Value}");
+                }
+
+            }
+
+                    
         }    
 
 
@@ -338,8 +371,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 // Assuming autoTag is a Dictionary<string, object>
                 if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
                 {
+                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
+
                     string tag = tagDict["tag"].ToString() ?? "";
-                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData });
+                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData ,plexdata });
 
                     string currentTags = T["Tags"] is IEnumerable<object> ctlist
                         ? string.Join(",", ctlist)
@@ -401,8 +436,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 // Assuming autoCategory is a Dictionary<string, object>
                 if (autoCategory is IDictionary<string, object> catDict && catDict.ContainsKey("category"))
                 {
+                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
+
                     string category = catDict["category"].ToString() ?? "";
-                    string criteria = Misc.Replacer(catDict["criteria"].ToString() ?? "", new[] { T, driveData } );
+                    string criteria = Misc.Replacer(catDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata } );
 
                     string currentCategory = T["Category"]?.ToString() ?? "";
 
@@ -482,15 +519,16 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
             {
                 if (autoScript is IDictionary<string, object> scrDict && scrDict.ContainsKey("script"))
                 {
-                    
-                    string name = scrDict["name"].ToString() ?? "";
-                    string criteria = Misc.Replacer(scrDict["criteria"].ToString() ?? "", new[] { T, driveData });
+                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
 
-                    string directory = Misc.Replacer(scrDict["directory"].ToString() ?? "", new[] { T, driveData });
+                    string name = scrDict["name"].ToString() ?? "";
+                    string criteria = Misc.Replacer(scrDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
+
+                    string directory = Misc.Replacer(scrDict["directory"].ToString() ?? "", new[] { T, driveData, plexdata });
                     char sep = directory.Contains('\\') ? '\\' : '/';
                     directory = directory + sep;
 
-                    string shebang = Misc.Replacer(scrDict["shebang"].ToString() ?? "",new[] { T, driveData });
+                    string shebang = Misc.Replacer(scrDict["shebang"].ToString() ?? "",new[] { T, driveData, plexdata });
                     if (shebang == "" && OperatingSystem.IsWindows())
                     {
                         shebang = "cmd.exe";
@@ -500,7 +538,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         shebang = "/bin/bang";
                     }
 
-                    string script = Misc.Replacer(scrDict["script"].ToString() ?? "", new[] { T, driveData });
+                    string script = Misc.Replacer(scrDict["script"].ToString() ?? "", new[] { T, driveData, plexdata });
                     long timeout = (long)scrDict["timeout"];
 
                     string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
@@ -570,8 +608,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         continue;
                     }
 
-                    string path = Misc.Replacer(movDict["path"].ToString() ?? "", new[] { T, driveData });
-                    string criteria = Misc.Replacer(movDict["criteria"].ToString() ?? "", new[] { T, driveData });
+                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
+
+                    string path = Misc.Replacer(movDict["path"].ToString() ?? "", new[] { T, driveData, plexdata });
+                    string criteria = Misc.Replacer(movDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
 
                     char sep = path.Contains('\\') ? '\\' : '/';
 
@@ -623,9 +663,11 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 if (autoSpeed is IDictionary<string, object> spdDict)
                 {
 
+                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
+
                     long uploadSpeed = Int64.Parse(spdDict["uploadSpeed"].ToString() ?? "-1") * 1024;
                     long downloadSpeed = Int64.Parse(spdDict["uploadSpeed"].ToString() ?? "-1") * 1024;
-                    string criteria = Misc.Replacer(spdDict["criteria"].ToString() ?? "", new[] { T, driveData });
+                    string criteria = Misc.Replacer(spdDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
 
                     string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\nuploadSpeed:{uploadSpeed}\ndownloadSpeed:{downloadSpeed}\ncriteria{criteria}";
 

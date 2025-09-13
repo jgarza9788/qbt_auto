@@ -1,3 +1,18 @@
+/*
+ * ============================================================================
+ *  Project:      qbt_auto
+ *  File:         DriveInfo.cs
+ *  Description:  see Readme.md and comments
+ *
+ *  Author:       Justin Garza
+ *  Created:      2025-09-06
+ *
+ *  License:      Usage of this file is governed by the LICENSE file at the
+ *                root of this repository. See the LICENSE file for details.
+ *
+ *  Copyright:    (c) 2025 Justin Garza. All rights reserved.
+ * ============================================================================
+ */
 
 
 using Microsoft.CodeAnalysis.Scripting.Hosting;

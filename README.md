@@ -65,6 +65,7 @@ Project 'qbt_auto' has the following package references
 * category 
 * running Scripts (cmd, bash, pwsh, etc )
 * moving files
+* change upload and download rates - speed
 
 ### RoadMap (features that i'll add soon) 
 * seed management 
@@ -193,12 +194,12 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 
   //these will move a torrent if the criteria is met
   "autoMoves":[
-    {
-      //<Category> will be replaced with the category from that torrent
-      "path": "/media/jgarza/H00/Torrents/<Category>",
-      // drive is less than 0.9 (90% full), active time is over 14 days, it's last active time is over 3 days ago, it was completed over 14, the category is Shows or Movies, and it's save path has S00 in it.
-      "criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
-    },
+      {
+        //<Category> will be replaced with the category from that torrent
+        "path": "/media/jgarza/H00/Torrents/<Category>",
+        // drive is less than 0.9 (90% full), active time is over 14 days, it's last active time is over 3 days ago, it was completed over 14, the category is Shows or Movies, and it's save path has S00 in it.
+        "criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
+      },
     ],
 
     //addjust rates/speed for uploading and downloading
@@ -220,7 +221,7 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 
 ## Build and run
 ```
-dotnet build "http://###.###.#.###:####" "UserName" "Password" "config.json"
+dotnet build
 ```
 
 ## Build for Windows 🪟
