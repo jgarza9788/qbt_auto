@@ -137,7 +137,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
                     try
                     {
-                        await plex.LoadAsync();
+                        await plex.LoadAsync(forceReload:true);
                     }
                     catch (Exception ex)
                     {
@@ -316,7 +316,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 var plexdata = plex.getData(pi.Key);
                 foreach (var pd in plexdata)
                 {
-                    logger.Info($"\tkey=<{pd.Key}\ttype={pd.Value.GetType()}\texample={pd.Value}");
+                    logger.Info($"\tkey=<{pd.Key}>\ttype={pd.Value.GetType()}\texample={pd.Value}");
                 }
 
             }

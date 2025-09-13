@@ -116,7 +116,7 @@ namespace Utils
         public async Task LoadAsync(bool forceReload = false)
         {
             ////debugging
-            //logger.Info($"isLoaded: {isLoaded} forceReload: {forceReload}");
+            // logger.Info($"isLoaded: {isLoaded} forceReload: {forceReload}");
 
             //data was already loaded from the cache file... use forceReload true
             if (isLoaded && forceReload == false)
@@ -207,14 +207,14 @@ namespace Utils
                                 dict["plex_contentRating"] = x.contentRating ?? "";
                                 dict["plex_contentRatingAge"] = x.contentRatingAge ?? "";
                                 dict["plex_summary"] = x.summary ?? "";
-                                dict["plex_rating"] = x.rating ?? "";
-                                dict["plex_audienceRating"] = x.audienceRating ?? "";
-                                dict["plex_userRating"] = x.userRating ?? "";
-                                dict["plex_viewCount"] = x.viewCount ?? "";
+                                dict["plex_rating"] = x.rating ?? "0";
+                                dict["plex_audienceRating"] = x.audienceRating ?? "0";
+                                dict["plex_userRating"] = x.userRating ?? "0";
+                                dict["plex_viewCount"] = x.viewCount ?? "0";
                                 dict["plex_lastViewedAt"] = x.lastViewedAt ?? "";
                                 dict["plex_lastRatedAt"] = x.lastRatedAt ?? "";
-                                dict["plex_year"] = x.year ?? "";
-                                dict["plex_duration"] = x.duration ?? "";
+                                dict["plex_year"] = x.year ?? "0";
+                                dict["plex_duration"] = x.duration ?? "0";
                                 dict["plex_tags"] = x.tags ?? "";
                                 dict["plex_tagList"] = x.tagList;
                                 dict["plex_files"] = x.files ?? "";
@@ -257,14 +257,14 @@ namespace Utils
                                 dict["plex_contentRating"] = x.contentRating ?? "";
                                 dict["plex_contentRatingAge"] = x.contentRatingAge ?? "";
                                 dict["plex_summary"] = x.summary ?? "";
-                                dict["plex_rating"] = x.rating ?? "";
-                                dict["plex_audienceRating"] = x.audienceRating ?? "";
-                                dict["plex_userRating"] = x.userRating ?? "";
-                                dict["plex_viewCount"] = x.viewCount ?? "";
+                                dict["plex_rating"] = x.rating ?? "0";
+                                dict["plex_audienceRating"] = x.audienceRating ?? "0";
+                                dict["plex_userRating"] = x.userRating ?? "0";
+                                dict["plex_viewCount"] = x.viewCount ?? "0";
                                 dict["plex_lastViewedAt"] = x.lastViewedAt ?? "";
                                 dict["plex_lastRatedAt"] = x.lastRatedAt ?? "";
-                                dict["plex_year"] = x.year ?? "";
-                                dict["plex_duration"] = x.duration ?? "";
+                                dict["plex_year"] = x.year ?? "0";
+                                dict["plex_duration"] = x.duration ?? "0";
                                 dict["plex_tags"] = x.tags ?? "";
                                 dict["plex_tagList"] = x.tagList;
                                 dict["plex_files"] = e.file?.ToString() ?? "";
