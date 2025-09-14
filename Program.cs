@@ -128,6 +128,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     Password ??= getData(qbt_login_data, ["password", "p", "pwd"]) as string;
                 }
 
+                //see if plex is avliable
                 plex = new Plex(loadCacheFile:true);
                 Dictionary<string, object>? plex_login_data = getData(config.data, ["plex","Plex"]) as Dictionary<string, object>;
                 if (plex_login_data != null)
@@ -153,8 +154,10 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 logger.Info($"USER: {USER}");
                 logger.Info($"Password: ******");
                 logger.Info($"ConfigPath: {ConfigPath}");
+                logger.Info($"Plex.isLoaded: {plex.isLoaded}");
                 logger.Info($"verbose: {verbose}");
 
+                // Autos
                 autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
                 autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
                 autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
@@ -166,7 +169,6 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                     .SetFunction("match", (string t, string p) => Regex.IsMatch(t, p))
                     .SetFunction("daysAgo", (string iso) => (DateTime.UtcNow - DateTime.Parse(iso)).TotalDays)
                     .SetDefaultNumberType(DefaultNumberType.Double);
-
 
                 var httpHandler = new SocketsHttpHandler
                 {
@@ -181,6 +183,7 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                 qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
                 logger.Info($"Connected to qBittorrent.");
 
+                // gets all the torrent data
                 torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
 
                 //getting the driveadata
@@ -368,13 +371,17 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
 
             foreach (var autoTag in autoTags)
             {
+                string tag = "";
+                var AddTagCount = 0;
+                var DeleteTagCount = 0;
+
                 // Assuming autoTag is a Dictionary<string, object>
                 if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
                 {
                     var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
-                    string tag = tagDict["tag"].ToString() ?? "";
-                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData ,plexdata });
+                    tag = tagDict["tag"].ToString() ?? "";
+                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
 
                     string currentTags = T["Tags"] is IEnumerable<object> ctlist
                         ? string.Join(",", ctlist)
@@ -420,6 +427,8 @@ $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
                         continue;
                     }
                 }
+
+                logger.Info($"{tag} Added:{AddTagCount} Deleted:{DeleteTagCount}");
             }
         }
 

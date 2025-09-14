@@ -46,6 +46,10 @@ namespace Utils
         public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
 
         public string baseUrl = "";
+
+        public string user = "";
+        public string pwd = "";
+
         public string token = "";
 
         public HttpClient http = new HttpClient();
@@ -64,10 +68,13 @@ namespace Utils
         public bool isLoaded = false;
         public double ageInDays = 0.0;
 
-        public Plex(string iBaseUrl, string iToken,bool loadCacheFile = false)
+        public Plex(string iBaseUrl, string iuser,string ipassword,bool loadCacheFile = false)
         {
             baseUrl = iBaseUrl;
-            token = iToken;
+            user = iuser;
+            pwd = ipassword;
+
+            
 
             cacheFile = Path.Combine(basePath, cacheName);
             if (loadCacheFile)
@@ -113,6 +120,33 @@ namespace Utils
         }
 
 
+
+
+        public async Task GetTokenAsync()
+        {
+            // Basic Auth to plex.tv/users/sign_in.json
+            var req = new HttpRequestMessage(HttpMethod.Post, "https://plex.tv/users/sign_in.json");
+            var basic = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{user}:{pwd}"));
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basic);
+
+            // Required X-Plex headers
+            req.Headers.Add("X-Plex-Product", "MyApp");
+            req.Headers.Add("X-Plex-Version", "1.0");
+            req.Headers.Add("X-Plex-Client-Identifier", "your-static-guid-here");
+            req.Headers.Add("X-Plex-Platform", "Windows");
+            req.Headers.Add("X-Plex-Device", "PC");
+
+            // Body can be empty; using form type keeps some proxies happy
+            req.Content = new FormUrlEncodedContent(Array.Empty<KeyValuePair<string, string>>());
+
+            var res = await http.SendAsync(req);
+            res.EnsureSuccessStatusCode();
+            var json = await res.Content.ReadAsStringAsync();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            token = doc.RootElement.GetProperty("user").GetProperty("authToken").GetString() ?? "";
+
+        }
+
         public async Task LoadAsync(bool forceReload = false)
         {
             ////debugging
@@ -121,6 +155,21 @@ namespace Utils
             //data was already loaded from the cache file... use forceReload true
             if (isLoaded && forceReload == false)
             {
+                return;
+            }
+
+            try
+            {
+                await GetTokenAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex,"issue getting token");
+            }
+
+            if (token == "")
+            {
+                isLoaded = false;
                 return;
             }
 
@@ -202,25 +251,25 @@ namespace Utils
                             foreach (var f in x.fileList)
                             {
                                 Dictionary<string, object> dict = new Dictionary<string, object>();
-                                dict["plex_title"] = x.title ?? "";
-                                dict["plex_name"] = x.name ?? "";
-                                dict["plex_contentRating"] = x.contentRating ?? "";
-                                dict["plex_contentRatingAge"] = x.contentRatingAge ?? "";
-                                dict["plex_summary"] = x.summary ?? "";
+                                dict["plex_title"] = x.title ?? "null";
+                                dict["plex_name"] = x.name ?? "null";
+                                dict["plex_contentRating"] = x.contentRating ?? "0";
+                                dict["plex_contentRatingAge"] = x.contentRatingAge ?? "0";
+                                dict["plex_summary"] = x.summary ?? "null";
                                 dict["plex_rating"] = x.rating ?? "0";
                                 dict["plex_audienceRating"] = x.audienceRating ?? "0";
                                 dict["plex_userRating"] = x.userRating ?? "0";
                                 dict["plex_viewCount"] = x.viewCount ?? "0";
-                                dict["plex_lastViewedAt"] = x.lastViewedAt ?? "";
-                                dict["plex_lastRatedAt"] = x.lastRatedAt ?? "";
+                                dict["plex_lastViewedAt"] = x.lastViewedAt ?? "0";
+                                dict["plex_lastRatedAt"] = x.lastRatedAt ?? "0";
                                 dict["plex_year"] = x.year ?? "0";
                                 dict["plex_duration"] = x.duration ?? "0";
                                 dict["plex_tags"] = x.tags ?? "";
                                 dict["plex_tagList"] = x.tagList;
                                 dict["plex_files"] = x.files ?? "";
                                 dict["plex_fileList"] = x.fileList;
-                                dict["plex_ratingKey"] = x.ratingKey ?? "";
-                                dict["plex_type"] = x.type ?? "";
+                                dict["plex_ratingKey"] = x.ratingKey ?? "-1";
+                                dict["plex_type"] = x.type ?? "null";
 
                                 if (f != null)
                                 {
@@ -252,25 +301,25 @@ namespace Utils
                                 }
 
                                 Dictionary<string, object> dict = new Dictionary<string, object>();
-                                dict["plex_title"] = x.title ?? "";
-                                dict["plex_name"] = x.name ?? "";
-                                dict["plex_contentRating"] = x.contentRating ?? "";
-                                dict["plex_contentRatingAge"] = x.contentRatingAge ?? "";
-                                dict["plex_summary"] = x.summary ?? "";
+                                dict["plex_title"] = x.title ?? "null";
+                                dict["plex_name"] = x.name ?? "null";
+                                dict["plex_contentRating"] = x.contentRating ?? "0";
+                                dict["plex_contentRatingAge"] = x.contentRatingAge ?? "0";
+                                dict["plex_summary"] = x.summary ?? "null";
                                 dict["plex_rating"] = x.rating ?? "0";
                                 dict["plex_audienceRating"] = x.audienceRating ?? "0";
                                 dict["plex_userRating"] = x.userRating ?? "0";
                                 dict["plex_viewCount"] = x.viewCount ?? "0";
-                                dict["plex_lastViewedAt"] = x.lastViewedAt ?? "";
-                                dict["plex_lastRatedAt"] = x.lastRatedAt ?? "";
+                                dict["plex_lastViewedAt"] = x.lastViewedAt ?? "0";
+                                dict["plex_lastRatedAt"] = x.lastRatedAt ?? "0";
                                 dict["plex_year"] = x.year ?? "0";
                                 dict["plex_duration"] = x.duration ?? "0";
                                 dict["plex_tags"] = x.tags ?? "";
                                 dict["plex_tagList"] = x.tagList;
                                 dict["plex_files"] = e.file?.ToString() ?? "";
                                 dict["plex_fileList"] = e.file?.ToString() ?? "";
-                                dict["plex_ratingKey"] = x.ratingKey ?? "";
-                                dict["plex_type"] = x.type ?? "";
+                                dict["plex_ratingKey"] = x.ratingKey ?? "-1";
+                                dict["plex_type"] = x.type ?? "null";
 
                                 if (e.file != null)
                                 {

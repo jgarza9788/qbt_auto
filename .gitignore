@@ -1,6 +1,6 @@
 config.json
 bin
-
+plex_cache.json
 
 # other stuff
 .vscode

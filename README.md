@@ -66,6 +66,7 @@ Project 'qbt_auto' has the following package references
 * running Scripts (cmd, bash, pwsh, etc )
 * moving files
 * change upload and download rates - speed
+* plex support 
 
 ### RoadMap (features that i'll add soon) 
 * seed management 
@@ -74,12 +75,11 @@ Project 'qbt_auto' has the following package references
     * no limit
     * ratio , total min, inactive min
   * Seed - Speed Limit 
-* plex support (maybe)
 
 
 ## Run 
 ```
-/path/to/qbt_auto -url http://192.168.1.250:8080 -u jgarza9788@gmail.com -p 3832Langley -c config.json
+/path/to/qbt_auto -url http://###.###.#.###:8080 -u username -p password -c config.json
 ```
 ```
 # if the connection data is in the config file
@@ -104,6 +104,12 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
     "host": "http://###.###.#.###:####",
     "user": "?????",
     "pwd":  "*****"
+  },
+  //plex - optional
+  "plex":{
+      "url": "http://###.###.#.###:32400",
+      "user": "?????",
+      "pwd": "*****"
   },
 
   "autoTags": [
@@ -146,7 +152,13 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       // Tag torrents in category "Movies" that were added at least 1 year ago
       "tag": "old_movie",
       "criteria": "contains(\"<Category>\", \"Movies\") && daysAgo(\"<AddedOn>\") >= 365.0"
-    }
+    },
+    {
+      //no views on plex yet
+      // - this would require the plex login in the config file
+      "tag": "NoViews",
+      "criteria": "(<plex_viewCount> == 0)"
+    },
   ],
 
   "autoCategories": [
