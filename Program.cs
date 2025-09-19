@@ -22,7 +22,7 @@ namespace QbtAuto
 {
     class Program
     {
-        private static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        private static NLog.Logger loggerFC = NLog.LogManager.GetLogger("LoggerFC");
 
         // Entry point of the application
         static async Task Main(string[] args)
@@ -35,7 +35,7 @@ namespace QbtAuto
             }
             catch (Exception ex)
             {
-                logger.Error(ex);
+                loggerFC.Error(ex);
             }
         }
     }

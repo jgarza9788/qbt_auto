@@ -64,7 +64,12 @@ namespace QbtAuto
         public IReadOnlyList<TorrentInfo>? torrents;
 
         //logger 
-        public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        // public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+
+        private static NLog.Logger loggerFC = NLog.LogManager.GetLogger("LoggerFC");
+        private static NLog.Logger loggerF = NLog.LogManager.GetLogger("LoggerF");
+        private static NLog.Logger loggerC = NLog.LogManager.GetLogger("LoggerC");
+
 
         public QbtAuto(string[] args)
         {
@@ -74,12 +79,12 @@ namespace QbtAuto
             var AP = new ArgParser(args);
             if (AP.has(["help", "?", "h"]))
             {
-                logger.Info("qbt_auto | This is a qBittorrent automation tool");
-                logger.Info("https://github.com/jgarza9788/qbt_auto/blob/master/README.md");
+                loggerC.Info("qbt_auto | This is a qBittorrent automation tool");
+                loggerC.Info("https://github.com/jgarza9788/qbt_auto/blob/master/README.md");
                 return;
             }
 
-            URL = AP.get(["host","H", "url"]);
+            URL = AP.get(["host", "H", "url"]);
             USER = AP.get(["user", "u"]);
             Password = AP.get(["password", "p", "pwd"]);
             ConfigPath = AP.get(["config", "c", "configpath"]);
@@ -95,10 +100,10 @@ namespace QbtAuto
             {
                 verbose = true;
             }
-            
+
             ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
             DataObject config = new DataObject(ConfigPath);
-            logger.Info("Config loaded.");
+            loggerFC.Info("Config loaded.");
 
             //if these values are on in the args, they can be in the config
             Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
@@ -110,12 +115,13 @@ namespace QbtAuto
             }
 
             //see if plex is avliable
-            plex = new Plex(loadCacheFile:true);
-            Dictionary<string, object>? plex_login_data = getData(config.data, ["plex","Plex"]) as Dictionary<string, object>;
+            plex = new Plex(loadCacheFile: true);
+            Dictionary<string, object>? plex_login_data = getData(config.data, ["plex", "Plex"]) as Dictionary<string, object>;
             if (plex_login_data != null)
             {
                 plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
-                plex.token = getData(plex_login_data, ["token"]) as string ?? "";
+                plex.user = getData(plex_login_data, ["user","u"]) as string ?? "";
+                plex.pwd = getData(plex_login_data, ["pwd", "password", "p"]) as string ?? "";
 
                 try
                 {
@@ -123,7 +129,8 @@ namespace QbtAuto
                 }
                 catch (Exception ex)
                 {
-                    logger.Error(ex,"unable to get data from plex, see error");
+                    loggerF.Error(ex, "unable to get data from plex, see error");
+                    loggerC.Error("unable to get data from plex, see error");
                 }
             }
 
@@ -131,12 +138,15 @@ namespace QbtAuto
             EnsureParametersValid();
 
             //print data
-            logger.Info($"URL: {URL}");
-            logger.Info($"USER: {USER}");
-            logger.Info($"Password: ******");
-            logger.Info($"ConfigPath: {ConfigPath}");
-            logger.Info($"Plex.isLoaded: {plex.isLoaded}");
-            logger.Info($"verbose: {verbose}");
+            loggerFC.Info($"");
+            loggerFC.Info($"URL: {URL}");
+            loggerFC.Info($"USER: {USER}");
+            loggerFC.Info($"Password: ******");
+            loggerFC.Info($"ConfigPath: {ConfigPath}");
+            loggerFC.Info($"Plex.isLoaded: {plex.isLoaded}");
+            loggerFC.Info($"verbose: {verbose}");
+            loggerFC.Info($"");
+
 
             // Autos
             autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
@@ -162,7 +172,7 @@ namespace QbtAuto
 
             qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
             qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
-            logger.Info($"Connected to qBittorrent.");
+            loggerFC.Info($"Connected to qBittorrent.");
 
             // gets all the torrent data
             torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
@@ -179,72 +189,9 @@ namespace QbtAuto
             if (verbose)
             {
                 logKeys(torrents);
-
-
             }
             #endregion
 
-            // Run process_autoTags for all torrents in parallel
-            /*
-            var atTasks = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_autoTags(T);
-            });
-            await Task.WhenAll(atTasks);
-
-            var acTasks = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_autoCategories(T);
-            });
-            await Task.WhenAll(acTasks);
-
-            var asTasks = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_autoScripts(T);
-            });
-            await Task.WhenAll(asTasks);
-            
-            var amTasks = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_autoMoves(T);
-            });
-            await Task.WhenAll(amTasks);
-
-            var spdTasks = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_autoSpeeds(T);
-            });
-            await Task.WhenAll(spdTasks);
-            */
-
-            //this will run all at once, however the log looks like 💩
-            /*
-            var task = torrents.Select(torrent =>
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
-                if (T == null) return Task.CompletedTask;
-
-                return process_all(T);
-            });
-            await Task.WhenAll(task);
-            */
-
-            
         }
 
         
@@ -266,8 +213,8 @@ namespace QbtAuto
         ");
         
         }
-        
-        
+
+
         /// <summary>
         /// this is only used when verbose is true
         /// </summary>
@@ -275,7 +222,8 @@ namespace QbtAuto
         /// <returns></returns>
         public void logKeys(IReadOnlyList<TorrentInfo> torrents)
         {
-            logger.Info("**Keys from Qbittorrent**");
+            loggerFC.Info(new string('#', 40));
+            loggerFC.Info("**Keys from Qbittorrent**");
             try
             {
                 Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrents[0]));
@@ -284,41 +232,48 @@ namespace QbtAuto
                 {
                     foreach (var entry in T)
                     {
-                        logger.Info($"\tkey=<{entry.Key}>\ttype={entry.Value?.GetType().ToString()}\texample={entry.Value?.ToString()}");
+                        loggerFC.Info($"\tkey=<{entry.Key}>\ttype={entry.Value?.GetType().ToString()}\texample={entry.Value?.ToString()}");
                     }
                 }
 
             }
             catch (Exception Ex)
             {
-                logger.Error(Ex);
+                loggerF.Error(Ex);
+                loggerC.Error("**ERROR** issue loading drive data");
             }
 
-            logger.Info("**Keys from Drives**");
+            loggerFC.Info(new string('#', 20));
+
+            loggerFC.Info("**Keys from Drives**");
             try
             {
                 foreach (var entry in driveData)
                 {
-                    logger.Info($"\tkey=<{entry.Key}>\ttype={entry.Value.GetType()}\texample={entry.Value}");
+                    loggerFC.Info($"\tkey=<{entry.Key}>\ttype={entry.Value.GetType()}\texample={entry.Value}");
                 }
             }
             catch (Exception Ex)
             {
-                logger.Error(Ex);
+                loggerF.Error(Ex);
+                loggerC.Error("**ERROR** issue loading drive data");
             }
 
+            loggerFC.Info(new string('#', 20));
+
             //plex items 
-            logger.Info("**Keys from Plex**");
+            loggerFC.Info("**Keys from Plex**");
             if (plex.isLoaded)
-            { 
+            {
                 var pi = plex.items.First();
                 var plexdata = plex.getData(pi.Key);
                 foreach (var pd in plexdata)
                 {
-                    logger.Info($"\tkey=<{pd.Key}>\ttype={pd.Value.GetType()}\texample={pd.Value}");
+                    loggerFC.Info($"\tkey=<{pd.Key}>\ttype={pd.Value.GetType()}\texample={pd.Value}");
                 }
 
             }
+            loggerFC.Info(new string('#',40));
 
                     
         }    
@@ -351,19 +306,59 @@ namespace QbtAuto
         /// <returns></returns>
         public async Task RunAllAutosAsync()
         {
-            var list = torrents ?? Enumerable.Empty<TorrentInfo>(); 
+            if (torrents == null || torrents.Count == 0)
+            {
+                loggerFC.Info("No torrents to process.");
+                return;
+            }
 
-            var tasks = list
+            loggerFC.Info("Start Processing");
+
+            int total = torrents.Count();
+            int done = 0;
+            object lockObj = new object();
+
+            var tasks = torrents!
                 .Where(t => t != null) 
-                .Select(torrent =>
+                .Select( torrent =>
                 {
                     var T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
+
+                    lock (lockObj)
+                    {
+                        done++;
+                        PrintProgress(done, total);
+                    }
+                    
                     return T == null ? Task.CompletedTask : process_all(T);
+
                 });
 
             await Task.WhenAll(tasks);
 
-            logger.Info("Processing completed.");
+            loggerFC.Info("\nProcessing completed.");
+        }
+
+        private void PrintProgress(int completed, int total)
+        {
+            double percent = (double)completed / total;
+            int barSize = 40; // number of chars in the bar
+            int filled = (int)(percent * barSize);
+
+            string bar = new string('#', filled).PadRight(barSize);
+
+            // loggerC.Info($"\r[{bar}] {percent:P2}");
+            // Console.WriteLine($"\r[{bar}] {percent:P2}");
+
+            try
+            {
+                Console.SetCursorPosition(0, Console.CursorTop);
+                Console.Write($"[{bar}] {percent:P2}   ");
+            }
+            catch
+            {
+                Console.WriteLine($"[{bar}] {percent:P2}");
+            }
         }
 
         public async Task process_all(Dictionary<string, object> T)
@@ -382,19 +377,14 @@ namespace QbtAuto
         /// <returns></returns>
         public async Task process_autoTags(Dictionary<string, object> T)
         {
-
             foreach (var autoTag in autoTags)
             {
-                string tag = "";
-                var AddTagCount = 0;
-                var DeleteTagCount = 0;
-
                 // Assuming autoTag is a Dictionary<string, object>
                 if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
                 {
                     var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
-                    tag = tagDict["tag"].ToString() ?? "";
+                    var tag = tagDict["tag"].ToString() ?? "";
                     string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
 
                     string currentTags = T["Tags"] is IEnumerable<object> ctlist
@@ -411,7 +401,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
@@ -422,7 +412,7 @@ namespace QbtAuto
                             if (!currentTags.Contains(tag))
                             {
                                 await qbt.AddTorrentTagAsync(T["Hash"].ToString(), tag);
-                                logger.Info($"AddTag :: {T["Name"]} + {tag}");
+                                loggerF.Info($"AddTag :: {T["Name"]} + {tag}");
                             }
 
                         }
@@ -431,18 +421,17 @@ namespace QbtAuto
                             if (currentTags.Contains(tag))
                             {
                                 await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), tag);
-                                logger.Info($"DeleteTag :: {T["Name"]} - {tag}");
+                                loggerF.Info($"DeleteTag :: {T["Name"]} - {tag}");
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
                 }
 
-                logger.Info($"{tag} Added:{AddTagCount} Deleted:{DeleteTagCount}");
             }
         }
 
@@ -489,7 +478,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
@@ -502,7 +491,7 @@ namespace QbtAuto
                             if (currentCategory != category)
                             {
                                 await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), category);
-                                logger.Info($"SetCategory :: {T["Name"]} => {category}");
+                                loggerF.Info($"SetCategory :: {T["Name"]} => {category}");
 
 
                                 //if it's done downloading, we will move the location
@@ -511,7 +500,7 @@ namespace QbtAuto
                                     await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
                                     await qbt.SetLocationAsync(T["Hash"].ToString(), newLocation);
 
-                                    logger.Info($"MovedTorrent :: {T["Name"]} => {newLocation}");
+                                    loggerF.Info($"MovedTorrent :: {T["Name"]} => {newLocation}");
                                 }
                             }
 
@@ -523,7 +512,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
                 }
@@ -568,7 +557,7 @@ namespace QbtAuto
 
                     if (!Directory.Exists(directory))
                     {
-                        logger.Warn($"Directory does not exists {logString}");
+                        loggerF.Warn($"Directory does not exists {logString}");
                         continue;
                     }
 
@@ -579,7 +568,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, $"{logString}");
+                        loggerF.Error(ex, $"{logString}");
                         continue;
                     }
 
@@ -587,7 +576,7 @@ namespace QbtAuto
 
                     if (!shouldRun)
                     { 
-                        logger.Info($"Did not match criteria {logString}");
+                        loggerF.Info($"Did not match criteria {logString}");
                         continue;
                     }
 
@@ -597,13 +586,13 @@ namespace QbtAuto
                         {
                             if (File.Exists($"{directory}{sep}{name}"))
                             {
-                                logger.Warn($"The Script has been ran for this item.\ndelete \"{directory}{sep}{name}\" to allow a re-run of this script {logString}");
+                                loggerF.Warn($"The Script has been ran for this item.\ndelete \"{directory}{sep}{name}\" to allow a re-run of this script {logString}");
                             }
                             else
                             {
 
                                 var r = await Utils.Cmd.SheBangCmdAsync(shebang, script, directory, (int)timeout);
-                                logger.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
+                                loggerF.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
 
                                 await File.WriteAllTextAsync($"{directory}{sep}{name}", "");
                             }
@@ -611,7 +600,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
                 }
@@ -632,7 +621,7 @@ namespace QbtAuto
                     double Progress = Convert.ToDouble(T["Progress"]);
                     if (Progress < 1.0)
                     {
-                        logger.Info($"{T["Name"]} {Progress} - not complete yet");
+                        loggerF.Info($"{T["Name"]} {Progress} - not complete yet");
                         continue;
                     }
 
@@ -653,13 +642,13 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
                     if (!Directory.Exists(path))
                     {
-                        logger.Warn($"path does not exists,\n{logString}");
+                        loggerF.Warn($"path does not exists,\n{logString}");
                         continue;
                     }
 
@@ -670,12 +659,12 @@ namespace QbtAuto
                             await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
                             await qbt.SetLocationAsync(T["Hash"].ToString(), path);
 
-                            logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
+                            loggerF.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
@@ -710,7 +699,7 @@ namespace QbtAuto
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
@@ -721,25 +710,27 @@ namespace QbtAuto
                             if (uploadSpeed >= 0)
                             {
                                 await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), uploadSpeed);
-                                logger.Info($"Set uploadSpeed :: {T["Name"]} => {uploadSpeed} | {logString}");
+                                loggerF.Info($"Set uploadSpeed :: {T["Name"]} => {uploadSpeed} | {logString}");
                             }
                             if (downloadSpeed >= 0)
                             {
                                 await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), downloadSpeed);
-                                logger.Info($"Set downloadSpeed :: {T["Name"]} => {downloadSpeed} | {logString}");
+                                loggerF.Info($"Set downloadSpeed :: {T["Name"]} => {downloadSpeed} | {logString}");
                             }
                             
                         }
                     }
                     catch (Exception ex)
                     {
-                        logger.Error(ex, logString);
+                        loggerF.Error(ex, logString);
                         continue;
                     }
 
                 }
             }
         }
+
+        
 
         #endregion
 

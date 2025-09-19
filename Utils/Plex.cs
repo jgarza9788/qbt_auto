@@ -43,7 +43,8 @@ namespace Utils
 
     class Plex
     {
-        public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        // public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
         public string baseUrl = "";
 
