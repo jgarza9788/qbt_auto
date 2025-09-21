@@ -19,7 +19,8 @@ namespace Utils
 {
     public static class Misc
     {
-        public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        // public static NLog.Logger logger = NLog.LogManager.GetCurrentClassLogger();
+        private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
         /// <summary>
         /// Replaces string with values from dictionary 

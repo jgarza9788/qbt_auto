@@ -45,15 +45,17 @@ namespace QbtAuto
         public  bool verbose = false;
         #endregion
 
-        // Auto Itesm from the Config(s)
+        // Auto Itesm from the Config(s) - obsolite
+        /*
         public IEnumerable<object> autoTags = new List<object>();
         public IEnumerable<object> autoCategories = new List<object>();
         public IEnumerable<object> autoScripts = new List<object>();
         public IEnumerable<object> autoMoves = new List<object>();
         public IEnumerable<object> autoSpeeds = new List<object>();
+        */
 
-        //interpreter
-        public Interpreter it = new Interpreter();
+        List<AutoBase> Autos = new List<AutoBase>();
+        List<Dictionary<string, object>> globalDicts = new List<Dictionary<string, object>>();
 
         //Clients 
         public QBittorrentClient? qbt;
@@ -147,20 +149,6 @@ namespace QbtAuto
             loggerFC.Info($"verbose: {verbose}");
             loggerFC.Info($"");
 
-
-            // Autos
-            autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
-            autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
-            autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
-            autoMoves = config.getValue("autoMoves") as IEnumerable<object> ?? new List<object>();
-            autoSpeeds = config.getValue("autoSpeeds") as IEnumerable<object> ?? new List<object>();
-
-            it = new Interpreter()
-                .SetFunction("contains", (string t, string s) => t.Contains(s))
-                .SetFunction("match", (string t, string p) => Regex.IsMatch(t, p))
-                .SetFunction("daysAgo", (string iso) => (DateTime.UtcNow - DateTime.Parse(iso)).TotalDays)
-                .SetDefaultNumberType(DefaultNumberType.Double);
-
             var httpHandler = new SocketsHttpHandler
             {
                 MaxConnectionsPerServer = 100,
@@ -168,17 +156,92 @@ namespace QbtAuto
                 PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
                 AutomaticDecompression = DecompressionMethods.All
             };
-            // var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
-
             qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
             qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
             loggerFC.Info($"Connected to qBittorrent.");
 
+            //getting the driveadata
+            driveData = Drives.getDriveData();
+            globalDicts.Add(driveData);
+
+            #region CreateAutoObjects
+
+            // ** autoTags **
+            IEnumerable<object> autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> autoTag in autoTags)
+            {
+                Autos.Add(new AutoTag(
+                    autoTag["tag"].ToString() ?? "",
+                    autoTag["criteria"].ToString() ?? "",
+                    qbt,
+                    plex,
+                    globalDicts
+                    ));
+            } 
+
+            // ** autoCategories **
+            IEnumerable<object> autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> autoCat in autoCategories)
+            {
+                Autos.Add(new AutoCat(
+                    autoCat["category"].ToString() ?? "",
+                    autoCat["criteria"].ToString() ?? "",
+                    qbt,
+                    plex,
+                    globalDicts
+                    ));
+            } 
+
+            // ** autoScripts **
+            IEnumerable<object> autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> autoScript in autoScripts)
+            {
+                Autos.Add(new AutoScript(
+                    autoScript["name"].ToString() ?? "",
+                    autoScript["directory"].ToString() ?? "",
+                    autoScript["shebang"].ToString() ?? "",
+                    autoScript["script"].ToString() ?? "",
+                    (long)(autoScript["timeout"] ?? 100),
+                    autoScript["criteria"].ToString() ?? "",
+                    qbt,
+                    plex,
+                    globalDicts
+                    ));
+            } 
+
+            // ** autoMoves **
+            IEnumerable<object> autoMoves = config.getValue("autoMoves") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> autoMov in autoMoves)
+            {
+                Autos.Add(new AutoMoves(
+                    autoMov["path"].ToString() ?? "",
+                    autoMov["criteria"].ToString() ?? "",
+                    qbt,
+                    plex,
+                    globalDicts
+                    ));
+            } 
+
+            // ** autoSpeeds **
+            IEnumerable<object> autoSpeeds = config.getValue("autoSpeeds") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> autoSpeed in autoSpeeds)
+            {
+                Autos.Add(new AutoSpeed(
+                    (long)(autoSpeed["uploadSpeed"] ?? -1),
+                    (long)(autoSpeed["downloadSpeed"] ?? -1),
+                    autoSpeed["criteria"].ToString() ?? "",
+                    qbt,
+                    plex,
+                    globalDicts
+                    ));
+            } 
+
+            #endregion
+
             // gets all the torrent data
             torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
 
-            //getting the driveadata
-            driveData = Drives.getDriveData();
+
 
             //used for debugging
             /*
@@ -312,15 +375,13 @@ namespace QbtAuto
                 return;
             }
 
-            loggerFC.Info("Start Processing");
-
             int total = torrents.Count();
             int done = 0;
             object lockObj = new object();
 
             var tasks = torrents!
-                .Where(t => t != null) 
-                .Select( torrent =>
+                .Where(t => t != null)
+                .Select(async torrent =>
                 {
                     var T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
 
@@ -329,14 +390,46 @@ namespace QbtAuto
                         done++;
                         PrintProgress(done, total);
                     }
-                    
-                    return T == null ? Task.CompletedTask : process_all(T);
+
+                    if (T == null)
+                    {
+                        return;
+                    }
+
+                    foreach (var auto in Autos)
+                    {
+                        await auto.Process(T, verbose);
+                    }
+
+                    // WeakReference can also do it like this
+                    /*
+                    var autoTasks = Autos.Select(auto => auto.Process(T, verbose));
+                    await Task.WhenAll(autoTasks);
+                    */
 
                 });
 
             await Task.WhenAll(tasks);
-
             loggerFC.Info("\nProcessing completed.");
+
+            if (verbose)
+            { 
+                foreach (var auto in Autos)
+                {
+                    loggerFC.Info(
+@$"--------------------
+Auto: {auto.GetType()}
+Criteria: {auto.criteria}
+Success: {auto.SuccessCount}
+Failure (to meet critera): {auto.FailureCount}
+Error: {auto.ErrorCount}
+--------------------
+"
+                        );
+                }
+            }
+
+            
         }
 
         private void PrintProgress(int completed, int total)
@@ -360,377 +453,6 @@ namespace QbtAuto
                 Console.WriteLine($"[{bar}] {percent:P2}");
             }
         }
-
-        public async Task process_all(Dictionary<string, object> T)
-        {
-            await process_autoTags(T);
-            await process_autoCategories(T);
-            await process_autoScripts(T);
-            await process_autoMoves(T);
-            await process_autoSpeeds(T);
-        }
-
-        /// <summary>
-        /// Processes automatic tagging for a given torrent based on predefined criteria.
-        /// </summary>
-        /// <param name="T"></param>
-        /// <returns></returns>
-        public async Task process_autoTags(Dictionary<string, object> T)
-        {
-            foreach (var autoTag in autoTags)
-            {
-                // Assuming autoTag is a Dictionary<string, object>
-                if (autoTag is IDictionary<string, object> tagDict && tagDict.ContainsKey("tag"))
-                {
-                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
-
-                    var tag = tagDict["tag"].ToString() ?? "";
-                    string criteria = Misc.Replacer(tagDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
-
-                    string currentTags = T["Tags"] is IEnumerable<object> ctlist
-                        ? string.Join(",", ctlist)
-                        : T["Tags"]?.ToString() ?? "";
-
-                    string hash = T["Hash"]?.ToString() ?? "";
-                    string logString = !verbose ? $"{T["Name"]} {tag}" : $"Name:{T["Name"]}\nHash{hash}\nTag:{tag}\ncriteria{criteria}";
-
-                    bool shouldHaveTag = false;
-                    try
-                    {
-                        shouldHaveTag = it.Eval<bool>(criteria);
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (shouldHaveTag)
-                        {
-                            if (!currentTags.Contains(tag))
-                            {
-                                await qbt.AddTorrentTagAsync(T["Hash"].ToString(), tag);
-                                loggerF.Info($"AddTag :: {T["Name"]} + {tag}");
-                            }
-
-                        }
-                        else
-                        {
-                            if (currentTags.Contains(tag))
-                            {
-                                await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), tag);
-                                loggerF.Info($"DeleteTag :: {T["Name"]} - {tag}");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-                }
-
-            }
-        }
-
-        /// <summary>
-        /// Processes automatic Categories for a given torrent based on predefined criteria.
-        /// </summary>
-        /// <param name="T"></param>
-        /// <returns></returns>
-        public async Task process_autoCategories(Dictionary<string, object> T)
-        {
-
-            foreach (var autoCategory in autoCategories)
-            {
-                // Assuming autoCategory is a Dictionary<string, object>
-                if (autoCategory is IDictionary<string, object> catDict && catDict.ContainsKey("category"))
-                {
-                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
-
-                    string category = catDict["category"].ToString() ?? "";
-                    string criteria = Misc.Replacer(catDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata } );
-
-                    string currentCategory = T["Category"]?.ToString() ?? "";
-
-                    double Progress = Convert.ToDouble(T["Progress"]);
-                    string SavePath = T["SavePath"]?.ToString() ?? "";
-                    char sep = SavePath.Contains('\\') ? '\\' : '/';
-
-                    // Split into parent dir + last segment
-                    string parentDir = SavePath.Contains(sep)
-                        ? SavePath[..SavePath.LastIndexOf(sep)]
-                        : ""; // root-level
-
-                    // Construct the new location with the SAME separator style
-                    string newLocation = string.IsNullOrEmpty(parentDir)
-                        ? category
-                        : $"{parentDir}{sep}{category}";
-
-                    string logString = !verbose ? $"{T["Name"]} {category}" : $"Name:{T["Name"]}\nHash:{T["Hash"]?.ToString()}\ncategory:{category}\ncriteria{criteria}";
-
-                    bool shouldHaveCategory = false;
-                    try
-                    {
-                        shouldHaveCategory = it.Eval<bool>(criteria);
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                    string hash = T["Hash"]?.ToString() ?? "";
-
-                    try
-                    {
-                        if (shouldHaveCategory)
-                        {
-                            if (currentCategory != category)
-                            {
-                                await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), category);
-                                loggerF.Info($"SetCategory :: {T["Name"]} => {category}");
-
-
-                                //if it's done downloading, we will move the location
-                                if (Progress.Equals(1.0))
-                                {
-                                    await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
-                                    await qbt.SetLocationAsync(T["Hash"].ToString(), newLocation);
-
-                                    loggerF.Info($"MovedTorrent :: {T["Name"]} => {newLocation}");
-                                }
-                            }
-
-                        }
-                        else
-                        {
-                            // No action needed if the category does not match
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Processes automatic Scripts for a given torrent based on predefined criteria.
-        /// </summary>
-        /// <param name="T"></param>
-        /// <returns></returns>
-        public async Task process_autoScripts(Dictionary<string, object> T)
-        {
-
-            foreach (var autoScript in autoScripts)
-            {
-                if (autoScript is IDictionary<string, object> scrDict && scrDict.ContainsKey("script"))
-                {
-                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
-
-                    string name = scrDict["name"].ToString() ?? "";
-                    string criteria = Misc.Replacer(scrDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
-
-                    string directory = Misc.Replacer(scrDict["directory"].ToString() ?? "", new[] { T, driveData, plexdata });
-                    char sep = directory.Contains('\\') ? '\\' : '/';
-                    directory = directory + sep;
-
-                    string shebang = Misc.Replacer(scrDict["shebang"].ToString() ?? "",new[] { T, driveData, plexdata });
-                    if (shebang == "" && OperatingSystem.IsWindows())
-                    {
-                        shebang = "cmd.exe";
-                    }
-                    else if (shebang == "" && !OperatingSystem.IsWindows())
-                    { 
-                        shebang = "/bin/bang";
-                    }
-
-                    string script = Misc.Replacer(scrDict["script"].ToString() ?? "", new[] { T, driveData, plexdata });
-                    long timeout = (long)scrDict["timeout"];
-
-                    string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
-
-                    if (!Directory.Exists(directory))
-                    {
-                        loggerF.Warn($"Directory does not exists {logString}");
-                        continue;
-                    }
-
-                    bool shouldRun = false;
-                    try
-                    {
-                        shouldRun = it.Eval<bool>(criteria);
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, $"{logString}");
-                        continue;
-                    }
-
-                    string hash = T["Hash"]?.ToString() ?? "";
-
-                    if (!shouldRun)
-                    { 
-                        loggerF.Info($"Did not match criteria {logString}");
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (shouldRun)
-                        {
-                            if (File.Exists($"{directory}{sep}{name}"))
-                            {
-                                loggerF.Warn($"The Script has been ran for this item.\ndelete \"{directory}{sep}{name}\" to allow a re-run of this script {logString}");
-                            }
-                            else
-                            {
-
-                                var r = await Utils.Cmd.SheBangCmdAsync(shebang, script, directory, (int)timeout);
-                                loggerF.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
-
-                                await File.WriteAllTextAsync($"{directory}{sep}{name}", "");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Processes automatic moves for a given torrent based on predefined criteria.
-        /// </summary>
-        /// <param name="T"></param>
-        /// <returns></returns>
-        public async Task process_autoMoves(Dictionary<string, object> T)
-        {
-            foreach (var autoMove in autoMoves)
-            {
-                if (autoMove is IDictionary<string, object> movDict)
-                {
-                    double Progress = Convert.ToDouble(T["Progress"]);
-                    if (Progress < 1.0)
-                    {
-                        loggerF.Info($"{T["Name"]} {Progress} - not complete yet");
-                        continue;
-                    }
-
-                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
-
-                    string path = Misc.Replacer(movDict["path"].ToString() ?? "", new[] { T, driveData, plexdata });
-                    string criteria = Misc.Replacer(movDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
-
-                    char sep = path.Contains('\\') ? '\\' : '/';
-
-                    // todo
-                    string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
-
-                    bool shouldMove = false;
-                    try
-                    {
-                        shouldMove = it.Eval<bool>(criteria);
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                    if (!Directory.Exists(path))
-                    {
-                        loggerF.Warn($"path does not exists,\n{logString}");
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (shouldMove)
-                        {
-                            await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
-                            await qbt.SetLocationAsync(T["Hash"].ToString(), path);
-
-                            loggerF.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                }
-            }
-        }
-
-        /// <summary>
-        /// Processes automatic changes the speed(s) for a given torrent based on predefined criteria.
-        /// </summary>
-        /// <param name="T"></param>
-        /// <returns></returns>
-        public async Task process_autoSpeeds(Dictionary<string, object> T)
-        {
-            foreach (var autoSpeed in autoSpeeds)
-            {
-                if (autoSpeed is IDictionary<string, object> spdDict)
-                {
-
-                    var plexdata = plex.getData(T["ContentPath"].ToString() ?? ""); 
-
-                    long uploadSpeed = Int64.Parse(spdDict["uploadSpeed"].ToString() ?? "-1") * 1024;
-                    long downloadSpeed = Int64.Parse(spdDict["downloadSpeed"].ToString() ?? "-1") * 1024;
-                    string criteria = Misc.Replacer(spdDict["criteria"].ToString() ?? "", new[] { T, driveData, plexdata });
-
-                    string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\nuploadSpeed:{uploadSpeed}\ndownloadSpeed:{downloadSpeed}\ncriteria{criteria}";
-
-                    bool shouldChange = false;
-                    try
-                    {
-                        shouldChange = it.Eval<bool>(criteria);
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (shouldChange)
-                        {
-                            if (uploadSpeed >= 0)
-                            {
-                                await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), uploadSpeed);
-                                loggerF.Info($"Set uploadSpeed :: {T["Name"]} => {uploadSpeed} | {logString}");
-                            }
-                            if (downloadSpeed >= 0)
-                            {
-                                await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), downloadSpeed);
-                                loggerF.Info($"Set downloadSpeed :: {T["Name"]} => {downloadSpeed} | {logString}");
-                            }
-                            
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        loggerF.Error(ex, logString);
-                        continue;
-                    }
-
-                }
-            }
-        }
-
-        
 
         #endregion
 

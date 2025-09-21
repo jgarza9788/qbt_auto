@@ -25,6 +25,23 @@ namespace QbtAuto
         private static NLog.Logger loggerFC = NLog.LogManager.GetLogger("LoggerFC");
 
         // Entry point of the application
+        /*
+        static async Task Main(string[] args)
+        {
+
+            try
+            {
+                QbtAuto qbtauto = new QbtAuto(args);
+                await qbtauto.RunAllAutosAsync();
+            }
+            catch (Exception ex)
+            {
+                loggerFC.Error(ex);
+            }
+        }
+        */
+
+
         static async Task Main(string[] args)
         {
 
