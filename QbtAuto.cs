@@ -30,7 +30,8 @@ using Microsoft.VisualBasic;
 using NLog;
 using System.Reflection.PortableExecutable;
 using System.Linq;   
-using System.IO;     
+using System.IO;
+using System.Diagnostics;
 
 namespace QbtAuto
 {
@@ -369,13 +370,16 @@ namespace QbtAuto
         /// <returns></returns>
         public async Task RunAllAutosAsync()
         {
+            var sw = new Stopwatch();
+            sw.Start();
+
             if (torrents == null || torrents.Count == 0)
             {
                 loggerFC.Info("No torrents to process.");
                 return;
             }
 
-            int total = torrents.Count();
+            int torrCount = torrents.Count();
             int done = 0;
             object lockObj = new object();
 
@@ -388,7 +392,7 @@ namespace QbtAuto
                     lock (lockObj)
                     {
                         done++;
-                        PrintProgress(done, total);
+                        PrintProgress(done, torrCount);
                     }
 
                     if (T == null)
@@ -401,7 +405,7 @@ namespace QbtAuto
                         await auto.Process(T, verbose);
                     }
 
-                    // WeakReference can also do it like this
+                    // can also do it like this
                     /*
                     var autoTasks = Autos.Select(auto => auto.Process(T, verbose));
                     await Task.WhenAll(autoTasks);
@@ -410,10 +414,12 @@ namespace QbtAuto
                 });
 
             await Task.WhenAll(tasks);
-            loggerFC.Info("\nProcessing completed.");
+            loggerFC.Info("\n\nProcessing completed.\n");
+
+            sw.Stop();
 
             if (verbose)
-            { 
+            {
                 foreach (var auto in Autos)
                 {
                     loggerFC.Info(
@@ -423,11 +429,16 @@ Criteria: {auto.criteria}
 Success: {auto.SuccessCount}
 Failure (to meet critera): {auto.FailureCount}
 Error: {auto.ErrorCount}
---------------------
-"
+--------------------"
                         );
                 }
             }
+
+            double total_AXT = Autos.Count * torrents.Count;
+            loggerFC.Info($"total (Autos*Torrents): {total_AXT:F2}");
+            loggerFC.Info($"time: {sw.Elapsed.TotalMilliseconds:F4} ms");
+            loggerFC.Info($"{total_AXT / sw.Elapsed.TotalMilliseconds:F4} per ms");
+            loggerFC.Info($"{total_AXT/sw.Elapsed.TotalSeconds:F2} per sec");
 
             
         }
@@ -440,9 +451,6 @@ Error: {auto.ErrorCount}
 
             string bar = new string('#', filled).PadRight(barSize);
 
-            // loggerC.Info($"\r[{bar}] {percent:P2}");
-            // Console.WriteLine($"\r[{bar}] {percent:P2}");
-
             try
             {
                 Console.SetCursorPosition(0, Console.CursorTop);
@@ -451,6 +459,25 @@ Error: {auto.ErrorCount}
             catch
             {
                 Console.WriteLine($"[{bar}] {percent:P2}");
+            }
+        }
+
+        private void PrintProgress(int completed, int total, long timems)
+        {
+            double percent = (double)completed / total;
+            int barSize = 40; // number of chars in the bar
+            int filled = (int)(percent * barSize);
+
+            string bar = new string('#', filled).PadRight(barSize);
+
+            try
+            {
+                Console.SetCursorPosition(0, Console.CursorTop);
+                Console.Write($"[{bar}] {percent:P2} {timems:F0}ms   ");
+            }
+            catch
+            {
+                Console.WriteLine($"[{bar}] {percent:P2} {timems:F0}ms");
             }
         }
 
