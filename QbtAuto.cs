@@ -44,7 +44,7 @@ namespace QbtAuto
         */
 
         List<AutoBase> Autos = new List<AutoBase>();
-        List<Dictionary<string, object>> globalDicts = new List<Dictionary<string, object>>();
+        Dictionary<string, object> globalDicts = new Dictionary<string, object>();
 
         //Clients 
         public QBittorrentClient? qbt;
@@ -151,7 +151,7 @@ namespace QbtAuto
 
             //getting the driveadata
             driveData = Drives.getDriveData();
-            globalDicts.Add(driveData);
+            globalDicts = globalDicts.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             #region CreateAutoObjects
 

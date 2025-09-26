@@ -39,10 +39,10 @@ namespace QbtAuto
         public QBittorrentClient qbt;
         public Plex plex;
 
-        public List<Dictionary<string, object>> globalDicts;
+        public Dictionary<string, object> globalDicts;
 
         // Constructor
-        protected AutoBase(QBittorrentClient qbtClient,Plex plex, List<Dictionary<string, object>> globalDicts)
+        protected AutoBase(QBittorrentClient qbtClient,Plex plex, Dictionary<string, object> globalDicts)
         {
             this.qbt = qbtClient;
             this.plex = plex;
@@ -68,7 +68,7 @@ namespace QbtAuto
         }
 
 
-        public bool? Evaluate(List<Dictionary<string, object>> Dicts,string logstring = "")
+        public bool? Evaluate(Dictionary<string, object> Dicts,string logstring = "")
         {
             try
             {
@@ -98,18 +98,36 @@ namespace QbtAuto
             }
         }
 
-        public string Replacer(string String, List<Dictionary<string,object>> Dicts)//Dictionary<string, object>[] Dicts)
-        {
-            foreach (var Dict in Dicts)
-            {
-                String = Replacer(String, Dict);
 
-                // logger.Info(String);
+        /// <summary>
+        /// this one is faster at 1327 per sec
+        /// </summary>
+        /// <param name="criteriaString"></param>
+        /// <param name="Dict"></param>
+        /// <returns></returns>
+        public string Replacer(string criteriaString, Dictionary<string, object> Dict)
+        {
+            var rx = new Regex(@"<([^<>]+)>");
+            var matches = rx.Matches(criteriaString);
+
+            foreach (Match match in matches)
+            {
+                string m = match.Groups[1].Value;
+                // logger.Info($"{criteriaString} | {m}");
+                criteriaString = criteriaString.Replace($"<{m}>", Dict[m].ToString() ?? "");
             }
-            return String;
+
+            return criteriaString;
         } 
 
-        public string Replacer(string String, Dictionary<string, object> Dict)
+
+        /// <summary>
+        /// this one does about 1284 per sec
+        /// </summary>
+        /// <param name="String"></param>
+        /// <param name="Dict"></param>
+        /// <returns></returns>
+        public string Replacer_old(string String, Dictionary<string, object> Dict)
         {
 
             foreach (var entry in Dict)
@@ -145,6 +163,7 @@ namespace QbtAuto
             }
 
             return String;
-        }    
+        }   
+        
     }
 }

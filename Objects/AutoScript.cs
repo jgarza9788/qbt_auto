@@ -44,7 +44,7 @@ namespace QbtAuto
             string criteria,
             QBittorrentClient qbtClient,
             Plex plex,
-            List<Dictionary<string, object>> globalDicts
+            Dictionary<string, object> globalDicts
             )
             : base(qbtClient, plex, globalDicts)
         {
@@ -65,17 +65,18 @@ namespace QbtAuto
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
-            List<Dictionary<string, object>> Dicts = new List<Dictionary<string, object>>(globalDicts);
-            Dicts.Add(T);
-            Dicts.Add(plexdata);
+            Dictionary<string, object> Dict = new Dictionary<string, object>();
+            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             //local _directory variable
-            string _directory = Replacer(directory, Dicts);
+            string _directory = Replacer(directory, Dict);
             char sep = _directory.Contains('\\') ? '\\' : '/';
             _directory = _directory + sep;
 
             //local _shebang variable 
-            string _shebang = Replacer(shebang,Dicts);
+            string _shebang = Replacer(shebang,Dict);
             if (_shebang == "" && OperatingSystem.IsWindows())
             {
                 _shebang = "cmd.exe";
@@ -86,11 +87,11 @@ namespace QbtAuto
             }
 
             //local _script variable
-            string _script = Replacer(script, Dicts);
+            string _script = Replacer(script, Dict);
 
             string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
 
-            bool? b = Evaluate(Dicts, logString);
+            bool? b = Evaluate(Dict, logString);
             if (b is null)
             {
                 return;

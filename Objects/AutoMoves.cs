@@ -34,7 +34,7 @@ namespace QbtAuto
             string criteria,
             QBittorrentClient qbtClient,
             Plex plex,
-            List<Dictionary<string, object>> globalDicts
+            Dictionary<string, object> globalDicts
             )
             : base(qbtClient, plex, globalDicts)
         {
@@ -51,12 +51,13 @@ namespace QbtAuto
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
-            List<Dictionary<string, object>> Dicts = new List<Dictionary<string, object>>(globalDicts);
-            Dicts.Add(T);
-            Dicts.Add(plexdata);
+            Dictionary<string, object> Dict = new Dictionary<string, object>();
+            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             //lcoal _path variable
-            string _path = Replacer(path, Dicts);
+            string _path = Replacer(path, Dict);
 
             string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
 
@@ -66,7 +67,7 @@ namespace QbtAuto
                 return;
             }
 
-            bool? b = Evaluate(Dicts, logString);
+            bool? b = Evaluate(Dict, logString);
             if (b is null)
             {
                 return;
