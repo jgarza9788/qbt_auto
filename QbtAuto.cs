@@ -15,22 +15,10 @@
  */
 
 
-using System;
-using System.Collections;
-
 using System.Net;
-using System.Text.RegularExpressions;
-using DynamicExpresso;
 using Utils;
 using QBittorrent.Client;
 using Json5Core;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using NLog.LayoutRenderers;
-using Microsoft.VisualBasic;
-using NLog;
-using System.Reflection.PortableExecutable;
-using System.Linq;   
-using System.IO;
 using System.Diagnostics;
 
 namespace QbtAuto
@@ -237,6 +225,7 @@ namespace QbtAuto
                     ));
             } 
 
+
             #endregion
 
             // gets all the torrent data
@@ -379,9 +368,8 @@ namespace QbtAuto
                 return;
             }
 
-            int torrCount = torrents.Count();
+            int torrCount = torrents.Count;
             int done = 0;
-            object lockObj = new object();
 
             var tasks = torrents!
                 .Where(t => t != null)
@@ -389,11 +377,6 @@ namespace QbtAuto
                 {
                     var T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrent));
 
-                    lock (lockObj)
-                    {
-                        done++;
-                        PrintProgress(done, torrCount);
-                    }
 
                     if (T == null)
                     {
@@ -411,10 +394,13 @@ namespace QbtAuto
                     await Task.WhenAll(autoTasks);
                     */
 
+                    // increment and print progress
+                    Interlocked.Increment(ref done);
+                    await PrintProgress(done, torrCount);
                 });
 
             await Task.WhenAll(tasks);
-            loggerFC.Info("\n\nProcessing completed.\n");
+            loggerFC.Info("\nProcessing completed.");
 
             sw.Stop();
 
@@ -434,6 +420,7 @@ Error: {auto.ErrorCount}
                 }
             }
 
+            loggerFC.Info("**REPORT**");
             double total_AXT = Autos.Count * torrents.Count;
             loggerFC.Info($"total (Autos*Torrents): {total_AXT:F2}");
             loggerFC.Info($"time: {sw.Elapsed.TotalMilliseconds:F4} ms");
@@ -443,7 +430,9 @@ Error: {auto.ErrorCount}
             
         }
 
-        private void PrintProgress(int completed, int total)
+
+
+        private async Task PrintProgress(int completed, int total)
         {
             double percent = (double)completed / total;
             int barSize = 40; // number of chars in the bar
@@ -451,35 +440,27 @@ Error: {auto.ErrorCount}
 
             string bar = new string('#', filled).PadRight(barSize);
 
-            try
-            {
-                Console.SetCursorPosition(0, Console.CursorTop);
-                Console.Write($"[{bar}] {percent:P2}   ");
-            }
-            catch
-            {
-                Console.WriteLine($"[{bar}] {percent:P2}");
-            }
+            Console.Write($"\r[{bar}] {percent:P2}   ");
         }
 
-        private void PrintProgress(int completed, int total, long timems)
-        {
-            double percent = (double)completed / total;
-            int barSize = 40; // number of chars in the bar
-            int filled = (int)(percent * barSize);
+        // private void PrintProgress(int completed, int total, long timems)
+        // {
+        //     double percent = (double)completed / total;
+        //     int barSize = 40; // number of chars in the bar
+        //     int filled = (int)(percent * barSize);
 
-            string bar = new string('#', filled).PadRight(barSize);
+        //     string bar = new string('#', filled).PadRight(barSize);
 
-            try
-            {
-                Console.SetCursorPosition(0, Console.CursorTop);
-                Console.Write($"[{bar}] {percent:P2} {timems:F0}ms   ");
-            }
-            catch
-            {
-                Console.WriteLine($"[{bar}] {percent:P2} {timems:F0}ms");
-            }
-        }
+        //     try
+        //     {
+        //         Console.SetCursorPosition(0, Console.CursorTop);
+        //         Console.Write($"[{bar}] {percent:P2} {timems:F0}ms   ");
+        //     }
+        //     catch
+        //     {
+        //         Console.WriteLine($"[{bar}] {percent:P2} {timems:F0}ms");
+        //     }
+        // }
 
         #endregion
 

@@ -41,6 +41,9 @@ This is a qBittorrent automation tool.
 It connects to a qBittorrent instance, loads a config file (config.json by default), and then automatically applies tags and categories to torrents based on rules you define in that config.
 
 
+## Support 
+☕[Buy Me Coffee ... please](https://buymeacoffee.com/jgarza97885)
+
 
 ## Requirements
 
@@ -69,13 +72,7 @@ Project 'qbt_auto' has the following package references
 * plex support 
 
 ### RoadMap (features that i'll add soon) 
-* seed management 
-  * Seed - Radio Limit
-    * global
-    * no limit
-    * ratio , total min, inactive min
-  * Seed - Speed Limit 
-
+* request a new feature --please
 
 ## Run 
 ```
