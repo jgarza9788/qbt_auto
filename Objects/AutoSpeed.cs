@@ -1,7 +1,7 @@
 /*
 * ============================================================================
 *  Project:      qbt_auto
-*  File:         AutoMoves.cs
+*  File:         AutoSpeed.cs
 *  Description:  see Readme.md and comments
 *
 *  Author:       Justin Garza
