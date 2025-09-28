@@ -21,15 +21,18 @@ using System.Threading.Tasks;
 
 namespace QbtAuto
 {
-    class AutoScript : AutoBase
+    class AutoScript : AutoTorrentRuleBase
     {
         //this is in the base class
-        // public string criteria = "";
-        public string name = "";
-        public string directory = "";
-        public string shebang = "";
-        public string script = "";
-        public long timeout = 100;
+        /*
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
+        */
+        public string RunDir = "";
+        public string Shebang = "";
+        public string Script = "";
+        public long Timeout = 500;
 
 
 
@@ -37,23 +40,42 @@ namespace QbtAuto
 
         public AutoScript(
             string name,
-            string directory,
+            string runDir,
             string shebang,
             string script,
             long timeout,
             string criteria,
-            QBittorrentClient qbtClient,
-            Plex plex,
-            Dictionary<string, object> globalDicts
+            ref QBittorrentClient qbtClient,
+            ref Plex plex,
+            ref Dictionary<string, object> globalDict,
+            string type = "AutoScript"
             )
-            : base(qbtClient, plex, globalDicts)
+            : base(ref qbtClient,ref plex,ref globalDict)
         {
-            this.name       = name;
-            this.directory  = directory;
-            this.shebang    = shebang;
-            this.script     = script;
-            this.timeout    = timeout;
-            this.criteria   = criteria;
+            this.Name       = name;
+            this.Type       = type;
+            this.RunDir     = runDir;
+            this.Shebang    = shebang;
+            this.Script     = script;
+            this.Timeout    = timeout;
+            this.Criteria   = criteria;
+        }
+
+        public override string getReport()
+        { 
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+RunDir: {this.RunDir}
+Shebang: {this.Shebang}
+Script: {this.Script}
+Timeout: {this.Timeout}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         /// <summary>
@@ -61,35 +83,64 @@ namespace QbtAuto
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose)
+        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
             Dictionary<string, object> Dict = new Dictionary<string, object>();
-            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(globalDict).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             //local _directory variable
-            string _directory = Replacer(directory, Dict);
-            char sep = _directory.Contains('\\') ? '\\' : '/';
-            _directory = _directory + sep;
+            string _runDir = Replacer(RunDir, Dict);
+            char sep = _runDir.Contains('\\') ? '\\' : '/';
+            _runDir = _runDir + sep;
 
             //local _shebang variable 
-            string _shebang = Replacer(shebang,Dict);
+            string _shebang = Replacer(Shebang, Dict);
             if (_shebang == "" && OperatingSystem.IsWindows())
             {
                 _shebang = "cmd.exe";
             }
             else if (_shebang == "" && !OperatingSystem.IsWindows())
-            { 
+            {
                 _shebang = "/bin/bang";
             }
 
             //local _script variable
-            string _script = Replacer(script, Dict);
+            string _script = Replacer(Script, Dict);
 
-            string logString = !verbose ? $"{T["Name"]} {name}" : $"\ntorrent{T["Name"]}\nname:{name}\ndirectory:{directory}\ncriteria:{criteria}\nshebang:{shebang}\nscript:{script}";
+            string logString = $@"
+TorrentName: {T["Name"]}
+TorrentHash: {T["Hash"]}
+Name: {Name}
+Type: {Type}
+Directory: {_runDir}
+SheBang: {_shebang}
+Script: {_script}
+Criteria: {Criteria}
+";
+
+            if (verbose)
+            {
+                logger.Info(logString);
+            }
+
+            
+            if (!Directory.Exists(_shebang) && !File.Exists(_shebang))
+            {
+                logger.Warn($"Bad SheBang,\n{logString}");
+                return;
+            }
+
+            if (!Directory.Exists(_runDir))
+            {
+                logger.Warn($"Bad RunDir,\n{logString}");
+                return;
+            }
+
+
 
             bool? b = Evaluate(Dict, logString);
             if (b is null)
@@ -98,7 +149,7 @@ namespace QbtAuto
             }
 
             if (b == false)
-            { 
+            {
                 return;
             }
 
@@ -106,15 +157,15 @@ namespace QbtAuto
             {
                 try
                 {
-                    if (File.Exists($"{directory}{sep}{name}"))
+                    if (File.Exists($"{_runDir}{sep}{Name}"))
                     {
-                        logger.Warn($"The Script has been ran for this item.\ndelete \"{directory}{sep}{name}\" to allow a re-run of this script {logString}");
+                        logger.Warn($"The Script has been ran for this item.\ndelete \"{_runDir}{sep}{Name}\" to allow a re-run of this script {logString}");
                     }
                     else
                     {
-                        var r = await Utils.Cmd.SheBangCmdAsync(shebang, script, directory, (int)timeout);
+                        var r = await Utils.Cmd.SheBangCmdAsync(_shebang, _script, _runDir, (int)Timeout);
                         logger.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
-                        await File.WriteAllTextAsync($"{directory}{sep}{name}", "");
+                        await File.WriteAllTextAsync($"{_runDir}{sep}{Name}", "");
                     }
                 }
                 catch (Exception ex)
@@ -126,8 +177,7 @@ namespace QbtAuto
 
 
         }
-        
-        
+
 
     }
 

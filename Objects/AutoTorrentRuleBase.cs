@@ -1,7 +1,7 @@
 /*
 * ============================================================================
 *  Project:      qbt_auto
-*  File:         AutoBase.cs
+*  File:         AutoTorrentRuleBase.cs
 *  Description:  see Readme.md and comments
 *
 *  Author:       Justin Garza
@@ -21,12 +21,17 @@ using DynamicExpresso;
 using System.Data;
 using System.Text.RegularExpressions;
 using QBittorrent.Client;
+using System.Runtime.CompilerServices;
 
 namespace QbtAuto
 {
-    abstract class AutoBase
+    abstract class AutoTorrentRuleBase
     {
-        public string criteria = "";
+
+
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
 
         public int SuccessCount = 0;
         public int FailureCount = 0;
@@ -39,43 +44,58 @@ namespace QbtAuto
         public QBittorrentClient qbt;
         public Plex plex;
 
-        public Dictionary<string, object> globalDicts;
+        public Dictionary<string, object> globalDict;
+        
+
 
         // Constructor
-        protected AutoBase(QBittorrentClient qbtClient,Plex plex, Dictionary<string, object> globalDicts)
+        protected AutoTorrentRuleBase(ref QBittorrentClient qbtClient, ref Plex plex, ref Dictionary<string, object> globalDict)
         {
             this.qbt = qbtClient;
             this.plex = plex;
-            this.globalDicts = globalDicts;
+            this.globalDict = globalDict;
 
             this.SuccessCount = 0;
             this.FailureCount = 0;
             this.ErrorCount = 0;
             this.it = new Interpreter()
                 .SetFunction("contains", (string t, string s) => t.Contains(s))
-                .SetFunction("match", (string t, string p) => Regex.IsMatch(t, p))
+                .SetFunction("match", (string t, string p) => Regex.IsMatch(t, p, RegexOptions.IgnoreCase))
                 .SetFunction("daysAgo", (string iso) => (DateTime.UtcNow - DateTime.Parse(iso)).TotalDays)
                 .SetDefaultNumberType(DefaultNumberType.Double);
+        }
+
+        public virtual string getReport()
+        {
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         public virtual async Task Process(
             Dictionary<string, object> T,
             bool verbose = false
             )
-        { 
+        {
             // Example of future async code
-            await Task.Delay(1); 
+            await Task.Delay(1);
         }
 
 
-        public bool? Evaluate(Dictionary<string, object> Dicts,string logstring = "")
+
+        public bool? Evaluate(Dictionary<string, object> Dict, string logstring = "")
         {
+
             try
             {
-                string _criteria = Replacer(criteria, Dicts);
-                
+                string _criteria = Replacer(Criteria, Dict);
                 bool result = it.Eval<bool>(_criteria);
-                logger.Info($"{_criteria} | {result}");
 
                 if (result)
                 {
@@ -92,11 +112,12 @@ namespace QbtAuto
             catch (Exception ex)
             {
                 ErrorCount++;
-                
                 logger.Error(ex, logstring);
                 return null;
             }
         }
+
+
 
 
         /// <summary>
@@ -114,8 +135,10 @@ namespace QbtAuto
             {
                 string m = match.Groups[1].Value;
                 // logger.Info($"{criteriaString} | {m}");
-                criteriaString = criteriaString.Replace($"<{m}>", Dict[m].ToString() ?? "");
+                criteriaString = criteriaString.Replace($"<{m}>", Dict[m].ToString() ?? $"** ERROR <{match.Value}> is not a key **");
             }
+
+
 
             return criteriaString;
         } 

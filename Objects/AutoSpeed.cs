@@ -21,28 +21,54 @@ using System.Threading.Tasks;
 
 namespace QbtAuto
 {
-    class AutoSpeed : AutoBase
+    class AutoSpeed : AutoTorrentRuleBase
     {
         //this is in the base class
-        // public string criteria = "";
-        public long uploadSpeed = -1;
-        public long downloadSpeed = -1;
+        /*
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
+        */
+        public long UploadSpeed = -1;
+        public long DownloadSpeed = -1;
+
+        public List<string> ulsHashes = new List<string>();
+        public List<string> dlsHashes = new List<string>();
 
         private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
         public AutoSpeed(
+            string name,
             long uploadSpeed,
             long downloadSpeed,
             string criteria,
-            QBittorrentClient qbtClient,
-            Plex plex,
-            Dictionary<string, object> globalDicts
+            ref QBittorrentClient qbtClient,
+            ref Plex plex,
+            ref Dictionary<string, object> globalDict,
+            string type = "AutoSpeed"
             )
-            : base(qbtClient, plex, globalDicts)
+            : base(ref qbtClient,ref plex,ref globalDict)
         {
-            this.uploadSpeed        = uploadSpeed;
-            this.downloadSpeed      = downloadSpeed;
-            this.criteria           = criteria;
+            this.Name               = name;
+            this.Type               = type;
+            this.UploadSpeed        = uploadSpeed * 1024;
+            this.DownloadSpeed      = downloadSpeed * 1024;
+            this.Criteria           = criteria;
+        }
+        
+        public override string getReport()
+        { 
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+UploadSpeed: {this.UploadSpeed}
+DownloadSpeed: {this.DownloadSpeed}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         /// <summary>
@@ -50,19 +76,29 @@ namespace QbtAuto
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose)
+        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
             Dictionary<string, object> Dict = new Dictionary<string, object>();
-            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(globalDict).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            long _uploadSpeed = uploadSpeed * 1024;
-            long _downloadSpeed = downloadSpeed * 1024;
+            string logString = $@"
+TorrentName: {T["Name"]}
+TorrentHash: {T["Hash"]}
+Name: {Name}
+Type: {Type}
+UploadSpeed: {UploadSpeed/1024:F2}Kb
+DownloadSpeed: {DownloadSpeed/1024:F2}Kb
+Criteria: {Criteria}
+";
 
-            string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\nuploadSpeed:{uploadSpeed}\ndownloadSpeed:{downloadSpeed}\ncriteria{criteria}";
+            if (verbose)
+            {
+                logger.Info(logString);
+            }
 
             bool? b = Evaluate(Dict, logString);
             if (b is null)
@@ -71,27 +107,28 @@ namespace QbtAuto
             }
 
             if (b == false)
-            { 
+            {
                 return;
             }
 
             if (b == true)
             {
-                if (_uploadSpeed >= 0)
-                { 
-                    await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), _uploadSpeed);
-                    logger.Info($"Set uploadSpeed :: {T["Name"]} => {_uploadSpeed} | {logString}");  
+                if (UploadSpeed >= 0)
+                {
+                    await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), UploadSpeed);
+                    // ulsHashes.Add(T["Hash"].ToString() ?? "");
+                    logger.Info($"Set uploadSpeed :: {T["Name"]} => {UploadSpeed} | {logString}");
                 }
-                
-                if (_downloadSpeed >= 0)
-                { 
-                    await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), _downloadSpeed);
-                    logger.Info($"Set downloadSpeed :: {T["Name"]} => {_downloadSpeed} | {logString}"); 
+
+                if (DownloadSpeed >= 0)
+                {
+                    await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), DownloadSpeed);
+                    // dlsHashes.Add(T["Hash"].ToString() ?? "");
+                    logger.Info($"Set downloadSpeed :: {T["Name"]} => {DownloadSpeed} | {logString}");
                 }
             }
+            
         }
-        
-        
 
     }
 

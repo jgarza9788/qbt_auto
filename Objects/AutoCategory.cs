@@ -1,7 +1,7 @@
 /*
 * ============================================================================
 *  Project:      qbt_auto
-*  File:         AutoCat.cs
+*  File:         AutoCategory.cs
 *  Description:  see Readme.md and comments
 *
 *  Author:       Justin Garza
@@ -21,25 +21,47 @@ using System.Threading.Tasks;
 
 namespace QbtAuto
 {
-    class AutoCat : AutoBase
+    class AutoCategory : AutoTorrentRuleBase
     {
         //this is in the base class
-        // public string criteria = "";
-        public string category = "";
+        /*
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
+        */
+        public string Category = "";
 
         private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
-        public AutoCat(
+        public AutoCategory(
+            string name,
             string category,
             string criteria,
-            QBittorrentClient qbtClient,
-            Plex plex,
-            Dictionary<string, object> globalDicts
+            ref QBittorrentClient qbtClient,
+            ref Plex plex,
+            ref Dictionary<string, object> globalDict,
+            string type = "AutoCategory"
             )
-            : base(qbtClient, plex, globalDicts)
+            : base(ref qbtClient, ref plex, ref globalDict)
         {
-            this.category = category;
-            this.criteria = criteria;
+            this.Name = name;
+            this.Type = type;
+            this.Category = category;
+            this.Criteria = criteria;
+        }
+
+        public override string getReport()
+        {
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+Category: {this.Category}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         /// <summary>
@@ -47,12 +69,12 @@ namespace QbtAuto
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose)
+        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
             Dictionary<string, object> Dict = new Dictionary<string, object>();
-            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(globalDict).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
@@ -69,10 +91,28 @@ namespace QbtAuto
 
             // Construct the new location with the SAME separator style
             string newLocation = string.IsNullOrEmpty(parentDir)
-                ? category
-                : $"{parentDir}{sep}{category}";
+                ? Category
+                : $"{parentDir}{sep}{Category}";
 
-            string logString = !verbose ? $"{T["Name"]} {category}" : $"Name:{T["Name"]}\nHash:{T["Hash"]?.ToString()}\ncategory:{category}\ncriteria{criteria}";
+            // Log useful torrent and rule data for debugging and auditing
+            string logString = $@"
+TorrentName: {T["Name"]}
+TorrentHash: {T["Hash"]}
+AutoName: {Name}
+AutoType: {Type}
+CurrentCategory: {currentCategory}
+TargetCategory: {Category}
+Criteria: {Criteria}
+Progress: {Progress}
+SavePath: {SavePath}
+ParentDir: {parentDir}
+NewLocation: {newLocation}
+";
+
+            if (verbose)
+            {
+                logger.Info(logString);
+            }
 
             bool? b = Evaluate(Dict, logString);
             if (b is null)
@@ -83,29 +123,17 @@ namespace QbtAuto
             if (b == true)
             {
 
-                if (currentCategory != category)
+                if (currentCategory != Category)
                 {
                     // AutomaticTorrentManagement should move the file to the correct location
+                    
                     await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), true);
-                    await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), category);
-                    logger.Info($"SetCategory :: {T["Name"]} => {category}");
+                    await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), Category);
+                    
 
+                    // TrueHashes.Add(T["Hash"].ToString() ?? "");
+                    logger.Info($"SetCategory :: {T["Name"]} => {Category}");
 
-                    //if it's done downloading, we will move the location
-                    /*
-                    if (Progress.Equals(1.0))
-                    {
-
-                        await qbt.SetLocationAsync(T["Hash"].ToString(), newLocation);
-
-                        logger.Info($"MovedTorrent :: {T["Name"]} => {newLocation}");
-                    }
-                    else
-                    {
-
-
-                    }
-                    */
                 }
 
             }
@@ -114,10 +142,11 @@ namespace QbtAuto
                 //do nothing
             }
 
+
         }
         
-        
 
+        
     }
 
 }

@@ -21,25 +21,47 @@ using System.Threading.Tasks;
 
 namespace QbtAuto
 {
-    class AutoMoves : AutoBase
+    class AutoMove : AutoTorrentRuleBase
     {
         //this is in the base class
-        // public string criteria = "";
-        public string path = "";
+        /*
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
+        */
+        public string Path = "";
 
         private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
-        public AutoMoves(
+        public AutoMove(
+            string name,
             string path,
             string criteria,
-            QBittorrentClient qbtClient,
-            Plex plex,
-            Dictionary<string, object> globalDicts
+            ref QBittorrentClient qbtClient,
+            ref Plex plex,
+            ref Dictionary<string, object> globalDict,
+            string type = "AutoMove"
             )
-            : base(qbtClient, plex, globalDicts)
+            : base(ref qbtClient, ref plex, ref globalDict)
         {
-            this.path       = path;
-            this.criteria   = criteria;
+            this.Name = name;
+            this.Type = type;
+            this.Path = path;
+            this.Criteria = criteria;
+        }
+
+        public override string getReport()
+        {
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+Path: {this.Path}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         /// <summary>
@@ -47,21 +69,33 @@ namespace QbtAuto
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose)
+        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
             Dictionary<string, object> Dict = new Dictionary<string, object>();
-            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(globalDict).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             //lcoal _path variable
-            string _path = Replacer(path, Dict);
+            string _path = Replacer(Path, Dict);
 
-            string logString = !verbose ? $"{T["Name"]}" : $"Name:{T["Name"]}\npath:{path}\ncriteria{criteria}";
+            string logString = $@"
+TorrentName: {T["Name"]}
+TorrentHash: {T["Hash"]}
+AutoName: {Name}
+AutoType: {Type}
+TargetPath: {_path}
+Criteria: {Criteria}
+";
 
-            if (!Directory.Exists(path))
+            if (verbose)
+            {
+                logger.Info(logString);
+            }
+
+            if (!Directory.Exists(_path))
             {
                 logger.Warn($"path does not exists,\n{logString}");
                 return;
@@ -74,18 +108,18 @@ namespace QbtAuto
             }
 
             if (b == false)
-            { 
+            {
                 return;
             }
 
             if (b == true)
             {
-
                 try
                 {
+                    //unable to do these in bulk due to the different paths
                     await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), false);
-                    await qbt.SetLocationAsync(T["Hash"].ToString(), path);
-                    logger.Info($"MovedTorrent :: {T["Name"]} => {path} | {logString}");
+                    await qbt.SetLocationAsync(T["Hash"].ToString(), _path);
+                    logger.Info($"MovedTorrent :: {T["Name"]} => {_path} | {logString}");
                 }
                 catch (Exception ex)
                 {
@@ -93,11 +127,8 @@ namespace QbtAuto
                     return;
                 }
             }
-
-
         }
-        
-        
+
 
     }
 

@@ -53,6 +53,7 @@ namespace QbtAuto
             catch (Exception ex)
             {
                 loggerFC.Error(ex);
+                loggerFC.Error(ex.StackTrace?.ToString() ?? "");
             }
         }
     }

@@ -20,6 +20,7 @@ using Utils;
 using QBittorrent.Client;
 using Json5Core;
 using System.Diagnostics;
+using NLog.LayoutRenderers.Wrappers;
 
 namespace QbtAuto
 {
@@ -43,13 +44,15 @@ namespace QbtAuto
         public IEnumerable<object> autoSpeeds = new List<object>();
         */
 
-        List<AutoBase> Autos = new List<AutoBase>();
-        Dictionary<string, object> globalDicts = new Dictionary<string, object>();
+        List<AutoTorrentRuleBase> Autos = new List<AutoTorrentRuleBase>();
+        Dictionary<string, object> globalDict = new Dictionary<string, object>();
 
         //Clients 
         public QBittorrentClient? qbt;
         public Plex plex = new Plex();
 
+
+        public DateTime LastRefreshTime;
         //variables to store DriveData and Torrent Data
         public Dictionary<string, object> driveData = new Dictionary<string, object>();
         public IReadOnlyList<TorrentInfo>? torrents;
@@ -60,10 +63,16 @@ namespace QbtAuto
         private static NLog.Logger loggerFC = NLog.LogManager.GetLogger("LoggerFC");
         private static NLog.Logger loggerF = NLog.LogManager.GetLogger("LoggerF");
         private static NLog.Logger loggerC = NLog.LogManager.GetLogger("LoggerC");
+        
+
+        
 
 
         public QbtAuto(string[] args)
         {
+            //set Console to unicode (optional)
+            //Console.OutputEncoding = System.Text.Encoding.UTF8;
+
             Title();
 
             //processing Args
@@ -111,7 +120,7 @@ namespace QbtAuto
             if (plex_login_data != null)
             {
                 plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
-                plex.user = getData(plex_login_data, ["user","u"]) as string ?? "";
+                plex.user = getData(plex_login_data, ["user", "u"]) as string ?? "";
                 plex.pwd = getData(plex_login_data, ["pwd", "password", "p"]) as string ?? "";
 
                 try
@@ -138,100 +147,121 @@ namespace QbtAuto
             loggerFC.Info($"verbose: {verbose}");
             loggerFC.Info($"");
 
-            var httpHandler = new SocketsHttpHandler
-            {
-                MaxConnectionsPerServer = 100,
-                PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-                PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-                AutomaticDecompression = DecompressionMethods.All
-            };
-            qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
-            qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
-            loggerFC.Info($"Connected to qBittorrent.");
+            // var httpHandler = new SocketsHttpHandler
+            // {
+            //     MaxConnectionsPerServer = 100,
+            //     PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            //     PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+            //     AutomaticDecompression = DecompressionMethods.All
+            // };
+            // qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
+            // qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
+            // loggerFC.Info($"Connected to qBittorrent.");
+            // pullTorrentData();
 
             //getting the driveadata
-            driveData = Drives.getDriveData();
-            globalDicts = globalDicts.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            // pullDriveData();
+
+            // globalDict = globalDict.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            refreshData();
+            if (qbt == null)
+            {
+                loggerFC.Error("qbt is null, but it should have been set to an instance");
+                return;
+            }
 
             #region CreateAutoObjects
 
-            // ** autoTags **
-            IEnumerable<object> autoTags = config.getValue("autoTags") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> autoTag in autoTags)
+            IEnumerable<object> ATRs = config.getValue("AutoTorrentRules") as IEnumerable<object> ?? new List<object>();
+            foreach (IDictionary<string, object> ATR in ATRs)
             {
-                Autos.Add(new AutoTag(
-                    autoTag["tag"].ToString() ?? "",
-                    autoTag["criteria"].ToString() ?? "",
-                    qbt,
-                    plex,
-                    globalDicts
-                    ));
-            } 
+                string type = (ATR["Type"].ToString() ?? "").ToUpper();
 
-            // ** autoCategories **
-            IEnumerable<object> autoCategories = config.getValue("autoCategories") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> autoCat in autoCategories)
-            {
-                Autos.Add(new AutoCat(
-                    autoCat["category"].ToString() ?? "",
-                    autoCat["criteria"].ToString() ?? "",
-                    qbt,
-                    plex,
-                    globalDicts
-                    ));
-            } 
-
-            // ** autoScripts **
-            IEnumerable<object> autoScripts = config.getValue("autoScripts") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> autoScript in autoScripts)
-            {
-                Autos.Add(new AutoScript(
-                    autoScript["name"].ToString() ?? "",
-                    autoScript["directory"].ToString() ?? "",
-                    autoScript["shebang"].ToString() ?? "",
-                    autoScript["script"].ToString() ?? "",
-                    (long)(autoScript["timeout"] ?? 100),
-                    autoScript["criteria"].ToString() ?? "",
-                    qbt,
-                    plex,
-                    globalDicts
-                    ));
-            } 
-
-            // ** autoMoves **
-            IEnumerable<object> autoMoves = config.getValue("autoMoves") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> autoMov in autoMoves)
-            {
-                Autos.Add(new AutoMoves(
-                    autoMov["path"].ToString() ?? "",
-                    autoMov["criteria"].ToString() ?? "",
-                    qbt,
-                    plex,
-                    globalDicts
-                    ));
-            } 
-
-            // ** autoSpeeds **
-            IEnumerable<object> autoSpeeds = config.getValue("autoSpeeds") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> autoSpeed in autoSpeeds)
-            {
-                Autos.Add(new AutoSpeed(
-                    (long)(autoSpeed["uploadSpeed"] ?? -1),
-                    (long)(autoSpeed["downloadSpeed"] ?? -1),
-                    autoSpeed["criteria"].ToString() ?? "",
-                    qbt,
-                    plex,
-                    globalDicts
-                    ));
-            } 
-
+                if (type == "AutoTag".ToUpper())
+                {
+                    Autos.Add(
+                        new AutoTag(
+                        name: ATR["Name"].ToString() ?? "",
+                        tag: ATR["Tag"].ToString() ?? "",
+                        criteria: ATR["Criteria"].ToString() ?? "",
+                        qbtClient: ref qbt,
+                        plex: ref plex,
+                        globalDict: ref globalDict
+                        )
+                    );
+                }
+                else if (type == "AutoCategory".ToUpper())
+                {
+                    Autos.Add(
+                        new AutoCategory(
+                        name: ATR["Name"].ToString() ?? "",
+                        category: ATR["Category"].ToString() ?? "",
+                        criteria: ATR["Criteria"].ToString() ?? "",
+                        qbtClient: ref qbt,
+                        plex: ref plex,
+                        globalDict: ref globalDict
+                        )
+                    );
+                }
+                else if (type == "AutoScript".ToUpper())
+                {
+                    Autos.Add(
+                        new AutoScript(
+                        name: ATR["Name"].ToString() ?? "",
+                        runDir: ATR["RunDir"].ToString() ?? "",
+                        shebang: ATR["Shebang"].ToString() ?? "",
+                        script: ATR["Script"].ToString() ?? "",
+                        timeout: (long)(ATR["Timeout"] ?? 500),
+                        criteria: ATR["Criteria"].ToString() ?? "",
+                        qbtClient: ref qbt,
+                        plex: ref plex,
+                        globalDict: ref globalDict
+                        )
+                    );
+                }
+                else if (type == "AutoMove".ToUpper())
+                {
+                    Autos.Add(
+                        new AutoMove(
+                        name: ATR["Name"].ToString() ?? "",
+                        path: ATR["Path"].ToString() ?? "",
+                        criteria: ATR["Criteria"].ToString() ?? "",
+                        qbtClient: ref qbt,
+                        plex: ref plex,
+                        globalDict: ref globalDict
+                        )
+                    );
+                }
+                else if (type == "AutoSpeed".ToUpper())
+                {
+                    Autos.Add(
+                        new AutoSpeed(
+                        name: ATR["Name"].ToString() ?? "",
+                        uploadSpeed: (long)(ATR["UploadSpeed"] ?? -1),
+                        downloadSpeed: (long)(ATR["DownloadSpeed"] ?? -1),
+                        criteria: ATR["Criteria"].ToString() ?? "",
+                        qbtClient: ref qbt,
+                        plex: ref plex,
+                        globalDict: ref globalDict
+                        )
+                    );
+                }
+                else
+                {
+                    string logString = $"AutoTorrentRule {(ATR["Name"].ToString() ?? "")} does not have a Type Value";
+                    if (verbose)
+                    {
+                        loggerFC.Warn(logString);
+                    }
+                    else
+                    {
+                        loggerF.Warn(logString);
+                    }
+                }
+            }
 
             #endregion
-
-            // gets all the torrent data
-            torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
-
-
 
             //used for debugging
             /*
@@ -241,10 +271,52 @@ namespace QbtAuto
             #region verbose_for_testing
             if (verbose)
             {
-                logKeys(torrents);
+                if (torrents != null)
+                {
+                    logKeys(torrents);
+                }
             }
             #endregion
 
+        }
+
+        /// <summary>
+        /// refreshes data from 
+        /// </summary>
+        public void refreshData()
+        {
+            if ((DateTime.Now - LastRefreshTime).Hours < 1.0)
+            {
+                loggerF.Info("no refresh needed");
+                return;
+            }
+            LastRefreshTime = DateTime.Now;
+
+            plex.LoadAsync().GetAwaiter().GetResult();
+            driveData = Drives.getDriveData();
+            pullTorrentData();
+
+            globalDict.Clear();
+            globalDict = globalDict.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        }
+
+        public void pullTorrentData()
+        {
+            if (qbt == null)
+            {
+                var httpHandler = new SocketsHttpHandler
+                {
+                    MaxConnectionsPerServer = 100,
+                    PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                    AutomaticDecompression = DecompressionMethods.All
+                };
+
+                qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
+                qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
+                loggerFC.Info($"Connected to qBittorrent.");
+            }
+            torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
         }
 
         
@@ -264,7 +336,7 @@ namespace QbtAuto
               \__|
         
         ");
-        
+
         }
 
 
@@ -362,9 +434,17 @@ namespace QbtAuto
             var sw = new Stopwatch();
             sw.Start();
 
+            refreshData();
+
             if (torrents == null || torrents.Count == 0)
             {
                 loggerFC.Info("No torrents to process.");
+                return;
+            }
+
+            if (qbt == null)
+            { 
+                loggerFC.Error("qbt is null");
                 return;
             }
 
@@ -400,6 +480,9 @@ namespace QbtAuto
                 });
 
             await Task.WhenAll(tasks);
+
+
+
             loggerFC.Info("\nProcessing completed.");
 
             sw.Stop();
@@ -408,31 +491,25 @@ namespace QbtAuto
             {
                 foreach (var auto in Autos)
                 {
-                    loggerFC.Info(
-@$"--------------------
-Auto: {auto.GetType()}
-Criteria: {auto.criteria}
-Success: {auto.SuccessCount}
-Failure (to meet critera): {auto.FailureCount}
-Error: {auto.ErrorCount}
---------------------"
-                        );
+                    loggerFC.Info(auto.getReport());
                 }
             }
 
-            loggerFC.Info("**REPORT**");
-            double total_AXT = Autos.Count * torrents.Count;
-            loggerFC.Info($"total (Autos*Torrents): {total_AXT:F2}");
-            loggerFC.Info($"time: {sw.Elapsed.TotalMilliseconds:F4} ms");
-            loggerFC.Info($"{total_AXT / sw.Elapsed.TotalMilliseconds:F4} per ms");
-            loggerFC.Info($"{total_AXT/sw.Elapsed.TotalSeconds:F2} per sec");
 
+            double total_AXT = Autos.Count * torrents.Count;
+            loggerFC.Info(@$"
+**REPORT**
+total (Autos*Torrents): {total_AXT:F2}
+time: {sw.Elapsed.TotalMilliseconds:F4} ms
+{total_AXT / sw.Elapsed.TotalMilliseconds:F4} per ms
+{total_AXT/sw.Elapsed.TotalSeconds:F2} per sec
+            ");
             
         }
 
 
 
-        private async Task PrintProgress(int completed, int total)
+        private Task PrintProgress(int completed, int total)
         {
             double percent = (double)completed / total;
             int barSize = 40; // number of chars in the bar
@@ -441,26 +518,10 @@ Error: {auto.ErrorCount}
             string bar = new string('#', filled).PadRight(barSize);
 
             Console.Write($"\r[{bar}] {percent:P2}   ");
+            return Task.CompletedTask;
+
         }
 
-        // private void PrintProgress(int completed, int total, long timems)
-        // {
-        //     double percent = (double)completed / total;
-        //     int barSize = 40; // number of chars in the bar
-        //     int filled = (int)(percent * barSize);
-
-        //     string bar = new string('#', filled).PadRight(barSize);
-
-        //     try
-        //     {
-        //         Console.SetCursorPosition(0, Console.CursorTop);
-        //         Console.Write($"[{bar}] {percent:P2} {timems:F0}ms   ");
-        //     }
-        //     catch
-        //     {
-        //         Console.WriteLine($"[{bar}] {percent:P2} {timems:F0}ms");
-        //     }
-        // }
 
         #endregion
 

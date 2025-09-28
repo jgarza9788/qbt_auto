@@ -16,30 +16,52 @@
 
 using Utils;
 using QBittorrent.Client;
-using Microsoft.CodeAnalysis.Scripting.Hosting;
-using System.Threading.Tasks;
+
 
 namespace QbtAuto
 {
-    class AutoTag : AutoBase
+    class AutoTag : AutoTorrentRuleBase
     {
         //this is in the base class
-        // public string criteria = "";
-        public string tag = "";
+        /*
+        public string Name = "";
+        public string Type = "";
+        public string Criteria = "";
+        */
+        public string Tag = "";
 
         private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
+
         public AutoTag(
+            string name,
             string tag,
             string criteria,
-            QBittorrentClient qbtClient,
-            Plex plex,
-            Dictionary<string, object> globalDicts
+            ref QBittorrentClient qbtClient,
+            ref Plex plex,
+            ref Dictionary<string, object> globalDict,
+            string type = "AutoTag"
             )
-            : base(qbtClient, plex, globalDicts)
+            : base(ref qbtClient, ref plex, ref globalDict)
         {
-            this.tag = tag;
-            this.criteria = criteria;
+            this.Name = name;
+            this.Type = type;
+            this.Tag = tag;
+            this.Criteria = criteria;
+        }
+
+        public override string getReport()
+        {
+            return @$"
+--------------------
+Name: {this.Name} 
+Type: {this.Type}
+Tag: {this.Tag}
+Criteria: {this.Criteria}
+Success: {this.SuccessCount}
+Failure (to meet critera): {this.FailureCount}
+Error: {this.ErrorCount}
+--------------------";
         }
 
         /// <summary>
@@ -47,12 +69,12 @@ namespace QbtAuto
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose)
+        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
             Dictionary<string, object> Dict = new Dictionary<string, object>();
-            Dict = Dict.Concat(globalDicts).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+            Dict = Dict.Concat(globalDict).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(T).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
             Dict = Dict.Concat(plexdata).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
@@ -61,7 +83,19 @@ namespace QbtAuto
                 ? string.Join(",", ctlist)
                 : T["Tags"]?.ToString() ?? "";
 
-            string logString = !verbose ? $"{T["Name"]} {tag}" : $"Name:{T["Name"]}\nHash:{T["Hash"]}\nTag:{tag}\ncriteria:{criteria}";
+            string logString = $@"
+TorrentName: {T["Name"]}
+TorrentHash: {T["Hash"]}
+Name: {Name}
+Type: {Type}
+Tag: {Tag}
+Criteria: {Criteria}
+";
+
+            if (verbose)
+            {
+                logger.Info(logString);
+            }
 
             bool? b = Evaluate(Dict, logString);
             if (b is null)
@@ -71,47 +105,27 @@ namespace QbtAuto
 
             if (b == true)
             {
-                if (!currentTags.Contains(tag))
+                if (!currentTags.Contains(Tag))
                 {
-                    await AddTag(T, tag);
-                    // await qbt.AddTorrentTagAsync(T["Hash"].ToString(), tag);
+                    await qbt.AddTorrentTagAsync(T["Hash"].ToString(), Tag);
                     // logger.Info($"AddTag :: {T["Name"]} + {tag}");
                 }
             }
             else if (b == false)
             {
-                if (currentTags.Contains(tag))
+                if (currentTags.Contains(Tag))
                 {
-                    await RemoveTag(T, tag);
-                    // await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), tag);
+
+                    await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), Tag);
                     // logger.Info($"DeleteTag :: {T["Name"]} - {tag}");
                 }
             }
 
+
+
         }
 
-        /// <summary>
-        /// AddTag
-        /// </summary>
-        /// <param name="T"></param>
-        /// <param name="tag"></param>
-        public async Task AddTag(Dictionary<string, object> T, string tag)
-        {
-            await qbt.AddTorrentTagAsync(T["Hash"].ToString(), tag);
-            logger.Info($"AddTag :: {T["Name"]} + {tag}");
-        }
-        
-        /// <summary>
-        /// RemoveTag
-        /// </summary>
-        /// <param name="T"></param>
-        /// <param name="tag"></param>
-        public async Task RemoveTag(Dictionary<string, object> T, string tag)
-        {
-            await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), tag);
-            logger.Info($"DeleteTag :: {T["Name"]} - {tag}");
-        }
-        
+
         
 
     }

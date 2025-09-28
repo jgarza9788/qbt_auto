@@ -97,133 +97,124 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
 ```json
 {
   //optional - provide connection data in config
-  "qbt":{
+  "qbt": {
     "host": "http://###.###.#.###:####",
     "user": "?????",
-    "pwd":  "*****"
+    "pwd": "*****"
   },
   //plex - optional
-  "plex":{
-      "url": "http://###.###.#.###:32400",
-      "user": "?????",
-      "pwd": "*****"
+  "plex": {
+    "url": "http://###.###.#.###:32400",
+    "user": "?????",
+    "pwd": "*****"
   },
-
-  "autoTags": [
+  "AutoTorrentRules": [
+    // ───────────── AutoTag (from autoTags) ─────────────
     {
-      // Tag torrents smaller than 1 GB
-      "tag": "small_file",
-      "criteria": "(<Size> < 1073741824)" 
+      "Name": "Tag_SmallFile",
+      "Type": "AutoTag",
+      "Tag": "small_file",
+      "Criteria": "(<Size> < 1073741824)"
     },
     {
-      // Tag torrents between 1 GB and 10 GB
-      "tag": "medium_file",
-      "criteria": "(<Size> >= 1073741824) && (<Size> < 10737418240)"
+      "Name": "Tag_MediumFile",
+      "Type": "AutoTag",
+      "Tag": "medium_file",
+      "Criteria": "(<Size> >= 1073741824) && (<Size> < 10737418240)"
     },
     {
-      // Tag torrents larger than 10 GB
-      "tag": "large_file",
-      "criteria": "(<Size> >= 10737418240)"
+      "Name": "Tag_LargeFile",
+      "Type": "AutoTag",
+      "Tag": "large_file",
+      "Criteria": "(<Size> >= 10737418240)"
     },
     {
-      // Tag torrents that look like TV episodes (SxxExx pattern)
-      "tag": "tv_show",
-      "criteria": "match(\"<Name>\", \"S[0-9][0-9]E[0-9][0-9]\")"
+      "Name": "Tag_TvShow_EpisodePattern",
+      "Type": "AutoTag",
+      "Tag": "tv_show",
+      "Criteria": "match(\"<Name>\", \"S[0-9][0-9]E[0-9][0-9]\")"
     },
     {
-      // Tag torrents saved in the Music folder
-      "tag": "music",
-      "criteria": "contains(\"<SavePath>\", \"/Music/\")"
+      "Name": "Tag_Music_ByPath",
+      "Type": "AutoTag",
+      "Tag": "music",
+      "Criteria": "contains(\"<SavePath>\", \"/Music/\")"
     },
     {
-      // Tag torrents that had no activity for at least 30 days
-      "tag": "inactive_30d",
-      "criteria": "daysAgo(\"<LastActivityTime>\") >= 30.0"
+      "Name": "Tag_Inactive_30d",
+      "Type": "AutoTag",
+      "Tag": "inactive_30d",
+      "Criteria": "daysAgo(\"<LastActivityTime>\") >= 30.0"
     },
     {
-      // Tag torrents that had no activity for at least 90 days
-      "tag": "inactive_90d",
-      "criteria": "daysAgo(\"<LastActivityTime>\") >= 90.0"
+      "Name": "Tag_Inactive_90d",
+      "Type": "AutoTag",
+      "Tag": "inactive_90d",
+      "Criteria": "daysAgo(\"<LastActivityTime>\") >= 90.0"
     },
     {
-      // Tag torrents in category "Movies" that were added at least 1 year ago
-      "tag": "old_movie",
-      "criteria": "contains(\"<Category>\", \"Movies\") && daysAgo(\"<AddedOn>\") >= 365.0"
+      "Name": "Tag_OldMovie",
+      "Type": "AutoTag",
+      "Tag": "old_movie",
+      "Criteria": "contains(\"<Category>\", \"Movies\") && daysAgo(\"<AddedOn>\") >= 365.0"
     },
     {
-      //no views on plex yet
-      // - this would require the plex login in the config file
-      "tag": "NoViews",
-      "criteria": "(<plex_viewCount> == 0)"
+      "Name": "Tag_NoViews_OnPlex",
+      "Type": "AutoTag",
+      "Tag": "NoViews",
+      "Criteria": "(<plex_viewCount> == 0)"
     },
-  ],
-
-  "autoCategories": [
+    // ───────────── AutoCategory (from autoCategories) ─────────────
     {
-      // Categorize as Movies if torrent name contains typical quality markers
-      "category": "Movies",
-      "criteria": "match(\"<Name>\", \"(720p|1080p|2160p|BluRay)\")"
-    },
-    {
-      // Categorize as TV if torrent name has TV episode pattern
-      "category": "TV",
-      "criteria": "match(\"<Name>\", \"S[0-9][0-9]E[0-9][0-9]\")"
+      "Name": "Category_Movies_ByQuality",
+      "Type": "AutoCategory",
+      "Category": "Movies",
+      "Criteria": "match(\"<Name>\", \"(720p|1080p|2160p|BluRay)\")"
     },
     {
-      // Categorize as Music if save path contains /Music/
-      "category": "Music",
-      "criteria": "contains(\"<SavePath>\", \"/Music/\")"
+      "Name": "Category_TV_ByEpisode",
+      "Type": "AutoCategory",
+      "Category": "TV",
+      "Criteria": "match(\"<Name>\", \"S[0-9][0-9]E[0-9][0-9]\")"
     },
     {
-      // Categorize as Software if save path contains /Software/
-      "category": "Software",
-      "criteria": "contains(\"<SavePath>\", \"/Software/\")"
+      "Name": "Category_Music_ByPath",
+      "Type": "AutoCategory",
+      "Category": "Music",
+      "Criteria": "contains(\"<SavePath>\", \"/Music/\")"
+    },
+    {
+      "Name": "Category_Software_ByPath",
+      "Type": "AutoCategory",
+      "Category": "Software",
+      "Criteria": "contains(\"<SavePath>\", \"/Software/\")"
+    },
+    // ───────────── AutoScript (from autoScripts) ─────────────
+    {
+      "Name": "Script_UnzipDone",
+      "Type": "AutoScript",
+      "Criteria": "(\"<Progress>\" == \"1\") && ((\"Movies\" == \"<Category>\") || (\"Shows\" == \"<Category>\")) && match(\"<ContentPath>\",\"(Shows|Movies)\")",
+      "RunDir": "<ContentPath>",
+      "Shebang": "/bin/bash",
+      "Script": "unrar x -o- *.rar",
+      "Timeout": 3000
+    },
+    // ───────────── AutoMove (from autoMoves) ─────────────
+    {
+      "Name": "Move_ToH00_FromS00_Stale_ShowsMovies",
+      "Type": "AutoMove",
+      "Path": "/media/jgarza/H00/Torrents/<Category>",
+      "Criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
+    },
+    // ───────────── AutoSpeed (from autoSpeeds) ─────────────
+    {
+      "Name": "Speed_Unlimited_ShowsMovies",
+      "Type": "AutoSpeed",
+      "UploadSpeed": 0,
+      "UownloadSpeed": 0,
+      "Criteria": "match(\"<Category>\",\"(Shows|Movies)\")"
     }
-  ],
-
-  "autoScripts":[
-    {
-      //a blank file named unzip.done will be placed to mark this is script was ran.
-      "name": "unzip.done",
-      "criteria": "(\"<Progress>\" == \"1\") && ((\"Movies\" == \"<Category>\") || (\"Shows\" == \"<Category>\")) && match(\"<ContentPath>\",\"(Shows|Movies)\")",
-      "directory": "<ContentPath>",
-      //shebang should be ...
-      /*
-      /bin/bash (for linux)
-      /usr/bin/bash (for the user's custom's bash)
-      cmd.exe (for windows)
-      pwsh (if you use powershell)
-      ...or a custom
-      */
-      "shebang": "/bin/bash", 
-      "script": "unrar x -o- *.rar", //this would require unrar to be installed
-      "timeout": 3000 //sec => 5hours
-    },
-  ],
-
-  //these will move a torrent if the criteria is met
-  "autoMoves":[
-      {
-        //<Category> will be replaced with the category from that torrent
-        "path": "/media/jgarza/H00/Torrents/<Category>",
-        // drive is less than 0.9 (90% full), active time is over 14 days, it's last active time is over 3 days ago, it was completed over 14, the category is Shows or Movies, and it's save path has S00 in it.
-        "criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
-      },
-    ],
-
-    //addjust rates/speed for uploading and downloading
-    "autoSpeeds":[
-        {
-            /*
-            value in KB (kilobytes)
-            0 is unlimited
-            -1 is null or skip 
-            */
-            "uploadSpeed": 0,
-            "downloadSpeed": 0,
-            "criteria": "match(\"<Category>\",\"(Shows|Movies)\")",
-        }
-    ]
+  ]
 }
 ```
 
