@@ -129,6 +129,42 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       "Criteria": "(<Size> >= 10737418240)"
     },
     {
+        "Name": "ULperDay_0.00GB_0.10GB",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.0GB_0.10GB",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0) && (<Uploaded>/(<ActiveTime>/864000000000)) < (1073741824*0.10) "
+    },
+    {
+        "Name": "ULperDay_0.10GB_0.20GB",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.10GB_0.20GB",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0.1) && (<Uploaded>/(<ActiveTime>/864000000000)) < (1073741824*0.20) "
+    },
+    {
+        "Name": "ULperDay_0.20GB_0.30GB",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.20GB_0.30GB",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0.20) && (<Uploaded>/(<ActiveTime>/864000000000)) < (1073741824*0.3) "
+    },
+    {
+        "Name": "ULperDay_0.30GB_0.40GB",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.30GB_0.40GB",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0.30) && (<Uploaded>/(<ActiveTime>/864000000000)) < (1073741824*0.4) "
+    },
+    {
+        "Name": "ULperDay_0.40GB_0.50GB",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.40GB_0.50GB",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0.40) && (<Uploaded>/(<ActiveTime>/864000000000)) < (1073741824*0.5) "
+    },
+    {
+        "Name": "ULperDay_0.50GB_plus",
+        "Type": "AutoTag",
+        "Tag": "ULperDay_0.50GB_plus",
+        "Criteria": "(<Uploaded>/(<ActiveTime>/864000000000)) >= (1073741824*0.5) "
+    },
+    {
       "Name": "Tag_TvShow_EpisodePattern",
       "Type": "AutoTag",
       "Tag": "tv_show",
@@ -196,7 +232,7 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       "Criteria": "(\"<Progress>\" == \"1\") && ((\"Movies\" == \"<Category>\") || (\"Shows\" == \"<Category>\")) && match(\"<ContentPath>\",\"(Shows|Movies)\")",
       "RunDir": "<ContentPath>",
       "Shebang": "/bin/bash",
-      "Script": "unrar x -o- *.rar",
+      "Script": "unrar x -o- *.rar", //requires unrar to be installed
       "Timeout": 3000
     },
     // ───────────── AutoMove (from autoMoves) ─────────────
