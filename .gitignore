@@ -1,6 +1,7 @@
 config.json
 bin
 plex_cache.json
+notes.md
 
 # other stuff
 .vscode
