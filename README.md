@@ -109,7 +109,7 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
     "pwd": "*****"
   },
   "AutoTorrentRules": [
-    // ───────────── AutoTag (from autoTags) ─────────────
+    // ---------- AutoTag (from autoTags) ----------
     {
       "Name": "Tag_SmallFile",
       "Type": "AutoTag",
@@ -200,7 +200,7 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       "Tag": "NoViews",
       "Criteria": "(<plex_viewCount> == 0)"
     },
-    // ───────────── AutoCategory (from autoCategories) ─────────────
+    // ---------- AutoCategory (from autoCategories) ----------
     {
       "Name": "Category_Movies_ByQuality",
       "Type": "AutoCategory",
@@ -225,7 +225,7 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       "Category": "Software",
       "Criteria": "contains(\"<SavePath>\", \"/Software/\")"
     },
-    // ───────────── AutoScript (from autoScripts) ─────────────
+    // ---------- AutoScript ----------
     {
       "Name": "Script_UnzipDone",
       "Type": "AutoScript",
@@ -235,14 +235,19 @@ Run at intervals by adding the command to CRON (linux), or Windows Task Schedule
       "Script": "unrar x -o- *.rar", //requires unrar to be installed
       "Timeout": 3000
     },
-    // ───────────── AutoMove (from autoMoves) ─────────────
+    // ---------- AutoMove ----------
     {
       "Name": "Move_ToH00_FromS00_Stale_ShowsMovies",
       "Type": "AutoMove",
       "Path": "/media/jgarza/H00/Torrents/<Category>",
       "Criteria": " (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\"<LastActivityTime>\") >= 3.0) && (daysAgo(\"<LastSeenComplete>\") >= 14.0) && match(\"<Category>\",\"(Shows|Movies)\") && match(\"<SavePath>\",\"S00\") "
     },
-    // ───────────── AutoSpeed (from autoSpeeds) ─────────────
+    // ---------- AutoSpeed ----------
+    /*
+    value in kb
+    0 is unlimited
+    -1 is null or skip 
+    */
     {
       "Name": "Speed_Unlimited_ShowsMovies",
       "Type": "AutoSpeed",
