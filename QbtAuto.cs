@@ -57,8 +57,9 @@ namespace QbtAuto
         private static NLog.Logger loggerF = NLog.LogManager.GetLogger("LoggerF");
         private static NLog.Logger loggerC = NLog.LogManager.GetLogger("LoggerC");
 
-        public bool IsSetUp = false;
+        public bool DryRun = false;
 
+        public bool IsSetUp = false;
 
         public QbtAuto(string[] args)
         {
@@ -91,6 +92,19 @@ namespace QbtAuto
                 )
             {
                 verbose = true;
+            }
+
+            string? dr = AP.get(["dryrun", "dry_run", "dry","dr","dry-run"], "") ?? "";
+            dr = dr.Trim();
+            if (
+                dr.Contains('1', StringComparison.OrdinalIgnoreCase)
+                || dr.Contains("TRUE", StringComparison.OrdinalIgnoreCase)
+                || dr.Contains("YES", StringComparison.OrdinalIgnoreCase)
+                || dr.Contains("ON", StringComparison.OrdinalIgnoreCase)
+                || dr.Contains("T", StringComparison.OrdinalIgnoreCase)
+                )
+            {
+                DryRun = true;
             }
 
             ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
@@ -135,7 +149,6 @@ namespace QbtAuto
             {
                 loggerC.Info("Please fill out the exampleConfig.json and run again.");
                 return;
-
             }
 
             //print data
@@ -146,6 +159,7 @@ namespace QbtAuto
             loggerFC.Info($"ConfigPath: {ConfigPath}");
             loggerFC.Info($"Plex.isLoaded: {plex.isLoaded}");
             loggerFC.Info($"verbose: {verbose}");
+            loggerFC.Info($"Dry Run: {DryRun}");
             loggerFC.Info($"");
 
             //refresh data
@@ -248,10 +262,6 @@ namespace QbtAuto
 
             #endregion
 
-            //used for debugging
-            /*
-            qbt.AddTorrentTagAsync("c1545b527137317de5a3667031d7b922c873d484", "test").GetAwaiter().GetResult();
-            */
 
             #region verbose_for_testing
             if (verbose)
@@ -459,7 +469,7 @@ namespace QbtAuto
 
                     foreach (var auto in Autos)
                     {
-                        await auto.Process(T, verbose);
+                        await auto.Process(T, verbose, DryRun);
                     }
 
                     // can also do it like this

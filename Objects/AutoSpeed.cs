@@ -76,7 +76,11 @@ Error: {this.ErrorCount}
         /// </summary>
         /// <param name="T"></param>
         /// <param name="Dict"></param>
-        public override async Task Process(Dictionary<string, object> T, bool verbose = false)
+        public override async Task Process(
+            Dictionary<string, object> T,
+            bool verbose = false,
+            bool dryRun = false
+            )
         {
             var plexdata = plex.getData(T["ContentPath"].ToString() ?? "");
 
@@ -101,6 +105,12 @@ Criteria: {Criteria}
             }
 
             bool? b = Evaluate(Dict, logString);
+            if (dryRun)
+            {
+                logger.Info($"{logString}\nResult was {b} | DryRun is enabled, no changes will be made.");
+                return;
+            }
+            
             if (b is null)
             {
                 return;
