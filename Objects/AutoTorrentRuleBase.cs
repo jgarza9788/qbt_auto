@@ -113,7 +113,7 @@ Error: {this.ErrorCount}
             catch (Exception ex)
             {
                 ErrorCount++;
-                logger.Error(ex, logstring);
+                logger.Warn(ex, logstring);
                 return null;
             }
         }
