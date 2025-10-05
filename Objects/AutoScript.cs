@@ -34,7 +34,7 @@ namespace QbtAuto
         public string Script = "";
         public long Timeout = 500;
 
-
+        // public bool CreateDoneFile = true;
 
         private static NLog.Logger logger = NLog.LogManager.GetLogger("LoggerF");
 
@@ -48,17 +48,19 @@ namespace QbtAuto
             ref QBittorrentClient qbtClient,
             ref Plex plex,
             ref Dictionary<string, object> globalDict,
+            // bool createDoneFile = true,
             string type = "AutoScript"
             )
-            : base(ref qbtClient,ref plex,ref globalDict)
+            : base(ref qbtClient, ref plex, ref globalDict)
         {
-            this.Name       = name;
-            this.Type       = type;
-            this.RunDir     = runDir;
-            this.Shebang    = shebang;
-            this.Script     = script;
-            this.Timeout    = timeout;
-            this.Criteria   = criteria;
+            this.Name = name;
+            this.Type = type;
+            this.RunDir = runDir;
+            this.Shebang = shebang;
+            this.Script = script;
+            this.Timeout = timeout;
+            this.Criteria = criteria;
+            // this.CreateDoneFile = createDoneFile;
         }
 
         public override string getReport()
@@ -174,6 +176,12 @@ Criteria: {Criteria}
                         var r = await Utils.Cmd.SheBangCmdAsync(_shebang, _script, _runDir, (int)Timeout);
                         logger.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
                         await File.WriteAllTextAsync($"{_runDir}{sep}{Name}", "");
+
+                        // if (CreateDoneFile)
+                        // {
+                        //     await File.WriteAllTextAsync($"{_runDir}{sep}{Name}", "");
+                        // }
+                        
                     }
                 }
                 catch (Exception ex)

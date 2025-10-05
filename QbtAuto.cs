@@ -64,7 +64,7 @@ namespace QbtAuto
         public QbtAuto(string[] args)
         {
             //set Console to unicode (optional)
-            //Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
 
             Title();
 
@@ -94,7 +94,7 @@ namespace QbtAuto
                 verbose = true;
             }
 
-            string? dr = AP.get(["dryrun", "dry_run", "dry","dr","dry-run"], "") ?? "";
+            string? dr = AP.get(["dryrun", "dry_run", "dry", "dr", "dry-run"], "") ?? "";
             dr = dr.Trim();
             if (
                 dr.Contains('1', StringComparison.OrdinalIgnoreCase)
@@ -109,7 +109,7 @@ namespace QbtAuto
 
             ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
             DataObject config = new DataObject(ConfigPath);
-            loggerFC.Info("Config loaded.");
+            loggerFC.Info("✅ Config loaded.");
 
             //if these values are on in the args, they can be in the config
             Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
@@ -143,24 +143,16 @@ namespace QbtAuto
             //maybe we'll just ask the user
             if (EnsureParametersValid())
             {
-                loggerFC.Info("Parameters valid.");
+                loggerFC.Info("✅ Parameters valid.");
             }
             else
             {
-                loggerC.Info("Please fill out the exampleConfig.json and run again.");
+                loggerC.Info("❌ Please fill out the exampleConfig.json and run again.");
                 return;
             }
 
-            //print data
-            loggerFC.Info($"");
-            loggerFC.Info($"URL: {URL}");
-            loggerFC.Info($"USER: {USER}");
-            loggerFC.Info($"Password: ******");
-            loggerFC.Info($"ConfigPath: {ConfigPath}");
-            loggerFC.Info($"Plex.isLoaded: {plex.isLoaded}");
-            loggerFC.Info($"verbose: {verbose}");
-            loggerFC.Info($"Dry Run: {DryRun}");
-            loggerFC.Info($"");
+            // i can print this later 
+            // loggerFC.Info(getParameterInfo());
 
             //refresh data
             refreshData();
@@ -213,6 +205,7 @@ namespace QbtAuto
                         script: ATR["Script"].ToString() ?? "",
                         timeout: (long)(ATR["Timeout"] ?? 500),
                         criteria: ATR["Criteria"].ToString() ?? "",
+                        // createDoneFile: (bool)(ATR.ContainsKey("CreateDoneFile") ? ATR["CreateDoneFile"] ?? true : true),
                         qbtClient: ref qbt,
                         plex: ref plex,
                         globalDict: ref globalDict
@@ -291,49 +284,62 @@ namespace QbtAuto
             LastRefreshTime = DateTime.Now;
 
             plex.LoadAsync().GetAwaiter().GetResult();
+            loggerFC.Info(plex.isLoaded ? "✅ Plex loaded." : "❌ Plex not loaded.");
+
             driveData = Drives.getDriveData();
-            pullTorrentData();
+            loggerFC.Info((driveData.Count > 0) ? "✅ DriveData loaded." : "❌ DriveData not loaded.");
+
+            bool pdt = pullTorrentData();
+            loggerFC.Info(pdt ? "✅ TorrentData loaded." : "❌ TorrentData not loaded.");
 
             globalDict.Clear();
             globalDict = globalDict.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
-        public void pullTorrentData()
+        public bool pullTorrentData()
         {
-            if (qbt == null)
+            try
             {
-                var httpHandler = new SocketsHttpHandler
+                if (qbt == null)
                 {
-                    MaxConnectionsPerServer = 100,
-                    PooledConnectionLifetime = TimeSpan.FromMinutes(10),
-                    PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-                    AutomaticDecompression = DecompressionMethods.All
-                };
+                    var httpHandler = new SocketsHttpHandler
+                    {
+                        MaxConnectionsPerServer = 100,
+                        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+                        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+                        AutomaticDecompression = DecompressionMethods.All
+                    };
 
-                qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
-                qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
-                loggerFC.Info($"Connected to qBittorrent.");
+                    qbt = new QBittorrentClient(new Uri(URL!), httpHandler, disposeHandler: false);
+                    qbt.LoginAsync(USER!, Password!).GetAwaiter().GetResult();
+                }
+                torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
+                return true;
             }
-            torrents = qbt.GetTorrentListAsync().GetAwaiter().GetResult();
+            catch (Exception ex)
+            {
+                loggerF.Error(ex, "unable to get data from qbt, see error");
+                return false;
+            }
+
         }
 
 
         public void Title()
         {
             Console.Write(@"
-                  $$\        $$\                                $$\               
-                  $$ |       $$ |                               $$ |              
-         $$$$$$\  $$$$$$$\ $$$$$$\         $$$$$$\  $$\   $$\ $$$$$$\    $$$$$$\  
-        $$  __$$\ $$  __$$\\_$$  _|        \____$$\ $$ |  $$ |\_$$  _|  $$  __$$\ 
-        $$ /  $$ |$$ |  $$ | $$ |          $$$$$$$ |$$ |  $$ |  $$ |    $$ /  $$ |
-        $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
-        \$$$$$$$ |$$$$$$$  | \$$$$  |     \$$$$$$$ |\$$$$$$  |  \$$$$  |\$$$$$$  |
-         \____$$ |\_______/   \____/$$$$$$\\_______| \______/    \____/  \______/ 
-              $$ |                  \______|                                      
-              $$ |                                                                
-              \__|
-        
-        ");
+              $$\        $$\                                $$\               
+              $$ |       $$ |                               $$ |              
+     $$$$$$\  $$$$$$$\ $$$$$$\         $$$$$$\  $$\   $$\ $$$$$$\    $$$$$$\  
+    $$  __$$\ $$  __$$\\_$$  _|        \____$$\ $$ |  $$ |\_$$  _|  $$  __$$\ 
+    $$ /  $$ |$$ |  $$ | $$ |          $$$$$$$ |$$ |  $$ |  $$ |    $$ /  $$ |
+    $$ |  $$ |$$ |  $$ | $$ |$$\      $$  __$$ |$$ |  $$ |  $$ |$$\ $$ |  $$ |
+    \$$$$$$$ |$$$$$$$  | \$$$$  |     \$$$$$$$ |\$$$$$$  |  \$$$$  |\$$$$$$  |
+     \____$$ |\_______/   \____/$$$$$$\\_______| \______/    \____/  \______/ 
+          $$ |                  \______|                                      
+          $$ |                                                                
+          \__|
+");
 
         }
 
@@ -394,12 +400,25 @@ namespace QbtAuto
 
             }
 
-            loggerFC.Info(new string('#', 40));
+            // loggerFC.Info(new string('#', 40));
             File.WriteAllText("exampleKeys.csv", Keys);
-            loggerFC.Info("See exampleKeys.csv for a list of keys you can use in your criteria");
-            loggerFC.Info(new string('#', 40));
+            loggerFC.Info("❗ See exampleKeys.csv for a list of keys you can use in your criteria");
+            // loggerFC.Info(new string('#', 40));
         }
 
+
+        public string getParameterInfo()
+        {
+            return @$"
+URL: {URL}  
+USER: {USER}
+Password: ******
+ConfigPath: {ConfigPath}
+Plex.isLoaded: {plex.isLoaded}
+verbose: {verbose}
+Dry Run: {DryRun}
+";
+        }
 
         /// <summary>
         /// gets the data from a Dictionary
@@ -487,7 +506,7 @@ namespace QbtAuto
 
 
 
-            loggerFC.Info("\nProcessing completed.");
+            loggerFC.Info("\n✅ Processing completed.");
 
             sw.Stop();
 
@@ -501,6 +520,7 @@ namespace QbtAuto
 
 
             double total_AXT = Autos.Count * torrents.Count;
+            loggerFC.Info(getParameterInfo());
             loggerFC.Info(@$"
 **REPORT**
 total (Autos*Torrents): {total_AXT:F2}
@@ -510,8 +530,6 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
             ");
 
         }
-
-
 
         private Task PrintProgress(int completed, int total)
         {
@@ -525,7 +543,6 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
             return Task.CompletedTask;
 
         }
-
 
         #endregion
 
@@ -555,18 +572,32 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
                 Console.Write("Enter qBittorrent Password: ");
                 Password = Console.ReadLine();
             }
+            
+            int attempts = 0;
+            int maxAttempts = 3;
+            while ((string.IsNullOrWhiteSpace(ConfigPath) || !System.IO.File.Exists(ConfigPath)) && attempts < maxAttempts)
+            {
+                Console.Write($"Enter ConfigPath {attempts}/{maxAttempts} : ");
+                ConfigPath = Console.ReadLine();
+                attempts++;
+            }
 
             // Ask for ConfigPath if not provided or file not found
             if (string.IsNullOrWhiteSpace(ConfigPath) || !System.IO.File.Exists(ConfigPath))
             {
-                /*
-                Console.Write("Enter path to config file (must exist): ");
-                ConfigPath = Console.ReadLine();
-                */
+                createExampleConfig();
+                return false;
+            }
 
-                loggerFC.Info("Let's save a config for you.");
+            return true;
 
-                string exampleConfig = @"
+        }
+
+        private void createExampleConfig()
+        {
+            loggerFC.Info("Let's save a config for you.");
+
+            string exampleConfig = @"
 {
     //optional - provide connection data in config
     ""qbt"": {
@@ -659,10 +690,10 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
         },
         // ---------- AutoMove ----------
         {
-        ""Name"": ""Move_ToH00_FromS00_Stale_ShowsMovies"",
-        ""Type"": ""AutoMove"",
-        ""Path"": ""/media/jgarza/H00/Torrents/<Category>"",
-        ""Criteria"": "" (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\""<LastActivityTime>\"") >= 3.0) && (daysAgo(\""<LastSeenComplete>\"") >= 14.0) && match(\""<Category>\"",\""(Shows|Movies)\"") && match(\""<SavePath>\"",\""S00\"") ""
+            ""Name"": ""Move_ToH00_FromS00_Stale_ShowsMovies"",
+            ""Type"": ""AutoMove"",
+            ""Path"": ""/media/jgarza/H00/Torrents/<Category>"",
+            ""Criteria"": "" (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\""<LastActivityTime>\"") >= 3.0) && (daysAgo(\""<LastSeenComplete>\"") >= 14.0) && match(\""<Category>\"",\""(Shows|Movies)\"") && match(\""<SavePath>\"",\""S00\"") ""
         },
         // ---------- AutoSpeed ----------
         /*
@@ -676,24 +707,29 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
         ""UploadSpeed"": 0,
         ""UownloadSpeed"": 0,
         ""Criteria"": ""match(\""<Category>\"",\""(Shows|Movies)\"")""
-        }
+        },
+        {
+        ""Name"": ""Slow_Down_For_DriveFull_S01"",
+        ""Type"": ""AutoSpeed"",
+        ""UploadSpeed"": -1, //unlimited
+        ""DownloadSpeed"": 1, //1KB/s
+        ""Criteria"": ""(</media/jgarza/S01_FreeSizeGB> < 1.0) && ( match(\""<SavePath>\"",\""S01\"") )""
+        //^this will not the be name of your drive ...  run with the -v 1, then read the exampleKeys.csv to see what your drive is named
+        },
+        {
+        ""Name"": ""Unlimited_Down_For_S01"",
+        ""Type"": ""AutoSpeed"",
+        ""UploadSpeed"": -1,  //unlimited
+        ""DownloadSpeed"": -1, //unlimited
+        ""Criteria"": ""(</media/jgarza/S01_FreeSizeGB> > 1.0) && ( match(\""<SavePath>\"",\""S01\"") )""
+        //^this will not the be name of your drive ...  run with the -v 1, then read the exampleKeys.csv to see what your drive is named
+        },
     ]
 }
-                ";
-
-                File.WriteAllText("exampleConfig.json", exampleConfig);
-                return false;
-
-            }
-
-
-            return true;
-
+";
+            File.WriteAllText("exampleConfig.json", exampleConfig);
         }
-        
-        
-        
 
-
+        
     }
 }    
