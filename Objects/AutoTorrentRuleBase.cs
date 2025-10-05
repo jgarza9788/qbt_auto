@@ -80,7 +80,8 @@ Error: {this.ErrorCount}
 
         public virtual async Task Process(
             Dictionary<string, object> T,
-            bool verbose = false
+            bool verbose = false,
+            bool dryRun = false
             )
         {
             // Example of future async code
