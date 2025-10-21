@@ -28,6 +28,8 @@ namespace QbtAuto
     class QbtAuto
     {
 
+        public static string Version = "v0.4.2";
+
         #region Inputs
         private string? URL;
         private string? USER;
@@ -69,6 +71,107 @@ namespace QbtAuto
             Title();
 
             //processing Args
+            processArgs(args);
+
+
+            DataObject config = new DataObject(ConfigPath ?? "");
+            if (config.data.Count == 0)
+            {
+                helpExampleFiles.exampleConfig();
+                loggerC.Info("❌ Please fill out the exampleConfig.json and run again.");
+                return;
+            }
+            else
+            {
+                loggerFC.Info("✅ Config loaded.");
+            }
+                
+
+            //if these values are on in the args, they can be in the config
+            Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
+            if (qbt_login_data != null)
+            {
+                URL ??= getData(qbt_login_data, ["host", "h", "url"]) as string;
+                USER ??= getData(qbt_login_data, ["user", "u"]) as string;
+                Password ??= getData(qbt_login_data, ["password", "p", "pwd"]) as string;
+            }
+
+            //see if plex is avliable
+            plex = new Plex(loadCacheFile: true);
+            Dictionary<string, object>? plex_login_data = getData(config.data, ["plex", "Plex"]) as Dictionary<string, object>;
+            if (plex_login_data != null)
+            {
+                plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
+                plex.user = getData(plex_login_data, ["user", "u"]) as string ?? "";
+                plex.pwd = getData(plex_login_data, ["pwd", "password", "p"]) as string ?? "";
+
+                try
+                {
+                    plex.LoadAsync(forceReload: true).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    loggerF.Error(ex, "unable to get data from plex, see error");
+                    loggerC.Error("❌ unable to get data from plex, see error");
+                }
+            }
+
+            //maybe we'll just ask the user
+            if (EnsureParametersValid())
+            {
+                loggerFC.Info("✅ Parameters valid.");
+            }
+            else
+            {
+                loggerC.Info("❌ Please fill out the exampleConfig.json and run again.");
+                return;
+            }
+
+            // i can print this later 
+            // loggerFC.Info(getParameterInfo());
+
+            //refresh data
+            refreshData();
+            if (qbt == null)
+            {
+                loggerFC.Error("qbt is null, but it should have been set to an instance");
+                return;
+            }
+
+            #region CreateAutoObjects
+
+            IEnumerable<object> ATRs = config.getValue("AutoTorrentRules") as IEnumerable<object> ?? new List<object>();
+            createAutoObjects(ATRs);
+
+            #endregion
+
+
+            #region verbose_for_testing
+            if (verbose)
+            {
+                if (torrents != null)
+                {
+
+                    helpExampleFiles.exampleKeys(
+                        Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrents[0])),
+                        driveData,
+                        plex.getData(plex.items.First().Key)
+                        );
+                }
+            }
+            #endregion
+
+
+            IsSetUp = true;
+
+        }
+
+        /// <summary>
+        /// process the args into the different variables
+        /// </summary>
+        /// <param name="args"></param>
+        public void processArgs(string[] args)
+        {
             var AP = new ArgParser(args);
             if (AP.has(["help", "?", "h"]))
             {
@@ -108,64 +211,38 @@ namespace QbtAuto
             }
 
             ConfigPath = string.IsNullOrWhiteSpace(ConfigPath) ? "" : ConfigPath;
-            DataObject config = new DataObject(ConfigPath);
-            loggerFC.Info("✅ Config loaded.");
 
-            //if these values are on in the args, they can be in the config
-            Dictionary<string, object>? qbt_login_data = getData(config.data, ["qbt", "qbtc", "qbt_connection"]) as Dictionary<string, object>;
-            if (qbt_login_data != null)
-            {
-                URL ??= getData(qbt_login_data, ["host", "h", "url"]) as string;
-                USER ??= getData(qbt_login_data, ["user", "u"]) as string;
-                Password ??= getData(qbt_login_data, ["password", "p", "pwd"]) as string;
-            }
+            loggerFC.Info("✅ Args processed.");
+        }
 
-            //see if plex is avliable
-            plex = new Plex(loadCacheFile: true);
-            Dictionary<string, object>? plex_login_data = getData(config.data, ["plex", "Plex"]) as Dictionary<string, object>;
-            if (plex_login_data != null)
-            {
-                plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
-                plex.user = getData(plex_login_data, ["user", "u"]) as string ?? "";
-                plex.pwd = getData(plex_login_data, ["pwd", "password", "p"]) as string ?? "";
 
-                try
-                {
-                    plex.LoadAsync(forceReload: true).GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    loggerF.Error(ex, "unable to get data from plex, see error");
-                    loggerC.Error("unable to get data from plex, see error");
-                }
-            }
+        /// <summary>
+        /// creates the Auto objects from the config data
+        /// </summary>
+        /// <param name="autoTorrentRules"></param>
+        public void createAutoObjects(IEnumerable<object> autoTorrentRules)
+        {
+            // List<Type> autoTypes = TypeHelper.GetChildClasses<AutoTorrentRuleBase>();
 
-            //maybe we'll just ask the user
-            if (EnsureParametersValid())
-            {
-                loggerFC.Info("✅ Parameters valid.");
-            }
-            else
-            {
-                loggerC.Info("❌ Please fill out the exampleConfig.json and run again.");
-                return;
-            }
-
-            // i can print this later 
-            // loggerFC.Info(getParameterInfo());
-
-            //refresh data
-            refreshData();
             if (qbt == null)
             {
-                loggerFC.Error("qbt is null, but it should have been set to an instance");
+                loggerFC.Error("❌ qbt is null");
                 return;
             }
 
-            #region CreateAutoObjects
+            if (plex == null)
+            {
+                loggerFC.Error("❌ plex is null");
+                return;
+            }
 
-            IEnumerable<object> ATRs = config.getValue("AutoTorrentRules") as IEnumerable<object> ?? new List<object>();
-            foreach (IDictionary<string, object> ATR in ATRs)
+            if (globalDict == null)
+            {
+                loggerFC.Error("❌ globalDict is null");
+                return;
+            }
+
+            foreach (IDictionary<string, object> ATR in autoTorrentRules)
             {
                 string type = (ATR["Type"].ToString() ?? "").ToUpper();
 
@@ -205,7 +282,6 @@ namespace QbtAuto
                         script: ATR["Script"].ToString() ?? "",
                         timeout: (long)(ATR["Timeout"] ?? 500),
                         criteria: ATR["Criteria"].ToString() ?? "",
-                        // createDoneFile: (bool)(ATR.ContainsKey("CreateDoneFile") ? ATR["CreateDoneFile"] ?? true : true),
                         qbtClient: ref qbt,
                         plex: ref plex,
                         globalDict: ref globalDict
@@ -252,24 +328,8 @@ namespace QbtAuto
                     }
                 }
             }
-
-            #endregion
-
-
-            #region verbose_for_testing
-            if (verbose)
-            {
-                if (torrents != null)
-                {
-                    make_ExampleKeys(torrents);
-                }
-            }
-            #endregion
-
-
-            IsSetUp = true;
-
         }
+
 
         /// <summary>
         /// refreshes data from 
@@ -296,6 +356,10 @@ namespace QbtAuto
             globalDict = globalDict.Concat(driveData).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
         }
 
+        /// <summary>
+        /// pulls the torrent data from qbt
+        /// </summary>
+        /// <returns></returns>
         public bool pullTorrentData()
         {
             try
@@ -324,10 +388,12 @@ namespace QbtAuto
 
         }
 
-
+        /// <summary>
+        /// prints the title, and version
+        /// </summary>
         public void Title()
         {
-            Console.Write(@"
+            Console.Write($@"
               $$\        $$\                                $$\               
               $$ |       $$ |                               $$ |              
      $$$$$$\  $$$$$$$\ $$$$$$\         $$$$$$\  $$\   $$\ $$$$$$\    $$$$$$\  
@@ -339,71 +405,9 @@ namespace QbtAuto
           $$ |                  \______|                                      
           $$ |                                                                
           \__|
+    {Version}
 ");
 
-        }
-
-
-        /// <summary>
-        /// this is only used when verbose is true
-        /// </summary>
-        /// <param name="torrents"></param>
-        /// <returns></returns>
-        public void make_ExampleKeys(IReadOnlyList<TorrentInfo> torrents)
-        {
-            string Keys = "Source,Key,Type,Example\n";
-
-            //qbittorrent data
-            try
-            {
-                Dictionary<string, object>? T = Json5.Deserialize<Dictionary<string, object>>(Json5.Serialize(torrents[0]));
-
-                if (T != null)
-                {
-                    foreach (var entry in T)
-                    {
-                        Keys += $"qbittorrent,<{entry.Key}>,{entry.Value?.GetType().ToString()},{entry.Value?.ToString()}\n";
-                    }
-                }
-
-            }
-            catch (Exception Ex)
-            {
-                loggerF.Error(Ex);
-                loggerC.Error("**ERROR** issue loading drive data");
-            }
-
-            //drive data
-            try
-            {
-                foreach (var entry in driveData)
-                {
-                    Keys += $"drives,<{entry.Key}>,{entry.Value?.GetType().ToString()},{entry.Value?.ToString()}\n";
-                }
-            }
-            catch (Exception Ex)
-            {
-                loggerF.Error(Ex);
-                loggerC.Error("**ERROR** issue loading drive data");
-            }
-
-            //plex items 
-            if (plex.isLoaded)
-            {
-                var pi = plex.items.First();
-                var plexdata = plex.getData(pi.Key);
-                foreach (var pd in plexdata)
-                {
-                    // loggerFC.Info($"\tkey=<{pd.Key}>\ttype={pd.Value?.GetType()}\texample={pd.Value}");
-                    Keys += $"plex,<{pd.Key}>,{pd.Value?.GetType().ToString()},{pd.Value?.ToString()}\n";
-                }
-
-            }
-
-            // loggerFC.Info(new string('#', 40));
-            File.WriteAllText("exampleKeys.csv", Keys);
-            loggerFC.Info("❗ See exampleKeys.csv for a list of keys you can use in your criteria");
-            // loggerFC.Info(new string('#', 40));
         }
 
 
@@ -546,6 +550,7 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
 
         #endregion
 
+
         /// <summary>
         /// EnsureParametersValid
         /// </summary>
@@ -572,7 +577,7 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
                 Console.Write("Enter qBittorrent Password: ");
                 Password = Console.ReadLine();
             }
-            
+
             int attempts = 0;
             int maxAttempts = 3;
             while ((string.IsNullOrWhiteSpace(ConfigPath) || !System.IO.File.Exists(ConfigPath)) && attempts < maxAttempts)
@@ -585,7 +590,7 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
             // Ask for ConfigPath if not provided or file not found
             if (string.IsNullOrWhiteSpace(ConfigPath) || !System.IO.File.Exists(ConfigPath))
             {
-                createExampleConfig();
+                helpExampleFiles.exampleConfig();
                 return false;
             }
 
@@ -593,142 +598,6 @@ time: {sw.Elapsed.TotalMilliseconds:F4} ms
 
         }
 
-        private void createExampleConfig()
-        {
-            loggerFC.Info("Let's save a config for you.");
-
-            string exampleConfig = @"
-{
-    //optional - provide connection data in config
-    ""qbt"": {
-        ""host"": ""http://###.###.#.###:####"",
-        ""user"": ""?????"",
-        ""pwd"": ""*****""
-    },
-    //plex - optional
-    ""plex"": {
-        ""url"": ""http://###.###.#.###:32400"",
-        ""user"": ""?????"",
-        ""pwd"": ""*****""
-    },
-    ""AutoTorrentRules"": [
-        // ───────────── AutoTag (from autoTags) ─────────────  
-        {
-        ""Name"": ""Tag_SmallFile"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""small_file"",
-        ""Criteria"": ""(<Size> < 1073741824)""
-        },
-        {
-        ""Name"": ""Tag_MediumFile"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""medium_file"",
-        ""Criteria"": ""(<Size> >= 1073741824) && (<Size> < 10737418240)""
-        },
-        {
-        ""Name"": ""Tag_LargeFile"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""large_file"",
-        ""Criteria"": ""(<Size> >= 10737418240)""
-        },
-        {
-        ""Name"": ""Tag_Inactive_30d"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""inactive_30d"",
-        ""Criteria"": ""daysAgo(\""<LastActivityTime>\"") >= 30.0""
-        },
-        {
-        ""Name"": ""Tag_Inactive_90d"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""inactive_90d"",
-        ""Criteria"": ""daysAgo(\""<LastActivityTime>\"") >= 90.0""
-        },
-        {
-        ""Name"": ""Tag_OldMovie"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""old_movie"",
-        ""Criteria"": ""contains(\""<Category>\"", \""Movies\"") && daysAgo(\""<AddedOn>\"") >= 365.0""
-        },
-        {
-        ""Name"": ""Single_Episode"",
-        ""Type"": ""AutoTag"",
-        ""Tag"": ""Single_Episode"",
-        ""Criteria"": ""match(\""<Name>\"", \""S[0-9][0-9]E[0-9][0-9]\"")""
-        },
-        {
-            ""Name"": ""Tag_NoViews_OnPlex"",
-            ""Type"": ""AutoTag"",
-            ""Tag"": ""NoViews"",
-            ""Criteria"": ""(<plex_viewCount> == 0)""
-        },
-        // ---------- AutoCategory ----------
-        {
-            ""Name"": ""Category_CamMovies"",
-            ""Type"": ""AutoCategory"",
-            ""Category"": ""Cam_Movies"",
-            ""Criteria"": ""(\""Movies\"" == \""<Category>\"") && match(\""<Name>\"", \""(\\\\.|-|\\\\s)(CAM|HDCAM|TS|HDTS|TELESYNC)(\\\\.|-|\\\\s)\"")""
-        },
-        // ---------- AutoScript ----------
-        {
-        ""Name"": ""Script_UnzipDone"",
-        ""Type"": ""AutoScript"",
-        ""Criteria"": ""(\""<Progress>\"" == \""1\"") && ((\""Movies\"" == \""<Category>\"") || (\""Shows\"" == \""<Category>\"")) && match(\""<ContentPath>\"",\""(Shows|Movies)\"")"",
-        ""RunDir"": ""<ContentPath>"",
-        ""Shebang"": ""/bin/bash"",
-        ""Script"": ""unrar x -o- *.rar"", //requires unrar to be installed
-        ""Timeout"": 3000
-        },
-        {
-            //adjust permissions to file(s) on linux
-            ""Name"": ""chmod.done"",
-            ""Type"": ""AutoScript"",
-            ""Criteria"": ""(\""<Progress>\"" == \""1\"") && match(\""<Category>\"",\""(Shows|Movies)\"") && match(\""<ContentPath>\"",\""(Shows|Movies)\"")"",
-            ""RunDir"": ""<ContentPath>/.."",
-            ""Shebang"": ""/bin/bash"",
-            ""Script"": ""chmod 775 . -R"",
-            ""Timeout"": 10  //in Seconds
-        },
-        // ---------- AutoMove ----------
-        {
-            ""Name"": ""Move_ToH00_FromS00_Stale_ShowsMovies"",
-            ""Type"": ""AutoMove"",
-            ""Path"": ""/media/jgarza/H00/Torrents/<Category>"",
-            ""Criteria"": "" (</media/jgarza/H00_PercentUsed> < 0.9 ) && (<ActiveTime>/864000000000 >= 14.0) && ( daysAgo(\""<LastActivityTime>\"") >= 3.0) && (daysAgo(\""<LastSeenComplete>\"") >= 14.0) && match(\""<Category>\"",\""(Shows|Movies)\"") && match(\""<SavePath>\"",\""S00\"") ""
-        },
-        // ---------- AutoSpeed ----------
-        /*
-        value in kb
-        0 is unlimited
-        -1 is null or skip 
-        */
-        {
-        ""Name"": ""Speed_Unlimited_ShowsMovies"",
-        ""Type"": ""AutoSpeed"",
-        ""UploadSpeed"": 0,
-        ""UownloadSpeed"": 0,
-        ""Criteria"": ""match(\""<Category>\"",\""(Shows|Movies)\"")""
-        },
-        {
-        ""Name"": ""Slow_Down_For_DriveFull_S01"",
-        ""Type"": ""AutoSpeed"",
-        ""UploadSpeed"": -1, //unlimited
-        ""DownloadSpeed"": 1, //1KB/s
-        ""Criteria"": ""(</media/jgarza/S01_FreeSizeGB> < 1.0) && ( match(\""<SavePath>\"",\""S01\"") )""
-        //^this will not the be name of your drive ...  run with the -v 1, then read the exampleKeys.csv to see what your drive is named
-        },
-        {
-        ""Name"": ""Unlimited_Down_For_S01"",
-        ""Type"": ""AutoSpeed"",
-        ""UploadSpeed"": -1,  //unlimited
-        ""DownloadSpeed"": -1, //unlimited
-        ""Criteria"": ""(</media/jgarza/S01_FreeSizeGB> > 1.0) && ( match(\""<SavePath>\"",\""S01\"") )""
-        //^this will not the be name of your drive ...  run with the -v 1, then read the exampleKeys.csv to see what your drive is named
-        },
-    ]
-}
-";
-            File.WriteAllText("exampleConfig.json", exampleConfig);
-        }
 
         
     }

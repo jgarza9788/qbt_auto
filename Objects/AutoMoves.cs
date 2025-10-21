@@ -94,10 +94,6 @@ TargetPath: {_path}
 Criteria: {Criteria}
 ";
 
-            if (verbose)
-            {
-                logger.Info(logString);
-            }
 
             if (!Directory.Exists(_path))
             {
@@ -105,7 +101,7 @@ Criteria: {Criteria}
                 return;
             }
 
-            bool? b = Evaluate(Dict, logString);
+            bool? b = Evaluate(Dict, logString, verbose);
             if (dryRun)
             {
                 logger.Info($"{logString}\nResult was {b} | DryRun is enabled, no changes will be made.");

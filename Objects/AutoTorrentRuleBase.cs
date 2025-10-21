@@ -90,7 +90,7 @@ Error: {this.ErrorCount}
 
 
 
-        public bool? Evaluate(Dictionary<string, object> Dict, string logstring = "")
+        public bool? Evaluate(Dictionary<string, object> Dict, string logstring = "", bool verbose = false)
         {
 
             try
@@ -105,6 +105,11 @@ Error: {this.ErrorCount}
                 else
                 {
                     FailureCount++;
+                }
+
+                if (verbose)
+                {
+                    logger.Info($"{logstring}Criteria: {_criteria}\nResult: {result}\n");
                 }
 
                 return result;
