@@ -28,7 +28,7 @@ namespace QbtAuto
     class QbtAuto
     {
 
-        public static string Version = "v0.4.2";
+        public static string Version = "v0.4.3";
 
         #region Inputs
         private string? URL;

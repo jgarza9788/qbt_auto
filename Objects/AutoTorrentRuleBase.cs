@@ -141,7 +141,26 @@ Error: {this.ErrorCount}
             {
                 string m = match.Groups[1].Value;
                 // logger.Info($"{criteriaString} | {m}");
-                criteriaString = criteriaString.Replace($"<{m}>", Dict[m].ToString() ?? $"** ERROR <{match.Value}> is not a key **");
+
+                string value = "";
+                if (Dict.ContainsKey(m))
+                {
+                    if (Dict[m] is System.Collections.IList)
+                    {
+                        var enumerable = (Dict[m] as System.Collections.IList)?.Cast<object>() ?? new List<object>();
+                        value = string.Join(",", enumerable);
+                    }
+                    else
+                    {
+                        value = Dict[m]?.ToString() ?? "";
+                    }
+                }
+                else
+                {
+                    value = $"** ERROR <{match.Value}> is not a key **";
+                }
+
+                criteriaString = criteriaString.Replace($"<{m}>", value ?? $"** ERROR <{match.Value}> is not a key **");
             }
 
 
