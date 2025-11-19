@@ -99,12 +99,9 @@ DownloadSpeed: {DownloadSpeed/1024:F2}Kb
 Criteria: {Criteria}
 ";
 
-            if (verbose)
-            {
-                logger.Info(logString);
-            }
 
-            bool? b = Evaluate(Dict, logString);
+            
+            bool? b = Evaluate(Dict, logString, verbose);
             if (dryRun)
             {
                 logger.Info($"{logString}\nResult was {b} | DryRun is enabled, no changes will be made.");
