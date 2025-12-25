@@ -23,6 +23,7 @@ using System.Diagnostics;
 using Json5Core;
 using NLog;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 
 namespace Utils
 {
@@ -40,6 +41,14 @@ namespace Utils
             return $"{Title} ({Type}) [Key={Key}]";
         }
     }
+
+    public class PlexPlay{
+        public string MediaTitle = "";
+        public string VideoType= "";
+        public long ViewedAt = -1;
+        public string AccountID = "";
+        public string DeviceID = "";
+    };
 
     class Plex
     {
@@ -148,6 +157,12 @@ namespace Utils
 
         }
 
+        public double GetNormalizedScore(string name, List<(string Title, double Score)> list)
+        {
+            var match = list.FirstOrDefault(x => x.Title.Equals(name, StringComparison.OrdinalIgnoreCase));
+            return match == default ? 0.0 : match.Score;
+        }
+
         public async Task LoadAsync(bool forceReload = false)
         {
             ////debugging
@@ -194,6 +209,7 @@ namespace Utils
                             Type = (string?)d.Attribute("type")
                         })
                         .ToList();
+
                 //Debugging
                 /*
                 foreach (var pl in plexLibraries)
@@ -202,6 +218,73 @@ namespace Utils
                 }
                 logger.Info(plexLibraries.Count());
                 */
+
+                //this gets the plays for the last year (for everyone)
+                var selectionsXml = await http.GetStringAsync(
+                    $"{baseUrl}/status/sessions/history/all?activeTimePeriod=year&X-Plex-Token={token}");
+                var plexPlays = XDocument.Parse(selectionsXml).Descendants("Video") //.ToList();
+                    .Select(d => new PlexPlay
+                    {
+                        // Use grandparentTitle for episodes (show name), otherwise title for movies
+                        MediaTitle = d.Attribute("type")?.Value == "episode"
+                            ? (string?)d.Attribute("grandparentTitle") ?? "Unknown Show"
+                            : (string?)d.Attribute("title") ?? "Unknown Movie",
+
+                        // Unix timestamp when the play happened
+                        ViewedAt = (long.TryParse(d.Attribute("viewedAt")?.Value, out var ts) ? ts : 0L),
+                        // ViewedAt = 1.0,
+
+                        // Media type
+                        VideoType = (string?)d.Attribute("type") ?? "unknown",
+
+                        // Optional IDs if you need them later
+                        AccountID = (string?)d.Attribute("accountID") ?? "unknown",
+                        DeviceID  = (string?)d.Attribute("deviceID") ?? "unknown"
+                    })
+                    .Where(x => x.ViewedAt > 0) // discard malformed plays
+                    .ToList();
+
+                //save raw plays data for debugging
+                /*
+                File.WriteAllText(
+                    "plex_plays_raw.json",
+                    Json5.Serialize(plexPlays)
+                );
+                */
+
+                // Split into movies vs shows
+                var movies = plexPlays.Where(x => x.VideoType == "movie").ToList();
+                var shows  = plexPlays.Where(x => x.VideoType == "episode").ToList();
+
+                // Count plays per movie title
+                var movieCounts = movies
+                    .GroupBy(x => x.MediaTitle)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                // Count plays per show (grandparentTitle already mapped into MediaTitle)
+                var showCounts = shows
+                    .GroupBy(x => x.MediaTitle)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                // Normalize helper
+                List<(string Title, double Score)> Normalize(Dictionary<string,int> counts)
+                {
+                    var list = counts.Select(kv => kv.Value).ToList();
+                    int min = list.Min();
+                    int max = list.Max();
+
+                    return counts
+                        .Select(kv => (
+                            Title: kv.Key,
+                            Score: max == min ? 1.0 : (double)(kv.Value - min) / (max - min)
+                        ))
+                        .Select(x => (x.Title, x.Score))
+                        .ToList();
+                }
+
+                // Create your final 0.0 → 1.0 scored lists
+                var plexPlaysMovies = Normalize(movieCounts);
+                var plexPlaysShows  = Normalize(showCounts);
 
                 foreach (var pl in plexLibraries)
                 {
@@ -220,6 +303,9 @@ namespace Utils
                             audienceRating = (string?)v.Attribute("audienceRating"),
                             userRating = (string?)v.Attribute("userRating"),
                             viewCount = (string?)v.Attribute("viewCount"),
+                            NView = pl.Type == "movie"
+                                ? GetNormalizedScore((string?)v.Attribute("title") ?? "", plexPlaysMovies)
+                                : GetNormalizedScore((string?)v.Attribute("title") ?? "", plexPlaysShows),
                             lastViewedAt = (string?)v.Attribute("lastViewedAt"),
                             lastRatedAt = (string?)v.Attribute("lastRatedAt"),
                             year = (string?)v.Attribute("year"),
@@ -261,6 +347,7 @@ namespace Utils
                                 dict["plex_audienceRating"] = x.audienceRating ?? "0";
                                 dict["plex_userRating"] = x.userRating ?? "0";
                                 dict["plex_viewCount"] = x.viewCount ?? "0";
+                                dict["plex_nview"] = x.NView;
                                 dict["plex_lastViewedAt"] = x.lastViewedAt ?? "0";
                                 dict["plex_lastRatedAt"] = x.lastRatedAt ?? "0";
                                 dict["plex_year"] = x.year ?? "0";
@@ -311,6 +398,7 @@ namespace Utils
                                 dict["plex_audienceRating"] = x.audienceRating ?? "0";
                                 dict["plex_userRating"] = x.userRating ?? "0";
                                 dict["plex_viewCount"] = x.viewCount ?? "0";
+                                dict["plex_nview"] = x.NView;
                                 dict["plex_lastViewedAt"] = x.lastViewedAt ?? "0";
                                 dict["plex_lastRatedAt"] = x.lastRatedAt ?? "0";
                                 dict["plex_year"] = x.year ?? "0";
