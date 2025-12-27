@@ -136,11 +136,21 @@ Criteria: {Criteria}
                 return;
             }
 
+            // //this is a strange edge case where the run dir is inside an archive
+            // if (_runDir.EndsWith(".zip/") || _runDir.EndsWith(".rar/") || _runDir.EndsWith(".7z/"))
+            // {
+            //     _runDir = Path.GetDirectoryName(Path.GetDirectoryName(_runDir)) ?? "";
+            //     logger.Info($"RunDir appears to be an archive, using parent directory {_runDir}");
+            // }
+
             if (!Directory.Exists(_runDir))
             {
-                logger.Warn($"Bad RunDir,\n{logString}");
+                // logger.Warn($"Bad RunDir,\n{logString}");
+                logger.Warn($"Bad RunDir,\n{_runDir}");
                 return;
             }
+
+
 
             bool? b = Evaluate(Dict, logString, verbose);
             if (dryRun)
