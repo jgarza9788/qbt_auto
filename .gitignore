@@ -9,3 +9,5 @@ exampleKeys.csv
 .vscode
 bin
 obj
+plex_plays_movies.json
+plex_plays_raw.json

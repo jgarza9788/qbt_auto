@@ -76,6 +76,74 @@ namespace Utils
             }
             return String;
         }     
+
+        /// <summary>
+        /// Normalizes a dictionary of counts to a list of (title, score) tuples
+        /// </summary>
+        /// <param name="counts"></param>
+        /// <returns></returns> 
+        public static List<(string Title, double Score)> Normalize(Dictionary<string,float> counts)
+        {
+            var list = counts.Select(kv => kv.Value).ToList();
+            float min = list.Min<float>();
+            float max = list.Max<float>();
+
+            return counts
+                .Select(kv => (
+                    Title: kv.Key,
+                    Score: max == min ? 1.0 : (double)(kv.Value - min) / (max - min)
+                ))
+                .Select(x => (x.Title, x.Score))
+                .ToList();
+        }
+
+        public static List<(string Title, double Score)> NormalizeQuantile(Dictionary<string, float> counts)
+        {
+            if (counts == null) throw new ArgumentNullException(nameof(counts));
+            if (counts.Count == 0) return new List<(string Title, double Score)>();
+
+            // Sort by value ascending
+            var items = counts
+                .Select(kv => (Title: kv.Key, Value: kv.Value))
+                .OrderBy(x => x.Value)
+                .ToList();
+
+            int n = items.Count;
+            if (n == 1)
+                return new List<(string Title, double Score)> { (items[0].Title, 1.0) };
+
+            // Assign quantile score by rank, evenly spaced in [0,1]
+            // Ties get the midrank (average rank of the tie block)
+            var result = new List<(string Title, double Score)>(n);
+
+            int i = 0;
+            while (i < n)
+            {
+                int j = i;
+                float v = items[i].Value;
+
+                // find tie block [i, j]
+                while (j + 1 < n && items[j + 1].Value.Equals(v))
+                    j++;
+
+                // ranks are 0..n-1; midrank is average of i..j
+                double midRank = (i + j) / 2.0;
+
+                // Normalize rank to [0,1]
+                double score = midRank / (n - 1);
+
+                // If you want "highest value => 1.0", this already does that
+                // because higher values have higher ranks.
+
+                for (int k = i; k <= j; k++)
+                    result.Add((items[k].Title, score));
+
+                i = j + 1;
+            }
+
+            return result;
+        }
+    
     }
 
 }

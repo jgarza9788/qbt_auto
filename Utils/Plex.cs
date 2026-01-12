@@ -24,6 +24,8 @@ using Json5Core;
 using NLog;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
 
 namespace Utils
 {
@@ -163,6 +165,143 @@ namespace Utils
             return match == default ? 0.0 : match.Score;
         }
 
+        private async Task<List<PlexPlay>> get_PlexPlays(string period = "year")
+        {
+            try
+            {
+                var sectionsXml = await http.GetStringAsync($"{baseUrl}/library/sections?X-Plex-Token={token}");
+                plexLibraries = XDocument.Parse(sectionsXml).Descendants("Directory")
+                        .Where(n =>
+                        {
+                            var t = (string?)n.Attribute("type");
+                            return t == "movie" || t == "show";
+                        })
+                        .Select(d => new PlexLibrary
+                        {
+                            Key = (string?)d.Attribute("key"),
+                            Title = (string?)d.Attribute("title"),
+                            Type = (string?)d.Attribute("type")
+                        })
+                        .ToList();
+
+                //this gets the plays for the last year (for everyone)
+                var selectionsXml = await http.GetStringAsync(
+                    $"{baseUrl}/status/sessions/history/all?activeTimePeriod={period}&X-Plex-Token={token}&sort=viewedAt%3Adesc");
+                var result = XDocument.Parse(selectionsXml).Descendants("Video") //.ToList();
+                    .Select(d => new PlexPlay
+                    {
+                        // Use grandparentTitle for episodes (show name), otherwise title for movies
+                        MediaTitle = d.Attribute("type")?.Value == "episode"
+                            ? (string?)d.Attribute("grandparentTitle") ?? "Unknown Show"
+                            : (string?)d.Attribute("title") ?? "Unknown Movie",
+
+                        // Unix timestamp when the play happened
+                        ViewedAt = (long.TryParse(d.Attribute("viewedAt")?.Value, out var ts) ? ts : 0L),
+                        // ViewedAt = 1.0,
+
+                        // Media type
+                        VideoType = (string?)d.Attribute("type") ?? "unknown",
+
+                        // Optional IDs if you need them later
+                        AccountID = (string?)d.Attribute("accountID") ?? "unknown",
+                        DeviceID  = (string?)d.Attribute("deviceID") ?? "unknown"
+                    })
+                    .Where(x => x.ViewedAt > 0) // discard malformed plays
+                    .ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "issue getting token");
+                return new List<PlexPlay>();
+            }
+
+        }
+
+
+        public record NormalizedPlexPlays(
+            List<(string Title, double Score)> Movies,
+            List<(string Title, double Score)> Shows
+        );
+        /// <summary>
+        /// provides a normalized list of plex plays, using a weighted score system
+        /// </summary>
+        /// <returns></returns>
+        private async Task<NormalizedPlexPlays> get_NormalizedPlexPlays()
+        {
+            var plexPlaysMovies = null as List<(string Title, double Score)>;
+            var plexPlaysShows  = null as List<(string Title, double Score)>;
+            var plexPlays = null as List<PlexPlay>;
+            var movies = null as List<PlexPlay>;
+            var shows  = null as List<PlexPlay>;
+            var movieCounts = new Dictionary<string,float>();
+            var showCounts = new Dictionary<string,float>();
+
+
+            //periods with weights
+            var periods = new List<(string Name, float Value)>
+            {
+                ("all", 0.1f),
+                ("year", 0.5f),
+                ("month", 0.75f),
+                ("week", 1.0f)
+            };
+
+            foreach (var p in periods)
+            {
+                plexPlays = await get_PlexPlays(p.Name);
+
+                // Split into movies vs shows
+                movies = plexPlays.Where(x => x.VideoType == "movie").ToList();
+                shows  = plexPlays.Where(x => x.VideoType == "episode").ToList();
+
+                foreach (var m in movies)
+                {
+                    if (movieCounts.ContainsKey(m.MediaTitle))
+                    {
+                        movieCounts[m.MediaTitle] += p.Value;
+                    }
+                    else
+                    {
+                        movieCounts[m.MediaTitle] = p.Value;;
+                    }
+                }
+
+                foreach (var s in shows)
+                {
+                    if (showCounts.ContainsKey(s.MediaTitle))
+                    {
+                        showCounts[s.MediaTitle] += p.Value;
+                    }
+                    else
+                    {
+                        showCounts[s.MediaTitle] = p.Value;
+                    }
+                }
+
+
+            }
+
+            // Create your final 0.0 → 1.0 scored lists
+            plexPlaysMovies = Misc.NormalizeQuantile(movieCounts);
+            plexPlaysShows  = Misc.NormalizeQuantile(showCounts);
+
+            /*
+            File.WriteAllText(
+                "plex_plays_movies.json",
+                Json5.Serialize(plexPlaysMovies)
+            );
+            */
+
+            return new NormalizedPlexPlays(
+                Movies: plexPlaysMovies,
+                Shows: plexPlaysShows
+            );
+
+        }
+
+
         public async Task LoadAsync(bool forceReload = false)
         {
             ////debugging
@@ -195,96 +334,15 @@ namespace Utils
 
             try
             {
-                var sectionsXml = await http.GetStringAsync($"{baseUrl}/library/sections?X-Plex-Token={token}");
-                plexLibraries = XDocument.Parse(sectionsXml).Descendants("Directory")
-                        .Where(n =>
-                        {
-                            var t = (string?)n.Attribute("type");
-                            return t == "movie" || t == "show";
-                        })
-                        .Select(d => new PlexLibrary
-                        {
-                            Key = (string?)d.Attribute("key"),
-                            Title = (string?)d.Attribute("title"),
-                            Type = (string?)d.Attribute("type")
-                        })
-                        .ToList();
 
-                //Debugging
-                /*
-                foreach (var pl in plexLibraries)
-                {
-                    logger.Info($"{pl.Key} {pl.Title} {pl.Type}");
-                }
-                logger.Info(plexLibraries.Count());
-                */
 
-                //this gets the plays for the last year (for everyone)
-                var selectionsXml = await http.GetStringAsync(
-                    $"{baseUrl}/status/sessions/history/all?activeTimePeriod=year&X-Plex-Token={token}");
-                var plexPlays = XDocument.Parse(selectionsXml).Descendants("Video") //.ToList();
-                    .Select(d => new PlexPlay
-                    {
-                        // Use grandparentTitle for episodes (show name), otherwise title for movies
-                        MediaTitle = d.Attribute("type")?.Value == "episode"
-                            ? (string?)d.Attribute("grandparentTitle") ?? "Unknown Show"
-                            : (string?)d.Attribute("title") ?? "Unknown Movie",
 
-                        // Unix timestamp when the play happened
-                        ViewedAt = (long.TryParse(d.Attribute("viewedAt")?.Value, out var ts) ? ts : 0L),
-                        // ViewedAt = 1.0,
 
-                        // Media type
-                        VideoType = (string?)d.Attribute("type") ?? "unknown",
-
-                        // Optional IDs if you need them later
-                        AccountID = (string?)d.Attribute("accountID") ?? "unknown",
-                        DeviceID  = (string?)d.Attribute("deviceID") ?? "unknown"
-                    })
-                    .Where(x => x.ViewedAt > 0) // discard malformed plays
-                    .ToList();
-
-                //save raw plays data for debugging
-                /*
-                File.WriteAllText(
-                    "plex_plays_raw.json",
-                    Json5.Serialize(plexPlays)
-                );
-                */
-
-                // Split into movies vs shows
-                var movies = plexPlays.Where(x => x.VideoType == "movie").ToList();
-                var shows  = plexPlays.Where(x => x.VideoType == "episode").ToList();
-
-                // Count plays per movie title
-                var movieCounts = movies
-                    .GroupBy(x => x.MediaTitle)
-                    .ToDictionary(g => g.Key, g => g.Count());
-
-                // Count plays per show (grandparentTitle already mapped into MediaTitle)
-                var showCounts = shows
-                    .GroupBy(x => x.MediaTitle)
-                    .ToDictionary(g => g.Key, g => g.Count());
-
-                // Normalize helper
-                List<(string Title, double Score)> Normalize(Dictionary<string,int> counts)
-                {
-                    var list = counts.Select(kv => kv.Value).ToList();
-                    int min = list.Min();
-                    int max = list.Max();
-
-                    return counts
-                        .Select(kv => (
-                            Title: kv.Key,
-                            Score: max == min ? 1.0 : (double)(kv.Value - min) / (max - min)
-                        ))
-                        .Select(x => (x.Title, x.Score))
-                        .ToList();
-                }
+                var NPPs = await get_NormalizedPlexPlays();
 
                 // Create your final 0.0 → 1.0 scored lists
-                var plexPlaysMovies = Normalize(movieCounts);
-                var plexPlaysShows  = Normalize(showCounts);
+                var plexPlaysMovies = NPPs.Movies;
+                var plexPlaysShows  = NPPs.Shows;
 
                 foreach (var pl in plexLibraries)
                 {
