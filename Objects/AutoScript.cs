@@ -145,12 +145,27 @@ Criteria: {Criteria}
 
             if (!Directory.Exists(_runDir))
             {
-                // logger.Warn($"Bad RunDir,\n{logString}");
-                logger.Warn($"Bad RunDir,\n{_runDir}");
-                return;
+                logger.Warn($"Bad RunDir (getting parent Directory),\n{_runDir}");
+                _runDir = Directory.GetParent(_runDir)?.FullName ?? "";
             }
 
 
+            
+            int TryDirCount = 0;
+            while (!Directory.Exists(_runDir) && TryDirCount < 3)
+            {
+                _runDir = Directory.GetParent(_runDir)?.FullName ?? "";
+                TryDirCount++;
+            }
+            if (!Directory.Exists(_runDir))
+            {
+                logger.Warn($"Bad RunDir,\n{_runDir}");
+                return;
+            }
+            else
+            {
+                logger.Warn($"Directory: {_runDir}");
+            }
 
             bool? b = Evaluate(Dict, logString, verbose);
             if (dryRun)
