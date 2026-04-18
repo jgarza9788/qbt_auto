@@ -113,17 +113,35 @@ Criteria: {Criteria}
             {
                 if (!currentTags.Contains(Tag))
                 {
-                    await qbt.AddTorrentTagAsync(T["Hash"].ToString(), Tag);
-                    // logger.Info($"AddTag :: {T["Name"]} + {tag}");
+                    try
+                    {
+                        await qbt.AddTorrentTagAsync(T["Hash"].ToString(), Tag);
+                        // logger.Info($"AddTag :: {T["Name"]} + {tag}");                        
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, logString);
+                        this.ErrorCount++;
+                        return;    
+                    }
+
                 }
             }
             else if (b == false)
             {
                 if (currentTags.Contains(Tag))
                 {
-
-                    await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), Tag);
-                    // logger.Info($"DeleteTag :: {T["Name"]} - {tag}");
+                    try
+                    {
+                        await qbt.DeleteTorrentTagAsync(T["Hash"].ToString(), Tag);
+                        // logger.Info($"DeleteTag :: {T["Name"]} - {tag}");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, logString);
+                        this.ErrorCount++;
+                        return;    
+                    }
                 }
             }
 

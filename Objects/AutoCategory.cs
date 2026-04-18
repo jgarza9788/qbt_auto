@@ -132,13 +132,21 @@ NewLocation: {newLocation}
                 if (currentCategory != Category)
                 {
                     // AutomaticTorrentManagement should move the file to the correct location
-                    
-                    await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), true);
-                    await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), Category);
-                    
 
-                    // TrueHashes.Add(T["Hash"].ToString() ?? "");
-                    logger.Info($"SetCategory :: {T["Name"]} => {Category}");
+                    try
+                    {
+                        await qbt.SetAutomaticTorrentManagementAsync(T["Hash"].ToString(), true);
+                        await qbt.SetTorrentCategoryAsync(T["Hash"].ToString(), Category);
+
+                        logger.Info($"SetCategory :: {T["Name"]} => {Category}");
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Error(ex, $"Error setting category for torrent {T["Name"]} ({T["Hash"]}) to {Category}");
+                        this.ErrorCount++;
+                        return;                        
+                    }
+                   
 
                 }
 

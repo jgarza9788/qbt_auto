@@ -173,16 +173,14 @@ Criteria: {Criteria}
                         logger.Info($"{logString}\n{r.ExitCode}|{r.StdOut}|{r.StdErr}\n{logString}");
                         await File.WriteAllTextAsync($"{_runDir}{sep}{Name}", "");
 
-                        // if (CreateDoneFile)
-                        // {
-                        //     await File.WriteAllTextAsync($"{_runDir}{sep}{Name}", "");
-                        // }
                         
                     }
                 }
                 catch (Exception ex)
                 {
                     logger.Error(ex, logString);
+                    this.ErrorCount++;
+                    return; 
                 }
 
             }

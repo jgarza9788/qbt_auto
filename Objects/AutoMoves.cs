@@ -130,7 +130,8 @@ Criteria: {Criteria}
                 catch (Exception ex)
                 {
                     logger.Error(ex, logString);
-                    return;
+                    this.ErrorCount++;
+                    return;    
                 }
             }
         }

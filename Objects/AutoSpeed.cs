@@ -120,19 +120,38 @@ Criteria: {Criteria}
 
             if (b == true)
             {
-                if (UploadSpeed >= 0)
+                try
                 {
-                    await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), UploadSpeed);
-                    // ulsHashes.Add(T["Hash"].ToString() ?? "");
-                    logger.Info($"Set uploadSpeed :: {T["Name"]} => {UploadSpeed} | {logString}");
+                    if (UploadSpeed >= 0)
+                    {
+                        await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), UploadSpeed);
+                        // ulsHashes.Add(T["Hash"].ToString() ?? "");
+                        logger.Info($"Set uploadSpeed :: {T["Name"]} => {UploadSpeed} | {logString}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, logString);
+                    this.ErrorCount++;
+                    return;    
                 }
 
-                if (DownloadSpeed >= 0)
+                try
                 {
-                    await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), DownloadSpeed);
-                    // dlsHashes.Add(T["Hash"].ToString() ?? "");
-                    logger.Info($"Set downloadSpeed :: {T["Name"]} => {DownloadSpeed} | {logString}");
+                    if (DownloadSpeed >= 0)
+                    {
+                        await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), DownloadSpeed);
+                        // dlsHashes.Add(T["Hash"].ToString() ?? "");
+                        logger.Info($"Set downloadSpeed :: {T["Name"]} => {DownloadSpeed} | {logString}");
+                    }
                 }
+                catch (Exception ex)
+                {
+                    logger.Error(ex, logString);
+                    this.ErrorCount++;
+                    return;    
+                }
+
             }
             
         }
