@@ -102,6 +102,7 @@ namespace QbtAuto
             if (plex_login_data != null)
             {
                 plex.baseUrl = getData(plex_login_data, ["host", "url"]) as string ?? "";
+                plex.client_id = getData(plex_login_data, ["client_id", "clientid","client-id"]) as string ?? "";
                 plex.user = getData(plex_login_data, ["user", "u"]) as string ?? "";
                 plex.pwd = getData(plex_login_data, ["pwd", "password", "p"]) as string ?? "";
 

@@ -27,12 +27,14 @@ namespace Utils
 
             foreach (DriveInfo di in DriveInfo.GetDrives())
             {
+                /*
                 if (OperatingSystem.IsWindows())
                 {
                     //windows drives
                 }
                 else
                 {
+                    // this will get all the linux drives
                     //we don't need all the linux drives
                     if (di.Name.StartsWith("/media/") || di.Name == "/")
                     {
@@ -44,15 +46,25 @@ namespace Utils
                         continue;
                     }
                 }
+                */
 
-                DriveData[$"{di.Name}_TotalSizeGB"] = di.TotalSize / (1024 * 1024 * 1024);
-                DriveData[$"{di.Name}_FreeSizeGB"] = di.TotalFreeSpace / (1024 * 1024 * 1024);
-                DriveData[$"{di.Name}_UsedSizeGB"] = (di.TotalSize - di.TotalFreeSpace) / (1024 * 1024 * 1024);
+                try
+                {
+                    DriveData[$"{di.Name}_TotalSizeGB"] = di.TotalSize / (1024 * 1024 * 1024);
+                    DriveData[$"{di.Name}_FreeSizeGB"] = di.TotalFreeSpace / (1024 * 1024 * 1024);
+                    DriveData[$"{di.Name}_UsedSizeGB"] = (di.TotalSize - di.TotalFreeSpace) / (1024 * 1024 * 1024);
 
-                float TotalSize = di.TotalSize / (1024 * 1024 * 1024);
-                float Used = (di.TotalSize - di.TotalFreeSpace) / (1024 * 1024 * 1024);
+                    float TotalSize = di.TotalSize / (1024 * 1024 * 1024);
+                    float Used = (di.TotalSize - di.TotalFreeSpace) / (1024 * 1024 * 1024);
 
-                DriveData[$"{di.Name}_PercentUsed"] = (float)( Used / TotalSize);
+                    DriveData[$"{di.Name}_PercentUsed"] = (float)( Used / TotalSize);
+                }
+                catch
+                {
+                    //unable to get data on that drive... no worries 
+                }
+
+
 
                 // Console.WriteLine($"{di.Name}_TotalSizeGB  {DriveData[$"{di.Name}_TotalSizeGB"]}");
                 // Console.WriteLine($"{di.Name}_FreeSizeGB   {DriveData[$"{di.Name}_FreeSizeGB"]}");
