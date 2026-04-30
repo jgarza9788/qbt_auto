@@ -92,6 +92,15 @@ Error: {this.ErrorCount}
 
         public bool? Evaluate(Dictionary<string, object> Dict, string logstring = "", bool verbose = false)
         {
+            
+            // logger.Info(Criteria);
+            // logger.Info(Dict);
+            // logger.Info(_criteria);
+            
+            // foreach (var kvp in Dict)
+            // {
+            //     logger.Info($"{kvp.Key.ToString()} | {kvp.Value.ToString()} ");
+            // }
 
             try
             {
@@ -139,6 +148,7 @@ Error: {this.ErrorCount}
 
             foreach (Match match in matches)
             {
+                
                 string m = match.Groups[1].Value;
                 // logger.Info($"{criteriaString} | {m}");
 

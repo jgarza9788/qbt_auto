@@ -61,6 +61,7 @@ namespace Utils
 
         // keyed by full file path (ContentPath)
         public Dictionary<string, object> items = new();
+        public Dictionary<string, object>? items_grouped = new(); 
 
         public string basePath  = Directory.GetCurrentDirectory();
         public string cacheName = "plex_cache.json";
@@ -95,6 +96,10 @@ namespace Utils
             {
                 string content = File.ReadAllText(cacheFile);
                 items    = Json5.Deserialize<Dictionary<string, object>>(content) ?? new();
+                items_grouped ??= items
+                    .GroupBy(e => e.Key.Split('/').Last())
+                    .ToDictionary(g => g.Key, g => g.First().Value);
+
                 isLoaded = true;
             }
         }
@@ -338,6 +343,11 @@ namespace Utils
                 }
 
                 File.WriteAllText(cacheFile, Json5.Serialize(items));
+
+                items_grouped ??= items
+                    .GroupBy(e => e.Key.Split('/').Last())
+                    .ToDictionary(g => g.Key, g => g.First().Value);
+
                 ageInDays = 0.0;
                 isLoaded  = true;
             }
@@ -359,6 +369,33 @@ namespace Utils
         /// </summary>
         public Dictionary<string, object> getDataByContentPath(string path)
         {
+            string _cp = path.Split('/').Last();
+
+            // logger.Info(_cp);
+            // foreach (var entry in items)
+            // {
+            //     logger.Info($"{entry.Key} | {entry.Value}");
+            // }
+            
+            if (items_grouped != null && items_grouped.TryGetValue(_cp, out var val))
+            {
+                return val as Dictionary<string, object> ?? new();
+            }
+
+            foreach (var entry in items)
+            {
+                if (entry.Key.Contains(_cp))
+                {
+                    return entry.Value as Dictionary<string, object> ?? new(); 
+                }
+            }
+            return new();
+        }
+
+        /// //old version
+        /*
+        public Dictionary<string, object> getDataByContentPath(string path)
+        {
             if (items.TryGetValue(path, out var value))
             {
                 return value as Dictionary<string, object> ?? new();
@@ -371,6 +408,7 @@ namespace Utils
             }
             return new();
         }
+        */
 
     }
 

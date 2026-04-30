@@ -120,19 +120,26 @@ Criteria: {Criteria}
 
             if (b == true)
             {
-                if (UploadSpeed >= 0)
+
+                if (UploadSpeed == 0 && DownloadSpeed == 0)
                 {
-                    await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), UploadSpeed);
-                    // ulsHashes.Add(T["Hash"].ToString() ?? "");
-                    logger.Info($"Set uploadSpeed :: {T["Name"]} => {UploadSpeed} | {logString}");
+                    await qbt.PauseAsync(T["Hash"].ToString());
+                    logger.Info($"Removed both limits :: {T["Name"]} | {logString}");
+                    return;
                 }
 
-                if (DownloadSpeed >= 0)
-                {
-                    await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), DownloadSpeed);
-                    // dlsHashes.Add(T["Hash"].ToString() ?? "");
-                    logger.Info($"Set downloadSpeed :: {T["Name"]} => {DownloadSpeed} | {logString}");
-                }
+                //negative values are treated as 0 (unlimited) by qbittorrent, but we want to log that as well
+                UploadSpeed = Math.Max(UploadSpeed , 0);
+                DownloadSpeed = Math.Max(DownloadSpeed , 0);
+
+                await qbt.SetTorrentUploadLimitAsync(T["Hash"].ToString(), UploadSpeed);
+                // ulsHashes.Add(T["Hash"].ToString() ?? "");
+                logger.Info($"Set uploadSpeed :: {T["Name"]} => {UploadSpeed} | {logString}");
+
+                await qbt.SetTorrentDownloadLimitAsync(T["Hash"].ToString(), DownloadSpeed);
+                // dlsHashes.Add(T["Hash"].ToString() ?? "");
+                logger.Info($"Set downloadSpeed :: {T["Name"]} => {DownloadSpeed} | {logString}");
+
             }
             
         }

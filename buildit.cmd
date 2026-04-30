@@ -11,5 +11,9 @@ dotnet publish ./qbt_auto.csproj -c Release -r win-x64 --self-contained true /p:
 copy .\bin\linux\qbt_auto \\192.168.1.250\TBP-Home\GitHub\qbt_auto\
 copy .\NLog.config \\192.168.1.250\TBP-Home\GitHub\qbt_auto\NLog.config
 copy .\config.json \\192.168.1.250\TBP-Home\GitHub\qbt_auto\config.json
+del /s /q \\192.168.1.250\TBP-Home\GitHub\qbt_auto\logs
 
-del \\192.168.1.250\TBP-Home\GitHub\temp\log
+copy .\bin\linux\qbt_auto \\192.168.1.232\user101\scripts\qbt_auto\
+copy .\NLog.config \\192.168.1.232\user101\scripts\qbt_auto\NLog.config
+copy .\config.json \\192.168.1.232\user101\scripts\qbt_auto\config.json
+del /s /q \\192.168.1.232\user101\scripts\qbt_auto\logs
