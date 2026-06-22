@@ -188,9 +188,9 @@ namespace Utils
         {
             var periods = new (string Name, float Weight)[]
             {
-                ("all",   0.10f),
+                ("all",   0.01f),
                 ("year",  0.50f),
-                ("month", 0.75f),
+                ("month", 0.90f),
                 ("week",  1.00f)
             };
 
