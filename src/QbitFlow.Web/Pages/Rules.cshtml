@@ -1,0 +1,237 @@
+@page
+@model RulesModel
+@{ ViewData["Title"] = $"Rules · {Model.Pipeline.Name}"; }
+
+<section class="panel">
+    <div class="spread">
+        <div><h1>Rules — @Model.Pipeline.Name</h1><span class="muted">Evaluated top to bottom against every torrent. Drag to reorder.</span></div>
+        <div class="row">
+            <a class="btn ghost" href="/PipelineEdit?id=@Model.Pipeline.Id">Pipeline settings</a>
+            <button id="btn-new">New rule</button>
+        </div>
+    </div>
+</section>
+
+<section class="panel scroll-x">
+    <table>
+        <thead><tr><th></th><th>#</th><th>Name</th><th>Expression</th><th>Action</th><th>On</th><th></th></tr></thead>
+        <tbody id="rule-rows"></tbody>
+    </table>
+</section>
+
+<section class="panel" id="editor" hidden>
+    <h2 id="editor-title">New rule</h2>
+    <input type="hidden" id="rule-id">
+    <div class="grid2">
+        <div><label>Name</label><input id="rule-name" placeholder="Tag cold movies"></div>
+        <div><label>Mode</label>
+            <select id="rule-mode"><option value="Builder">Builder</option><option value="Raw">Raw expression</option></select>
+        </div>
+    </div>
+
+    <fieldset id="builder-pane">
+        <legend>Conditions</legend>
+        <div class="row"><label style="margin:0">Combine with</label>
+            <select id="grp-logic" style="width:auto"><option value="And">AND</option><option value="Or">OR</option></select>
+        </div>
+        <div id="cond-rows" style="margin-top:8px"></div>
+        <button class="ghost" id="btn-add-cond" style="margin-top:8px">+ condition</button>
+    </fieldset>
+
+    <fieldset id="raw-pane" hidden>
+        <legend>Raw DynamicExpresso expression</legend>
+        <textarea id="rule-raw" placeholder='(&lt;Size&gt; &lt; 1073741824) &amp;&amp; match("&lt;Name&gt;", "1080p")'></textarea>
+    </fieldset>
+
+    <label>Compiled</label>
+    <div class="compiled" id="compiled">true</div>
+
+    <div class="grid2" style="margin-top:8px">
+        <div><label>Action</label><select id="rule-action"></select></div>
+        <div><label>Action parameters (JSON)</label><input id="rule-params" class="mono" value="{}"></div>
+    </div>
+    <p class="muted" id="action-help"></p>
+
+    <label class="row" style="margin-top:8px"><input type="checkbox" id="rule-enabled" checked style="width:auto"> Enabled</label>
+    <label class="row"><input type="checkbox" id="rule-stop" style="width:auto"> Stop pipeline if this rule matches</label>
+
+    <div class="row" style="margin-top:14px">
+        <button id="btn-save">Save rule</button>
+        <button class="ghost" id="btn-test">Test against current torrents</button>
+        <button class="ghost" id="btn-cancel">Cancel</button>
+    </div>
+    <div id="test-out" style="margin-top:14px"></div>
+</section>
+
+@section Scripts {
+<script>
+const PID = "@Model.Pipeline.Id";
+const FIELDS = @Html.Raw(Model.FieldsJson);
+const ACTIONS = @Html.Raw(Model.ActionsJson);
+let RULES = @Html.Raw(Model.RulesJson);
+
+const $ = s => document.querySelector(s);
+const csrf = () => ({ [document.querySelector('meta[name=csrf-header]').content]: document.querySelector('meta[name=csrf-token]').content });
+const jhead = () => ({ 'content-type': 'application/json', ...csrf() });
+const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---- rule list ----
+function renderRules() {
+  const tb = $('#rule-rows');
+  tb.innerHTML = RULES.map((r, i) => `
+    <tr data-id="${r.Id}">
+      <td class="drag" style="cursor:grab">⠿</td>
+      <td>${i + 1}</td>
+      <td><b>${esc(r.Name)}</b>${r.CompileValid ? '' : ' <span class="pill err">invalid</span>'}</td>
+      <td class="mono muted" style="max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.CompiledExpression)}</td>
+      <td class="mono">${esc(r.actionType)}</td>
+      <td><input type="checkbox" ${r.Enabled ? 'checked' : ''} onchange="toggleRule('${r.Id}', this.checked)" style="width:auto"></td>
+      <td><button class="ghost" onclick="editRule('${r.Id}')">Edit</button>
+          <button class="danger" onclick="deleteRule('${r.Id}')">Del</button></td>
+    </tr>`).join('') || '<tr><td colspan="7" class="muted">No rules yet.</td></tr>';
+
+  if (window.Sortable && tb.children.length && tb.children[0].dataset.id) {
+    Sortable.create(tb, { handle: '.drag', animation: 120, onEnd: reorder });
+  }
+}
+async function reorder() {
+  const ids = [...$('#rule-rows').children].map(tr => tr.dataset.id).filter(Boolean);
+  await fetch(`/api/pipelines/${PID}/rules/reorder`, { method: 'POST', headers: jhead(), body: JSON.stringify({ orderedRuleIds: ids }) });
+}
+async function toggleRule(id, on) {
+  const r = RULES.find(x => x.Id === id);
+  await putRule(id, { ...draftFrom(r), enabled: on });
+  r.Enabled = on;
+}
+async function deleteRule(id) {
+  if (!confirm('Delete this rule?')) return;
+  await fetch(`/api/rules/${id}`, { method: 'DELETE', headers: csrf() });
+  location.reload();
+}
+
+// ---- editor ----
+function actionOptions() {
+  $('#rule-action').innerHTML = ACTIONS.map(a => `<option value="${a.Type}">${esc(a.name)} (${a.Type})</option>`).join('');
+}
+function fieldOptions(sel) {
+  return FIELDS.map(f => `<option value="${f.Key}" ${f.Key === sel ? 'selected' : ''}>${f.Key} · ${f.type}</option>`).join('');
+}
+const OPS = ['Eq','Neq','Gt','Gte','Lt','Lte','Contains','NotContains','Matches','NotMatches','InList','DaysAgoGte','DaysAgoLt','IsTrue','IsFalse'];
+function condRow(c = { field: 'Category', op: 'Eq', value: '' }) {
+  const div = document.createElement('div');
+  div.className = 'row cond';
+  div.style.marginBottom = '6px';
+  div.innerHTML = `
+    <select class="c-field" style="width:220px">${fieldOptions(c.field)}</select>
+    <select class="c-op" style="width:130px">${OPS.map(o => `<option ${o === c.op ? 'selected' : ''}>${o}</option>`).join('')}</select>
+    <input class="c-val" style="width:180px" value="${esc(c.value)}" placeholder="value">
+    <button class="ghost c-del">✕</button>`;
+  div.querySelector('.c-del').onclick = () => { div.remove(); compile(); };
+  div.querySelectorAll('select,input').forEach(el => el.addEventListener('input', compile));
+  return div;
+}
+function readGroup() {
+  return {
+    logic: $('#grp-logic').value,
+    conditions: [...document.querySelectorAll('#cond-rows .cond')].map(r => ({
+      field: r.querySelector('.c-field').value,
+      operator: r.querySelector('.c-op').value,
+      valueKind: 'String',
+      value: r.querySelector('.c-val').value,
+    })),
+    children: [],
+  };
+}
+function draftFrom(r) {
+  const builder = $('#rule-mode').value === 'Builder';
+  return {
+    name: $('#rule-name').value.trim() || 'rule',
+    order: r ? r.Order : RULES.length,
+    enabled: $('#rule-enabled').checked,
+    stopOnMatch: $('#rule-stop').checked,
+    mode: $('#rule-mode').value,
+    rawExpression: builder ? null : $('#rule-raw').value,
+    group: builder ? readGroup() : null,
+    actionType: $('#rule-action').value,
+    actionParamsJson: $('#rule-params').value || '{}',
+  };
+}
+let compileTimer;
+function compile() {
+  clearTimeout(compileTimer);
+  compileTimer = setTimeout(async () => {
+    const box = $('#compiled');
+    if ($('#rule-mode').value === 'Raw') { box.textContent = $('#rule-raw').value || 'true'; box.classList.remove('bad'); return; }
+    const res = await fetch('/api/rules/compile', { method: 'POST', headers: jhead(), body: JSON.stringify(readGroup()) }).then(r => r.json());
+    box.textContent = res.expression;
+    box.classList.toggle('bad', !res.valid);
+  }, 250);
+}
+function showActionHelp() {
+  const a = ACTIONS.find(x => x.Type === $('#rule-action').value);
+  $('#action-help').textContent = a ? a.params.map(p => `${p.Key}${p.Required ? '*' : ''}: ${p.Label}${p.Help ? ' — ' + p.Help : ''}`).join('  ·  ') : '';
+}
+function openEditor(r) {
+  $('#editor').hidden = false;
+  $('#editor-title').textContent = r ? `Edit — ${r.Name}` : 'New rule';
+  $('#rule-id').value = r ? r.Id : '';
+  $('#rule-name').value = r ? r.Name : '';
+  $('#rule-mode').value = r ? r.mode : 'Builder';
+  $('#rule-enabled').checked = r ? r.Enabled : true;
+  $('#rule-stop').checked = r ? !!r.StopOnMatch : false;
+  $('#rule-raw').value = r && r.RawExpression ? r.RawExpression : '';
+  $('#rule-action').value = r ? r.actionType : ACTIONS[0].Type;
+  $('#rule-params').value = r ? r.actionParamsJson : '{}';
+  $('#grp-logic').value = r && r.group ? r.group.logic : 'And';
+  $('#cond-rows').innerHTML = '';
+  const conds = (r && r.group && r.group.conditions) ? r.group.conditions : [];
+  (conds.length ? conds : [{ field: 'Category', op: 'Eq', value: '' }]).forEach(c =>
+    $('#cond-rows').appendChild(condRow({ field: c.field, op: c.op, value: c.value })));
+  modePane(); showActionHelp(); compile();
+  $('#test-out').innerHTML = '';
+  $('#editor').scrollIntoView({ behavior: 'smooth' });
+}
+function modePane() {
+  const b = $('#rule-mode').value === 'Builder';
+  $('#builder-pane').hidden = !b;
+  $('#raw-pane').hidden = b;
+  compile();
+}
+function editRule(id) { openEditor(RULES.find(r => r.Id === id)); }
+
+async function putRule(id, draft) {
+  return fetch(`/api/rules/${id}`, { method: 'PUT', headers: jhead(), body: JSON.stringify(draft) });
+}
+$('#btn-save').onclick = async () => {
+  const id = $('#rule-id').value;
+  const r = id ? RULES.find(x => x.Id === id) : null;
+  const draft = draftFrom(r);
+  const res = id
+    ? await putRule(id, draft)
+    : await fetch(`/api/pipelines/${PID}/rules`, { method: 'POST', headers: jhead(), body: JSON.stringify(draft) });
+  if (res.ok) location.reload();
+  else alert('Save failed: ' + res.status);
+};
+$('#btn-test').onclick = async () => {
+  const draft = draftFrom(RULES.find(x => x.Id === $('#rule-id').value));
+  $('#test-out').innerHTML = '<span class="muted">running…</span>';
+  const rep = await fetch(`/api/pipelines/${PID}/test-rule`, { method: 'POST', headers: jhead(), body: JSON.stringify(draft) }).then(r => r.json());
+  $('#test-out').innerHTML = `
+    <p class="muted">${rep.Evaluated} evaluated · ${rep.Matched} match · ${rep.Errored} error</p>
+    <div class="scroll-x"><table><tr><th>Torrent</th><th>Category</th><th>Result</th></tr>
+    ${rep.Rows.map(x => `<tr><td>${esc(x.TorrentName)}</td><td class="muted">${esc(x.Category)}</td>
+      <td>${x.Matched === true ? '<span class="pill ok">match</span>' : x.Matched === false ? '<span class="pill">no</span>' : '<span class="pill err">error</span>'}</td></tr>`).join('')}
+    </table></div>`;
+};
+$('#btn-cancel').onclick = () => { $('#editor').hidden = true; };
+$('#btn-new').onclick = () => openEditor(null);
+$('#btn-add-cond').onclick = () => { $('#cond-rows').appendChild(condRow()); compile(); };
+$('#rule-mode').onchange = modePane;
+$('#rule-raw').oninput = compile;
+$('#grp-logic').onchange = compile;
+$('#rule-action').onchange = showActionHelp;
+
+actionOptions();
+renderRules();
+</script>
+}

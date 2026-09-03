@@ -1,13 +1,25 @@
-config.json
-bin
-plex_cache.json
-notes.md
-exampleConfig.json
-exampleKeys.csv
+# build output
+[Bb]in/
+[Oo]bj/
+*.user
+TestResults/
+[Cc]overage*/
 
-# other stuff
-.vscode
-bin
-obj
-plex_plays_movies.json
-plex_plays_raw.json
+# editor
+.vs/
+.vscode/
+.idea/
+
+# local runtime data / volumes
+data/
+exports/
+scripts/
+config/
+*.db
+*.db-shm
+*.db-wal
+qbitflow.design.db
+qbitflow-test-*.db
+
+# secrets / user config
+config.json

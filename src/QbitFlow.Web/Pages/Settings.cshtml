@@ -1,0 +1,50 @@
+@page
+@model SettingsModel
+@{ ViewData["Title"] = "Settings"; }
+
+<section class="panel">
+    <h1>Settings</h1>
+    <form method="post">
+        <div class="grid2">
+            <div><label>Analytics refresh interval (minutes, min 5)</label><input asp-for="AnalyticsIntervalMinutes" type="number" min="5"></div>
+            <div><label>qBittorrent torrent-list freshness (seconds)</label><input asp-for="QbtFreshnessSeconds" type="number" min="5"></div>
+            <div style="grid-column:1/-1"><label>Analytics weights (JSON, blank = defaults)</label><input asp-for="AnalyticsWeights" class="mono" placeholder='{"all":0.01,"year":0.5,"month":0.9,"week":1.0}'></div>
+        </div>
+        <div class="row" style="margin-top:14px"><button type="submit">Save</button></div>
+    </form>
+</section>
+
+<section class="panel">
+    <h2>Access</h2>
+    @if (Model.AuthModeFromEnv)
+    {
+        <p class="muted">Auth mode is set by the <code>AUTH_MODE</code> environment variable (<b>@Model.AuthMode</b>) and can't be changed here.</p>
+    }
+    else
+    {
+        <form method="post">
+            <input type="hidden" asp-for="AnalyticsIntervalMinutes"><input type="hidden" asp-for="QbtFreshnessSeconds"><input type="hidden" asp-for="AnalyticsWeights">
+            <div class="grid2">
+                <div><label>Auth mode</label>
+                    <select asp-for="AuthMode"><option value="none">none (open)</option><option value="apikey">apikey (X-Api-Key / ?apikey=)</option><option value="basic">basic (browser prompt)</option></select>
+                </div>
+                <div><label>Shared secret @(Model.AuthSecretSet ? "(set — blank keeps it)" : "")</label><input asp-for="AuthSecret" type="password"></div>
+            </div>
+            <div class="row" style="margin-top:12px"><button type="submit">Save access settings</button></div>
+        </form>
+    }
+</section>
+
+<section class="panel">
+    <h2>Environment</h2>
+    <p class="muted">Secrets can be supplied via env vars (they override the database and are never persisted).</p>
+    <table>
+        <tr><th>Variable</th><th>Status</th></tr>
+        <tr><td class="mono">SECRETS_ENCRYPTION</td><td>@Model.SecretsEncryption</td></tr>
+        @foreach (var kv in Model.EnvStatus)
+        {
+            <tr><td class="mono">@kv.Key</td><td class="muted">@(kv.Value ?? "not set")</td></tr>
+        }
+    </table>
+    <p class="muted" style="margin-top:10px"><code>AUTH_SECRET</code> (plaintext) overrides the stored hash; <code>EXPORTS_DIR</code> sets where <code>torrent.export</code> writes; <code>SECRETS_KEY_DIR</code> holds the Data Protection key ring when <code>SECRETS_ENCRYPTION=dpapi</code>.</p>
+</section>

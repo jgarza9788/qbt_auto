@@ -1,0 +1,70 @@
+@page
+@model SourcesModel
+@{ ViewData["Title"] = "Sources"; }
+
+<section class="panel">
+    <h1>Sources</h1>
+    <p class="muted">Plex &amp; Jellyfin feed the hot/cold analytics. qBittorrent instances are both a data source and the action target.</p>
+</section>
+
+<section>
+    <h2>Configured</h2>
+    <div class="panel scroll-x">
+        <table>
+            <tr><th>Name</th><th>Kind</th><th>URL</th><th>Health</th><th>Checked</th><th></th></tr>
+            @if (Model.Sources.Count == 0) { <tr><td colspan="6" class="muted">None yet — add one below.</td></tr> }
+            @foreach (var s in Model.Sources)
+            {
+                <tr id="src-@s.Id">
+                    <td><b>@s.Name</b> @(s.Enabled ? "" : "· disabled")</td>
+                    <td>@s.Kind</td>
+                    <td class="muted mono">@s.BaseUrl</td>
+                    <td>
+                        <span class="pill @(s.HealthState switch { HealthState.Healthy => "ok", HealthState.Unreachable => "err", HealthState.Degraded => "warn", _ => "" })">@s.HealthState.ToString().ToLower()</span>
+                        @if (s.LatencyMs is { } l) { <span class="muted"> @l ms</span> }
+                    </td>
+                    <td class="muted">@(s.LastCheckedUtc?.ToString("HH:mm:ss") ?? "—")</td>
+                    <td>
+                        <button class="ghost" hx-post="/api/sources/@s.Id/test" hx-target="#src-@s.Id" hx-swap="none"
+                                hx-on::after-request="location.reload()">Test</button>
+                        <a class="btn ghost" href="?edit=@s.Id">Edit</a>
+                        <form class="inline" method="post" asp-page-handler="Delete" asp-route-id="@s.Id"><button class="danger">Delete</button></form>
+                    </td>
+                </tr>
+                @if (s.LastError is { Length: > 0 })
+                {
+                    <tr><td colspan="6" class="muted mono" style="color:var(--err)">@s.LastError</td></tr>
+                }
+            }
+        </table>
+    </div>
+</section>
+
+<section class="panel">
+    <h2>@(Model.Id is null ? "Add source" : "Edit source")</h2>
+    <form method="post" asp-page-handler="Save">
+        <input type="hidden" asp-for="Id" />
+        <div class="grid2">
+            <div><label>Name</label><input asp-for="Name" required></div>
+            <div><label>Kind</label>
+                <select asp-for="Kind">
+                    <option>Qbt</option><option>Plex</option><option>Jellyfin</option>
+                </select>
+            </div>
+            <div><label>Base URL</label><input asp-for="BaseUrl" placeholder="http://192.168.1.10:8080" required></div>
+            <div><label>Auth mode</label>
+                <select asp-for="AuthMode">
+                    <option>UserPassword</option><option>ApiKey</option><option>PlexToken</option>
+                </select>
+            </div>
+            <div><label>Username</label><input asp-for="Username"></div>
+            <div><label>Secret (password / API key / token)</label><input asp-for="Secret" type="password" placeholder="@(Model.Id is null ? "" : "leave blank to keep")"></div>
+            <div style="grid-column:1/-1"><label>Options JSON</label><input asp-for="OptionsJson" class="mono" placeholder='{"clientId":"…"} or {"userScope":"all"} or {"verifyTls":true}'></div>
+        </div>
+        <label class="row" style="margin-top:12px"><input type="checkbox" asp-for="Enabled" style="width:auto"> Enabled</label>
+        <div class="row" style="margin-top:14px">
+            <button type="submit">Save</button>
+            @if (Model.Id is not null) { <a class="btn ghost" href="/Sources">Cancel</a> }
+        </div>
+    </form>
+</section>

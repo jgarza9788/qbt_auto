@@ -1,0 +1,55 @@
+@page
+@model AnalyticsModel
+@{ ViewData["Title"] = "Analytics"; }
+
+<section class="panel">
+    <div class="spread">
+        <div><h1>Hot / cold analytics</h1><span class="muted">@Model.MediaItems media item(s) · last refresh @(Model.LastRun?.ToLocalTime().ToString("MM-dd HH:mm") ?? "never")</span></div>
+        <form method="post" asp-page-handler="Refresh"><button>Refresh now</button></form>
+    </div>
+    <p class="muted">Watch counts are aggregated across all Plex/Jellyfin sources, then quantile-normalised within each qBittorrent category into a 0..1 score. Pipeline rules read <code>&lt;hotcold&gt;</code>, <code>&lt;watch_total&gt;</code>, <code>&lt;days_since_last_watched&gt;</code>, <code>&lt;is_media_matched&gt;</code>.</p>
+</section>
+
+<section>
+    <h2>Buckets</h2>
+    <div class="panel scroll-x">
+        <table>
+            <tr><th>qBittorrent</th><th>Category</th><th>Torrents</th><th>Matched</th><th>Avg weighted watch</th></tr>
+            @if (Model.Buckets.Count == 0) { <tr><td colspan="5" class="muted">No scores yet — configure sources and refresh.</td></tr> }
+            @foreach (var b in Model.Buckets)
+            {
+                <tr><td>@b.Instance</td><td>@b.Category</td><td>@b.Torrents</td><td>@b.Matched</td><td class="muted">@b.AvgWatch.ToString("0.###")</td></tr>
+            }
+        </table>
+    </div>
+</section>
+
+<section>
+    <h2>Hottest torrents</h2>
+    <div class="panel scroll-x">
+        <table>
+            <tr><th>Category</th><th>Hash</th><th>Watch total</th><th>Hot/cold</th></tr>
+            @foreach (var s in Model.Hottest)
+            {
+                <tr>
+                    <td>@s.Category</td><td class="mono muted">@s.Hash[..Math.Min(12, s.Hash.Length)]</td>
+                    <td>@s.WatchTotal.ToString("0.###")</td>
+                    <td style="min-width:120px"><div class="bar"><span style="width:@((int)(s.HotCold * 100))%"></span></div><span class="muted">@s.HotCold.ToString("0.00")</span></td>
+                </tr>
+            }
+        </table>
+    </div>
+</section>
+
+@if (Model.Unmatched.Count > 0)
+{
+    <section>
+        <h2>Unmatched torrents <span class="muted">(tune the matcher / library naming)</span></h2>
+        <div class="panel scroll-x">
+            <table>
+                <tr><th>Category</th><th>Hash</th></tr>
+                @foreach (var s in Model.Unmatched) { <tr><td>@s.Category</td><td class="mono muted">@s.Hash[..Math.Min(16, s.Hash.Length)]</td></tr> }
+            </table>
+        </div>
+    </section>
+}

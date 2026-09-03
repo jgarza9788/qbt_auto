@@ -2,28 +2,28 @@ name: Build
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master", "Dev8" ]
+    tags: [ "v*" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master", "Dev8" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '9.0.x'
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
 
-    - name: Restore dependencies
-      run: dotnet restore
+      - name: Restore
+        run: dotnet restore QbitFlow.sln
 
-    - name: Build
-      run: dotnet build --no-restore --configuration Release
+      - name: Build
+        run: dotnet build QbitFlow.sln --no-restore --configuration Release
 
-    - name: Test
-      run: dotnet test --no-build --configuration Release
+      - name: Test
+        run: dotnet test QbitFlow.sln --no-build --configuration Release --collect:"XPlat Code Coverage"
