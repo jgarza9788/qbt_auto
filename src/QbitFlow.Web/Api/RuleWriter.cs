@@ -64,10 +64,18 @@ public sealed class RuleWriter(AppDbContext db, ConditionCompiler compiler, Rule
                 // The builder tree is replaced wholesale rather than diffed — cheaper and avoids
                 // orphaned condition rows.
                 if (rule.RootGroupId is { } oldRoot)
-                    await DeleteGroupTreeAsync(oldRoot, ct);
+                    await DeleteGroupTreeAsync(rule.Id, oldRoot, ct);
                 rule.RootGroupId = null;
                 rule.RootGroup = null;
                 ApplyRule(rule, draft with { Order = i }, compiler);
+
+                // The rule is already tracked, so EF discovers its brand-new condition tree through
+                // the navigation. Because the ids are client-generated Guids, EF cannot tell a new
+                // row from an existing one and settles on Modified — issuing UPDATEs against rows
+                // that do not exist yet, which fails the whole save with DbUpdateConcurrencyException
+                // ("expected to affect 1 row(s), but actually affected 0"). Add() states it plainly.
+                if (rule.RootGroup is { } freshRoot)
+                    db.Add(freshRoot);
 
                 // An edited rule should take effect next pass, not sit out its old cooldown window.
                 cooldowns.Forget(rule.Id);
@@ -76,7 +84,7 @@ public sealed class RuleWriter(AppDbContext db, ConditionCompiler compiler, Rule
 
         foreach (var orphan in existing.Where(r => !keptIds.Contains(r.Id)))
         {
-            if (orphan.RootGroupId is { } root) await DeleteGroupTreeAsync(root, ct);
+            if (orphan.RootGroupId is { } root) await DeleteGroupTreeAsync(orphan.Id, root, ct);
             db.Rules.Remove(orphan);
             cooldowns.Forget(orphan.Id);
         }
@@ -163,24 +171,30 @@ public sealed class RuleWriter(AppDbContext db, ConditionCompiler compiler, Rule
     }
 
     /// <summary>
-    /// Removes a condition-group tree depth-first. Groups model their own parent/child links rather
-    /// than relying on a cascade (SQLite won't cascade a self-reference), so the walk is explicit.
+    /// Removes one rule's condition-group tree depth-first. Groups model their own parent/child links
+    /// rather than relying on a cascade (SQLite won't cascade a self-reference), so the walk is explicit.
+    /// Conditions come along via <c>Include</c> and are removed through the tracked graph, which lets
+    /// EF order the child deletes before their group.
     /// </summary>
-    private async Task DeleteGroupTreeAsync(Guid rootGroupId, CancellationToken ct)
+    private async Task DeleteGroupTreeAsync(Guid ruleId, Guid rootGroupId, CancellationToken ct)
     {
-        var groups = await db.RuleConditionGroups.Where(g => g.RuleId != Guid.Empty).ToListAsync(ct);
+        // Scoped to the rule — the previous version loaded every condition group in the database.
+        var groups = await db.RuleConditionGroups
+            .Include(g => g.Conditions)
+            .Where(g => g.RuleId == ruleId)
+            .ToListAsync(ct);
+
         var toDelete = new List<RuleConditionGroup>();
         void Collect(Guid id)
         {
-            var g = groups.FirstOrDefault(x => x.Id == id);
-            if (g is null) return;
+            if (groups.FirstOrDefault(x => x.Id == id) is not { } g) return;
             toDelete.Add(g);
             foreach (var child in groups.Where(x => x.ParentGroupId == id)) Collect(child.Id);
         }
         Collect(rootGroupId);
 
-        var groupIds = toDelete.Select(g => g.Id).ToHashSet();
-        db.RuleConditions.RemoveRange(db.RuleConditions.Where(c => groupIds.Contains(c.GroupId)));
+        foreach (var group in toDelete)
+            db.RuleConditions.RemoveRange(group.Conditions);
         db.RuleConditionGroups.RemoveRange(toDelete);
     }
 }

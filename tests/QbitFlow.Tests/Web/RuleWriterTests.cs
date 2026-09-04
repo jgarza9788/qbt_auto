@@ -65,6 +65,54 @@ public class RuleWriterTests(QbitFlowFactory factory) : IClassFixture<QbitFlowFa
         rules.Select(r => (r.Id, r.Name, r.Order)).Should().Equal((b, "b2", 0), (a, "a", 1));
     }
 
+    /// <summary>
+    /// Regression: editing any rule while a Builder-mode rule is in the same payload used to fail the
+    /// whole save with DbUpdateConcurrencyException, because the builder rule's group tree was rebuilt
+    /// and its condition rows were deleted by a separate query that raced SQLite's ON DELETE CASCADE.
+    /// Symptom in the UI was a 500 on Save and the rule appearing not to have been saved at all.
+    /// </summary>
+    [Fact]
+    public async Task Editing_a_rule_alongside_a_builder_rule_saves_cleanly()
+    {
+        var group = new RuleWriter.GroupDto("And", [new RuleWriter.CondDto("Category", "Eq", "String", "Movies")], null);
+        await ReconcileAsync(
+            Raw(null, "raw one", "true"),
+            new RuleWriter.RuleDraft(null, "builder one", 1, true, null, "Builder", null, group, "tag.sync", "{}"));
+
+        var seeded = await ReadAsync(db => db.Rules.AsNoTracking().OrderBy(r => r.Order).ToListAsync());
+        seeded.Should().HaveCount(2);
+        var (rawId, builderId) = (seeded[0].Id, seeded[1].Id);
+
+        // Rename the raw rule; the builder rule is resubmitted unchanged and so is rebuilt in place.
+        await ReconcileAsync(
+            Raw(rawId, "raw renamed", "true"),
+            new RuleWriter.RuleDraft(builderId, "builder one", 1, true, null, "Builder", null, group, "tag.sync", "{}"));
+
+        var after = await ReadAsync(db => db.Rules.AsNoTracking().OrderBy(r => r.Order).ToListAsync());
+        after.Select(r => r.Name).Should().Equal("raw renamed", "builder one");
+
+        // Exactly one live group with one condition — the old tree must be gone, not orphaned.
+        (await ReadAsync(db => db.RuleConditionGroups.CountAsync(g => g.RuleId == builderId))).Should().Be(1);
+        (await ReadAsync(db => db.RuleConditions.CountAsync(c => c.Group!.RuleId == builderId))).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Repeated_saves_of_a_builder_rule_do_not_accumulate_condition_rows()
+    {
+        var group = new RuleWriter.GroupDto("And",
+            [new RuleWriter.CondDto("Category", "Eq", "String", "Movies"),
+             new RuleWriter.CondDto("Ratio", "Gt", "Number", "2")], null);
+
+        await ReconcileAsync(new RuleWriter.RuleDraft(null, "b", 0, true, null, "Builder", null, group, "tag.sync", "{}"));
+        var id = await ReadAsync(db => db.Rules.Select(r => r.Id).SingleAsync());
+
+        for (var i = 0; i < 3; i++)
+            await ReconcileAsync(new RuleWriter.RuleDraft(id, "b", 0, true, null, "Builder", null, group, "tag.sync", "{}"));
+
+        (await ReadAsync(db => db.RuleConditionGroups.CountAsync())).Should().Be(1);
+        (await ReadAsync(db => db.RuleConditions.CountAsync())).Should().Be(2);
+    }
+
     [Fact]
     public async Task Target_filter_and_cooldown_round_trip()
     {

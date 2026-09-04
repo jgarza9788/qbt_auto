@@ -80,10 +80,11 @@
             <label class="row"><input type="checkbox" id="rule-stop" style="width:auto"> Stop at this rule if it matches</label>
 
             <div class="row" style="margin-top:14px">
-                <button type="button" id="btn-apply">Apply</button>
+                <button type="button" id="btn-apply">Add to list</button>
                 <button type="button" class="ghost" id="btn-test">Test against current torrents</button>
                 <button type="button" class="ghost" id="btn-cancel">Cancel</button>
             </div>
+            <p class="muted" style="margin-top:8px">Adds this rule to the list above. Pressing <b>Save</b> with the editor still open does it for you.</p>
             <div id="test-out" style="margin-top:14px"></div>
         </div>
     </section>
@@ -159,8 +160,36 @@ const esc = s => (s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 let dirty = false;
 function markDirty() { dirty = true; }
 window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-$('#rules-form').addEventListener('submit', () => { syncPayload(); dirty = false; });
 $('#rules-form').addEventListener('input', markDirty);
+
+// Save must mean "save what I can see". If the editor is still open, fold it into the list first —
+// otherwise a rule typed but never added would be silently dropped by the reconcile.
+//
+// This is the single entry point for saving (it catches the Save button and an Enter keypress
+// alike). Folding in the editor is async because it recompiles, so the real submit is deferred
+// until the list is current, then raised with form.submit(), which does NOT re-fire this listener.
+let submitting = false;
+$('#rules-form').addEventListener('submit', e => {
+  e.preventDefault();
+  if (submitting) return;
+  submitting = true;
+  $('#btn-save').disabled = true;
+
+  (async () => {
+    try {
+      clearTimeout(compileTimer);   // the editor's debounced preview is superseded by applyEditor
+      if (!$('#editor').hidden) await applyEditor();
+      syncPayload();
+      dirty = false;
+      $('#rules-form').submit();
+    } catch (err) {
+      // Never leave the user staring at a dead Save button with no explanation.
+      submitting = false;
+      $('#btn-save').disabled = false;
+      alert('Could not save: ' + (err?.message ?? err));
+    }
+  })();
+});
 
 // ---- draft payload ----
 // Shapes below must match RuleWriter.RuleDraft / GroupDto / CondDto (System.Text.Json web defaults,
@@ -281,9 +310,14 @@ function compile() {
   compileTimer = setTimeout(async () => {
     const box = $('#compiled');
     if ($('#rule-mode').value === 'Raw') { box.textContent = $('#rule-raw').value || 'true'; box.classList.remove('bad'); return; }
-    const res = await fetch('/api/rules/compile', { method: 'POST', headers: jhead(), body: JSON.stringify(readGroup()) }).then(r => r.json());
-    box.textContent = res.expression;
-    box.classList.toggle('bad', !res.valid);
+    try {
+      const res = await fetch('/api/rules/compile', { method: 'POST', headers: jhead(), body: JSON.stringify(readGroup()) }).then(r => r.json());
+      box.textContent = res.expression;
+      box.classList.toggle('bad', !res.valid);
+    } catch {
+      // This is only a preview, and the request is routinely cut short by a save navigating away.
+      // Swallow it: applyEditor() recompiles authoritatively before anything is persisted.
+    }
   }, 250);
 }
 function showActionHelp() {
@@ -326,9 +360,9 @@ function openEditor(r) {
   $('#editor').scrollIntoView({ behavior: 'smooth' });
 }
 
-// Apply stages the editor back into RULES (still not saved). It recompiles synchronously so the
-// list row shows the right expression and "invalid" badge immediately.
-$('#btn-apply').onclick = async () => {
+// Folds whatever is in the editor back into RULES (still not written to the database). Recompiles
+// first so the list row shows the right expression and "invalid" badge immediately.
+async function applyEditor() {
   const key = $('#rule-key').value;
   const builder = $('#rule-mode').value === 'Builder';
   const group = builder ? readGroup() : null;
@@ -355,10 +389,14 @@ $('#btn-apply').onclick = async () => {
   const existing = key ? RULES.find(x => x._key === key) : null;
   if (existing) Object.assign(existing, draft);
   else RULES.push({ ...draft, Id: null, _key: crypto.randomUUID() });
+  closeEditor();
+  renderRules(); syncPayload(); markDirty();
+}
+function closeEditor() {
   $('#editor').hidden = true;
   $('#editor-empty').hidden = false;
-  renderRules(); syncPayload(); markDirty();
-};
+}
+$('#btn-apply').onclick = applyEditor;
 // Evaluates the in-progress condition against real torrents. Read-only: no action is invoked and
 // no run is recorded, so it is safe to hit repeatedly while tuning an expression.
 $('#btn-test').onclick = async () => {
@@ -379,7 +417,7 @@ $('#btn-test').onclick = async () => {
       <td>${x.Matched === true ? '<span class="pill ok">match</span>' : x.Matched === false ? '<span class="pill">no</span>' : '<span class="pill err">error</span>'}</td></tr>`).join('')}
     </table></div>`;
 };
-$('#btn-cancel').onclick = () => { $('#editor').hidden = true; $('#editor-empty').hidden = false; };
+$('#btn-cancel').onclick = closeEditor;   // discards the editor without touching RULES
 $('#btn-new').onclick = () => openEditor(null);
 $('#btn-add-cond').onclick = () => { $('#cond-rows').appendChild(condRow()); compile(); };
 $('#rule-mode').onchange = modePane;
