@@ -61,7 +61,7 @@ ConnectionStrings__Db="Data Source=./data/qbitflow.db" dotnet run --project src/
   Each rule is a condition (structured builder — field / operator / value, AND / OR — or a raw
   expression) + one event, with optional per-rule qBittorrent-instance filter and a cooldown.
   Helpers `contains`, `match`, `daysAgo`. Fields cover torrent state, per-drive free space, matched
-  media metadata, and the derived `<watch_popularity>` (legacy alias `<hotcold>`) / `<watch_total>` /
+  media metadata, and the derived `<watch_popularity>` / `<watch_total>` /
   `<days_since_last_watched>` / `<is_media_matched>` — the **Fields** slide-over lists every one.
   "Test against current torrents" previews matches without touching anything; nothing is saved until
   you press Save.

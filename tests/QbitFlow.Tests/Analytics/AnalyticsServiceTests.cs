@@ -110,7 +110,7 @@ public class AnalyticsServiceTests : IAsyncLifetime
         // weighted: (10 + 5) * 0.01 "all"-window weight
         matrix.WeightedWatchTotal.Should().BeApproximately(0.15, 1e-9);
 
-        // Movies bucket: matrix (0.15) hottest, then fresh film (0.08), cartoon (0), ISO in its own bucket.
+        // Movies bucket: matrix (0.15) most watched, then fresh film (0.08), cartoon (0); ISO in its own bucket.
         var movies = await db.MediaScoreCache.Where(s => s.Category == "Movies").ToListAsync();
         movies.Should().HaveCount(3);
         movies.Single(s => s.TorrentHash == "hm").WatchPopularity.Should().Be(1.0);
@@ -134,16 +134,29 @@ public class AnalyticsServiceTests : IAsyncLifetime
             new TorrentView { Hash = "hm", Name = "x" }, CancellationToken.None);
 
         fields["is_media_matched"].Should().Be(true);
-        ((double)fields["hotcold"]!).Should().Be(1.0);
+        ((double)fields["watch_popularity"]!).Should().Be(1.0);
         ((double)fields["watch_total"]!).Should().BeApproximately(0.15, 1e-9);
         fields["media_title"].Should().Be("The Matrix");
-        ((double)fields["plex_nview"]!).Should().Be(1.0);   // alias of hotcold
+        ((double)fields["plex_nview"]!).Should().Be(1.0);   // alias of watch_popularity
 
         var iso = await enricher.EnrichAsync(_qbtId,
             new TorrentView { Hash = "hx", Name = "x" }, CancellationToken.None);
         iso["is_media_matched"].Should().Be(false);
-        ((double)iso["hotcold"]!).Should().Be(1.0);         // sole member of the Linux bucket
+        ((double)iso["watch_popularity"]!).Should().Be(1.0);   // sole member of the Linux bucket
         ((double)iso["days_since_last_watched"]!).Should().Be(99999d);
+    }
+
+    [Fact]
+    public async Task The_renamed_field_no_longer_answers_to_hotcold()
+    {
+        await _sp.GetRequiredService<IAnalyticsService>().RefreshAsync(CancellationToken.None);
+
+        var fields = await _sp.GetRequiredService<IMediaEnricher>().EnrichAsync(_qbtId,
+            new TorrentView { Hash = "hm", Name = "x" }, CancellationToken.None);
+
+        fields.Should().ContainKey("watch_popularity").And.NotContainKey("hotcold");
+        QbitFlow.Core.Expressions.FieldCatalog.ByKey.Should()
+            .ContainKey("watch_popularity").And.NotContainKey("hotcold");
     }
 
     // ---- fakes ----

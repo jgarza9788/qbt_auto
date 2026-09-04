@@ -30,7 +30,6 @@ public sealed class NullMediaEnricher : IMediaEnricher
         ["plex_viewCount"] = 0,
         ["plex_nview"] = 0d,
         ["watch_popularity"] = 0d,
-        ["hotcold"] = 0d,
         ["watch_total"] = 0d,
         ["days_since_last_watched"] = 99999d,
         ["is_media_matched"] = false,

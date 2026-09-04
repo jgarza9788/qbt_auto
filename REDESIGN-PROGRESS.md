@@ -1,8 +1,14 @@
 # qbit-flow redesign — progress tracker
 
+> ⚠️ **HISTORICAL RECORD — do not read as current design.** This tracked phases 0–6 of the
+> 2026-09-02/03 redesign. On 2026-09-04 the pipeline concept was removed entirely, so the names
+> below (`Pipeline`, `PipelineRunner`, `PipelineEdit`, `SchedulerService`, `hotcold`,
+> `HotColdScore`) no longer exist. For how the engine works now see
+> [`docs/engine.md`](docs/engine.md); `hotcold` is now `watch_popularity`.
+>
 > Working doc so the redesign can be paused and resumed across sessions.
 > Full plan: `C:\Users\JGarza\.claude\plans\let-s-redesign-this-i-mutable-planet.md`
-> Branch: `Dev8` · started 2026-09-02 · **nothing committed yet** (all changes on disk only)
+> Branch: `Dev8` · started 2026-09-02
 
 ## Legend
 - [ ] not started · [~] in progress · [x] done · [!] blocked / needs decision

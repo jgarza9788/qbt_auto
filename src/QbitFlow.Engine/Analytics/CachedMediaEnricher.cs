@@ -42,11 +42,11 @@ public sealed class CachedMediaEnricher(IDbContextFactory<AppDbContext> dbFactor
             ["plex_year"] = media?.Year ?? 0,
             ["plex_rating"] = media?.Rating ?? 0d,
             ["plex_viewCount"] = media is null ? 0 : (int)Math.Round(media.WeightedWatchTotal),
-            ["plex_nview"] = popularity,                    // alias of watch_popularity
+            // The one surviving alias: imported qbt_auto criteria are kept verbatim and use it.
+            ["plex_nview"] = popularity,
             ["plex_nview_legacy"] = media?.LegacyScore ?? 0d,
 
             ["watch_popularity"] = popularity,
-            ["hotcold"] = popularity,                       // legacy alias of watch_popularity
             ["watch_total"] = watchTotal,
             ["days_since_last_watched"] = daysSince,
             ["is_media_matched"] = matched,

@@ -28,7 +28,7 @@ own source list. It cost the user a container to create and name before they cou
 write a single rule, and three pipelines on the same 5-minute cron pulled the same
 torrent list from the same qBittorrent instance three times.
 
-The deciding observation: **there is only one source in the hot path.** Rule
+The deciding observation: **only one source is read while rules evaluate.** Rule
 evaluation reads qBittorrent torrent lists (cheap, changes on a minutes timescale)
 and a *cache* of Plex/Jellyfin watch data. The expensive sources are refreshed by a
 separate 6-hour job and are never touched during a pass. So a user-chosen cadence
@@ -106,9 +106,10 @@ Plex and Jellyfin. It aggregates a recency-weighted watch total per media item,
 matches every torrent to an item, buckets by qBittorrent category, and
 quantile-normalises each bucket to `0..1` in `MediaScoreCache.WatchPopularity`.
 
-Rules read it as `<watch_popularity>`. `<hotcold>` and `<plex_nview>` are kept as
-live aliases of the same value so pre-rename rules and legacy `config.json` imports
-keep working — see `CachedMediaEnricher`.
+Rules read it as `<watch_popularity>`. The only alias kept is `<plex_nview>`, because
+imported `qbt_auto` criteria are stored verbatim and use that name — see
+`CachedMediaEnricher`. There is deliberately no `<hotcold>`: it was the field's name
+for one day during the redesign and is gone.
 
 Normalising *within a category* is the point: "unpopular for a movie" and
 "unpopular for a Linux ISO" are different bars.

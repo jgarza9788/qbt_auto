@@ -4,10 +4,10 @@
 
 <section class="panel">
     <div class="spread">
-        <div><h1>Hot / cold analytics</h1><span class="muted">@Model.MediaItems media item(s) · last refresh @(Model.LastRun?.ToLocalTime().ToString("MM-dd HH:mm") ?? "never")</span></div>
+        <div><h1>Watch popularity</h1><span class="muted">@Model.MediaItems media item(s) · last refresh @(Model.LastRun?.ToLocalTime().ToString("MM-dd HH:mm") ?? "never")</span></div>
         <form method="post" asp-page-handler="Refresh"><button>Refresh now</button></form>
     </div>
-    <p class="muted">Watch counts are aggregated across all Plex/Jellyfin sources, then quantile-normalised within each qBittorrent category into a 0..1 score. Rules read <code>&lt;watch_popularity&gt;</code> (alias <code>&lt;hotcold&gt;</code>), <code>&lt;watch_total&gt;</code>, <code>&lt;days_since_last_watched&gt;</code>, <code>&lt;is_media_matched&gt;</code>.</p>
+    <p class="muted">Watch counts are aggregated across all Plex/Jellyfin sources, then quantile-normalised within each qBittorrent category into a 0..1 score. Rules read <code>&lt;watch_popularity&gt;</code>, <code>&lt;watch_total&gt;</code>, <code>&lt;days_since_last_watched&gt;</code>, <code>&lt;is_media_matched&gt;</code>.</p>
 </section>
 
 <section>
@@ -29,7 +29,7 @@
     <div class="panel scroll-x">
         <table>
             <tr><th>Category</th><th>Hash</th><th>Watch total</th><th>Watch popularity</th></tr>
-            @foreach (var s in Model.Hottest)
+            @foreach (var s in Model.MostWatched)
             {
                 <tr>
                     <td>@s.Category</td><td class="mono muted">@s.Hash[..Math.Min(12, s.Hash.Length)]</td>

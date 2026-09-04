@@ -61,7 +61,6 @@ public static class FieldCatalog
 
         // ---- Derived ----
         new("watch_popularity",       FieldType.Number, FieldSource.Derived, "0..1 — matched media's watch total, ranked within the qBt category", "0.62"),
-        new("hotcold",                FieldType.Number, FieldSource.Derived, "Legacy alias of watch_popularity", "0.62"),
         new("watch_total",            FieldType.Number, FieldSource.Derived, "Weighted watch total across all sources", "3.4"),
         new("days_since_last_watched",FieldType.Number, FieldSource.Derived, "Days since last watched (99999 if never)", "45"),
         new("is_media_matched",       FieldType.Bool,   FieldSource.Derived, "Torrent matched a media item", "True"),

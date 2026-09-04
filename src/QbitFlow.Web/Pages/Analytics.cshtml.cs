@@ -14,7 +14,7 @@ public class AnalyticsModel(AppDbContext db, IAnalyticsService analytics, Analyt
     public DateTimeOffset? LastRun { get; private set; }
     public int MediaItems { get; private set; }
     public List<Bucket> Buckets { get; private set; } = [];
-    public List<ScoreRow> Hottest { get; private set; } = [];
+    public List<ScoreRow> MostWatched { get; private set; } = [];
     public List<ScoreRow> Unmatched { get; private set; } = [];
 
     public async Task OnGetAsync()
@@ -34,7 +34,7 @@ public class AnalyticsModel(AppDbContext db, IAnalyticsService analytics, Analyt
             .OrderBy(b => b.Instance).ThenBy(b => b.Category)
             .ToList();
 
-        Hottest = scores.Where(s => s.IsMediaMatched)
+        MostWatched = scores.Where(s => s.IsMediaMatched)
             .OrderByDescending(s => s.WatchPopularity).Take(15)
             .Select(s => new ScoreRow(s.Category, s.TorrentHash, s.WatchTotal, s.WatchPopularity, true)).ToList();
 

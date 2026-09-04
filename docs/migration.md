@@ -43,7 +43,9 @@ from **Sources → Import**, with *force* to bypass the "rules already exist" gu
 > **Upgrading from a pipeline-era database:** "pipeline" is gone. On upgrade every pipeline's rules
 > merge into one global list (their order is preserved within each former pipeline; reorder by drag
 > if a multi-pipeline setup ends up interleaved). The per-pipeline schedule/targets/dry-run become
-> the global Settings; `<hotcold>` is now `<watch_popularity>` but still works as an alias.
+> the global Settings. **`<hotcold>` was renamed to `<watch_popularity>` and is not aliased** — a
+> rule still using it will fail to evaluate, so edit those rules (the Fields panel lists the current
+> names). It only existed during the pipeline era, so this affects nobody upgrading from `qbt_auto`.
 
 ## Field name changes
 
@@ -52,8 +54,8 @@ from **Sources → Import**, with *force* to bypass the "rules already exist" gu
 * `<ActiveTime>` is still in .NET **ticks** (so `<ActiveTime>/864000000000 >= 14.0` still means "14
   days"). New friendlier fields: `<ActiveTimeSeconds>`, `<ActiveTimeDays>`.
 * Media/analytics fields are new and cache-backed:
-  * `<watch_popularity>` (legacy alias `<hotcold>`) — 0..1, quantile of the recency-weighted watch
-    total **within the torrent's qBittorrent category** across all Plex + Jellyfin sources.
+  * `<watch_popularity>` — 0..1, quantile of the recency-weighted watch total **within the
+    torrent's qBittorrent category** across all Plex + Jellyfin sources.
   * `<watch_total>`, `<days_since_last_watched>` (99999 if never), `<is_media_matched>`.
   * `<media_title>` / `<media_year>` / `<media_rating>` / `<media_genres>` / `<media_type>`.
   * `plex_*` aliases: `<plex_nview>` → `<watch_popularity>`; `<plex_nview_legacy>` is the old per-title,
