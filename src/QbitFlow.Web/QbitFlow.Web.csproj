@@ -16,6 +16,8 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Shown in the site header (see AppVersion). Bump on each release. -->
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
 </Project>

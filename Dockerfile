@@ -18,16 +18,19 @@ RUN dotnet publish src/QbitFlow.Web/QbitFlow.Web.csproj \
 # ---- runtime ----
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 RUN apt-get update \
- && apt-get install -y --no-install-recommends bash curl unrar-free p7zip-full ca-certificates \
+ && apt-get install -y --no-install-recommends bash curl unrar-free p7zip-full ca-certificates gosu \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=build /app/publish ./
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN useradd -u 10001 -m app \
+# the aspnet:9.0 base image already provides a non-root "app" user.
+# ownership of bind-mounted volumes is fixed at runtime by the entrypoint.
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+ && chmod +x /usr/local/bin/docker-entrypoint.sh \
  && mkdir -p /data /data/keys /config /exports /scripts \
- && chown -R app:app /app /data /exports /scripts
-USER app
+ && chown -R app:app /app /data /data/keys /config /exports /scripts
 
 ENV ASPNETCORE_URLS=http://+:8080 \
     ConnectionStrings__Db="Data Source=/data/qbitflow.db" \
@@ -40,4 +43,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
   CMD curl -fsS http://localhost:8080/healthz || exit 1
 
-ENTRYPOINT ["dotnet", "QbitFlow.Web.dll"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["dotnet", "QbitFlow.Web.dll"]
