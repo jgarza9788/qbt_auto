@@ -2,7 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using QbitFlow.Core.Domain;
-using QbitFlow.Engine.Scheduling;
+using QbitFlow.Engine.RuleEngine;
 using QbitFlow.Infrastructure.Data;
 using QbitFlow.Web.Realtime;
 
@@ -14,13 +14,13 @@ internal static class RunsApi
     {
         var api = app.MapGroup("/api/runs");
 
-        api.MapPost("/{id:guid}/cancel", async (Guid id, AppDbContext db, SchedulerService scheduler, CancellationToken ct) =>
+        api.MapPost("/{id:guid}/cancel", async (Guid id, AppDbContext db, RuleEngineService engine, CancellationToken ct) =>
         {
             var run = await db.RunHistory.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id, ct);
             if (run is null) return Results.NotFound();
             if (run.Status != RunStatus.Running) return Results.Conflict(new { reason = "not running" });
 
-            var cancelled = scheduler.CancelRun(run.PipelineId);
+            var cancelled = engine.CancelRun();
             return Results.Json(new { cancelled });
         });
 
@@ -54,19 +54,16 @@ internal static class RunsApi
             await http.Response.WriteAsync("event: done\ndata: {}\n\n", ct);
         });
 
-        api.MapGet("/", async (Guid? pipelineId, int? limit, AppDbContext db) =>
+        api.MapGet("/", async (int? limit, AppDbContext db) =>
         {
-            var q = db.RunHistory.AsNoTracking();
-            if (pipelineId is { } pid) q = q.Where(r => r.PipelineId == pid);
-
-            var rows = await q
+            var rows = await db.RunHistory.AsNoTracking()
                 .OrderByDescending(r => r.StartedUtc)
                 .Take(Math.Clamp(limit ?? 50, 1, 500))
                 .ToListAsync();
 
             return Results.Json(rows.Select(r => new
             {
-                r.Id, r.PipelineId, trigger = r.Trigger.ToString(), status = r.Status.ToString(),
+                r.Id, trigger = r.Trigger.ToString(), status = r.Status.ToString(),
                 r.DryRun, r.StartedUtc, r.FinishedUtc, r.DurationMs,
                 r.TorrentsEvaluated, r.RulesEvaluated, r.ActionsApplied, r.ActionsWouldApply, r.ErrorCount,
             }));
@@ -81,7 +78,7 @@ internal static class RunsApi
 
             return Results.Json(new
             {
-                run.Id, run.PipelineId, trigger = run.Trigger.ToString(), status = run.Status.ToString(),
+                run.Id, trigger = run.Trigger.ToString(), status = run.Status.ToString(),
                 run.DryRun, run.StartedUtc, run.FinishedUtc, run.DurationMs,
                 run.TorrentsEvaluated, run.RulesEvaluated, run.ActionsApplied, run.ActionsWouldApply,
                 run.ActionsSkipped, run.ErrorCount, run.SummaryJson,

@@ -35,16 +35,17 @@ public class ConfigImportTests(SqliteFixture fx) : IClassFixture<SqliteFixture>
         first.Sources.Should().Be(2);
         first.Rules.Should().Be(3);   // AutoWhat skipped
 
-        var pipeline = await db.Pipelines.Include(p => p.Rules).ThenInclude(r => r.Action).SingleAsync();
-        pipeline.Rules.Should().HaveCount(3);
+        var rules = await db.Rules.Include(r => r.Action).OrderBy(r => r.Order).ToListAsync();
+        rules.Should().HaveCount(3);
+        rules.Should().OnlyContain(r => !r.Enabled);   // imported disabled, pending review
 
-        var tagRule = pipeline.Rules.Single(r => r.Name == "Tag_SmallFile");
+        var tagRule = rules.Single(r => r.Name == "Tag_SmallFile");
         tagRule.ConditionMode.Should().Be(RuleConditionMode.Raw);
         tagRule.RawExpression.Should().Be("(<Size> < 1073741824)");
         tagRule.Action!.Type.Should().Be("tag.sync");
         tagRule.Action.ParamsJson.Should().Contain("small_file");
 
-        pipeline.Rules.Single(r => r.Name == "Speed").Action!.ParamsJson
+        rules.Single(r => r.Name == "Speed").Action!.ParamsJson
             .Should().Contain("\"downloadKb\":0");   // legacy "UownloadSpeed" typo tolerated
 
         var qbt = await db.SourceConnections.SingleAsync(s => s.Kind == SourceKind.Qbt);
@@ -53,6 +54,6 @@ public class ConfigImportTests(SqliteFixture fx) : IClassFixture<SqliteFixture>
         // second import of the same content is a no-op
         var second = await importer.ImportAsync(Config, ImportMode.Force);
         second.Imported.Should().BeFalse();
-        (await db.Pipelines.CountAsync()).Should().Be(1);
+        (await db.Rules.CountAsync()).Should().Be(3);
     }
 }

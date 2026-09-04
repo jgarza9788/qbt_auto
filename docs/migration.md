@@ -14,13 +14,12 @@ volumes:
   - ./config:/config:ro
 ```
 
-On the first start (and only when no pipeline exists yet) qbit-flow:
+On the first start (and only when no rules exist yet) qbit-flow:
 
 * creates a **qBittorrent** source from the `qbt` block and a **Plex** source from the `plex` block
   (Jellyfin has no equivalent in the old config — add it in the UI);
-* creates one pipeline, **"Imported (config.json)"**, **disabled** and in **dry-run**, wired to that
-  qBittorrent source as both data and action target;
-* turns each `AutoTorrentRules[i]` into a rule whose **criteria string is kept verbatim** (Raw mode),
+* turns each `AutoTorrentRules[i]` into a rule in the single global list, **disabled** (so the engine
+  evaluates nothing until you review them), whose **criteria string is kept verbatim** (Raw mode),
   so evaluation is identical, plus one action:
 
 | Old `Type` | New action | Params |
@@ -32,13 +31,19 @@ On the first start (and only when no pipeline exists yet) qbit-flow:
 | `AutoSpeed` | `speed.limit` | `{ uploadKb, downloadKb }` (both `0` still pauses; `UownloadSpeed` typo tolerated) |
 
 The import is idempotent (SHA-256 gated) — re-importing the same file is a no-op. Re-run it any time
-from **Sources → Import**, with *force* to bypass the "pipelines already exist" guard.
+from **Sources → Import**, with *force* to bypass the "rules already exist" guard.
 
 ## After import
 
-1. Open the imported pipeline, review the rules, set a real schedule (interval or cron, min 5 min).
-2. Leave **dry-run** on for a run or two and watch the run log — it reports every "would apply".
-3. Turn dry-run off and enable the pipeline.
+1. Open **/Rules**, review each imported rule and enable the ones you want.
+2. In **Settings**, leave **Dry-run** on for a pass or two and watch a run log — it reports every
+   "would apply". Set the **Rule check interval** if 120 s isn't right.
+3. Turn Dry-run off. The engine runs continuously (no schedule to set).
+
+> **Upgrading from a pipeline-era database:** "pipeline" is gone. On upgrade every pipeline's rules
+> merge into one global list (their order is preserved within each former pipeline; reorder by drag
+> if a multi-pipeline setup ends up interleaved). The per-pipeline schedule/targets/dry-run become
+> the global Settings; `<hotcold>` is now `<watch_popularity>` but still works as an alias.
 
 ## Field name changes
 
@@ -47,11 +52,11 @@ from **Sources → Import**, with *force* to bypass the "pipelines already exist
 * `<ActiveTime>` is still in .NET **ticks** (so `<ActiveTime>/864000000000 >= 14.0` still means "14
   days"). New friendlier fields: `<ActiveTimeSeconds>`, `<ActiveTimeDays>`.
 * Media/analytics fields are new and cache-backed:
-  * `<hotcold>` — 0..1, quantile of the recency-weighted watch total **within the torrent's
-    qBittorrent category** across all Plex + Jellyfin sources.
+  * `<watch_popularity>` (legacy alias `<hotcold>`) — 0..1, quantile of the recency-weighted watch
+    total **within the torrent's qBittorrent category** across all Plex + Jellyfin sources.
   * `<watch_total>`, `<days_since_last_watched>` (99999 if never), `<is_media_matched>`.
   * `<media_title>` / `<media_year>` / `<media_rating>` / `<media_genres>` / `<media_type>`.
-  * `plex_*` aliases: `<plex_nview>` → `<hotcold>`; `<plex_nview_legacy>` is the old per-title,
+  * `plex_*` aliases: `<plex_nview>` → `<watch_popularity>`; `<plex_nview_legacy>` is the old per-title,
     per-media-type quantile (single global bucket, closest to `qbt_auto` semantics);
     `<plex_viewCount>` → the rounded weighted watch total.
 * Media matching is filename-first (normalised filename → path segment → title + year). Torrents the

@@ -8,7 +8,7 @@ using QbitFlow.Infrastructure.Data;
 
 namespace QbitFlow.Web.Pages;
 
-public class SourcesModel(AppDbContext db, ISecretProtector secrets, SourceAdapterFactory adapters) : PageModel
+public class SourcesModel(AppDbContext db, ISecretProtector secrets, SourceCacheInvalidator caches) : PageModel
 {
     public List<SourceConnection> Sources { get; private set; } = [];
 
@@ -54,7 +54,7 @@ public class SourcesModel(AppDbContext db, ISecretProtector secrets, SourceAdapt
 
         if (isNew) db.SourceConnections.Add(s);
         await db.SaveChangesAsync();
-        adapters.Invalidate(s.Id);
+        caches.Invalidate(s.Id);
         TempData["Msg"] = isNew ? "Source added." : "Source updated.";
         return RedirectToPage();
     }
@@ -65,7 +65,7 @@ public class SourcesModel(AppDbContext db, ISecretProtector secrets, SourceAdapt
         {
             db.SourceConnections.Remove(s);
             await db.SaveChangesAsync();
-            adapters.Invalidate(id);
+            caches.Invalidate(id);
         }
         TempData["Msg"] = "Source deleted.";
         return RedirectToPage();

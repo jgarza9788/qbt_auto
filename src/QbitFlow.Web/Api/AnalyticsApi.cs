@@ -34,14 +34,14 @@ internal static class AnalyticsApi
             if (!string.IsNullOrWhiteSpace(category)) q = q.Where(s => s.Category == category);
 
             var rows = await q
-                .OrderBy(s => s.Category).ThenByDescending(s => s.HotColdScore)
+                .OrderBy(s => s.Category).ThenByDescending(s => s.WatchPopularity)
                 .Take(Math.Clamp(limit ?? 200, 1, 2000))
                 .ToListAsync();
 
             return Results.Json(rows.Select(s => new
             {
                 s.QbtInstanceId, s.TorrentHash, s.Category,
-                s.WatchTotal, s.HotColdScore, s.DaysSinceLastWatched, s.IsMediaMatched, s.MediaItemId,
+                s.WatchTotal, s.WatchPopularity, s.DaysSinceLastWatched, s.IsMediaMatched, s.MediaItemId,
             }));
         });
 

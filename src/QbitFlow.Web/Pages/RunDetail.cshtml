@@ -5,7 +5,7 @@
 <section class="panel">
     <div class="spread">
         <div>
-            <h1>@Model.PipelineName</h1>
+            <h1>Rule engine run</h1>
             <span class="muted">
                 <span class="pill @(Model.Run.Status switch { RunStatus.Succeeded => "ok", RunStatus.Running => "run", RunStatus.Failed => "err", _ => "" })">@Model.Run.Status.ToString().ToLower()</span>
                 @(Model.Run.DryRun ? "dry-run · " : "") @Model.Run.Trigger · started @Model.Run.StartedUtc.ToLocalTime().ToString("MM-dd HH:mm:ss") · @(Model.Run.DurationMs) ms

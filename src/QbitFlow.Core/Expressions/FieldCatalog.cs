@@ -57,10 +57,11 @@ public static class FieldCatalog
         new("plex_year",         FieldType.Number,  FieldSource.Media, "Alias of media_year", "2024"),
         new("plex_rating",       FieldType.Number,  FieldSource.Media, "Alias of media_rating", "7.8"),
         new("plex_viewCount",    FieldType.Number,  FieldSource.Media, "Aggregated play count", "4"),
-        new("plex_nview",        FieldType.Number,  FieldSource.Derived, "Alias of hotcold", "0.62"),
+        new("plex_nview",        FieldType.Number,  FieldSource.Derived, "Alias of watch_popularity", "0.62"),
 
         // ---- Derived ----
-        new("hotcold",                FieldType.Number, FieldSource.Derived, "0..1 hot/cold score within the qBt category", "0.62"),
+        new("watch_popularity",       FieldType.Number, FieldSource.Derived, "0..1 — matched media's watch total, ranked within the qBt category", "0.62"),
+        new("hotcold",                FieldType.Number, FieldSource.Derived, "Legacy alias of watch_popularity", "0.62"),
         new("watch_total",            FieldType.Number, FieldSource.Derived, "Weighted watch total across all sources", "3.4"),
         new("days_since_last_watched",FieldType.Number, FieldSource.Derived, "Days since last watched (99999 if never)", "45"),
         new("is_media_matched",       FieldType.Bool,   FieldSource.Derived, "Torrent matched a media item", "True"),

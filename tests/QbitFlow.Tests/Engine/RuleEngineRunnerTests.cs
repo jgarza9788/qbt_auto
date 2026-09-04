@@ -6,16 +6,16 @@ using QbitFlow.Core.Abstractions;
 using QbitFlow.Core.Contracts;
 using QbitFlow.Core.Domain;
 using QbitFlow.Engine;
-using QbitFlow.Engine.Pipelines;
+using QbitFlow.Engine.RuleEngine;
 using QbitFlow.Infrastructure;
 using QbitFlow.Infrastructure.Data;
 using QbitFlow.Tests.Actions;
 
 namespace QbitFlow.Tests.Engine;
 
-public class PipelineRunnerTests : IAsyncLifetime
+public class RuleEngineRunnerTests : IAsyncLifetime
 {
-    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"qbitflow-runner-{Guid.NewGuid():N}.db");
+    private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"qbitflow-engine-{Guid.NewGuid():N}.db");
     private ServiceProvider _sp = null!;
     private readonly FakeGatewayFactory _gateways = new();
 
@@ -39,23 +39,26 @@ public class PipelineRunnerTests : IAsyncLifetime
         try { if (File.Exists(_dbPath)) File.Delete(_dbPath); } catch { }
     }
 
-    private async Task<Guid> SeedPipelineAsync(bool dryRun, string criteria, string actionType, string paramsJson)
+    private async Task<Guid> SeedAsync(string criteria, string actionType, string paramsJson,
+        bool enabled = true, int order = 0, bool? stopOnMatch = null, int? cooldown = null)
     {
         await using var scope = _sp.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var qbt = new SourceConnection { Name = "qbt", Kind = SourceKind.Qbt, BaseUrl = "http://x" };
-        db.SourceConnections.Add(qbt);
-
-        var pipeline = new Pipeline { Name = "p", Enabled = true, DryRun = dryRun, IntervalSeconds = 900 };
-        pipeline.Sources.Add(new PipelineSource { SourceConnectionId = qbt.Id, Roles = PipelineSourceRoles.Data | PipelineSourceRoles.ActionTarget });
-        pipeline.Rules.Add(new Rule
+        var qbt = await db.SourceConnections.FirstOrDefaultAsync(s => s.Kind == SourceKind.Qbt);
+        if (qbt is null)
         {
-            Name = "r", Order = 0, Enabled = true,
+            qbt = new SourceConnection { Name = "qbt", Kind = SourceKind.Qbt, BaseUrl = "http://x", Enabled = true };
+            db.SourceConnections.Add(qbt);
+        }
+
+        var rule = new Rule
+        {
+            Name = "r" + order, Order = order, Enabled = enabled, StopOnMatch = stopOnMatch, CooldownSeconds = cooldown,
             ConditionMode = RuleConditionMode.Raw, RawExpression = criteria, CompiledExpression = criteria,
             Action = new RuleAction { Type = actionType, ParamsJson = paramsJson },
-        });
-        db.Pipelines.Add(pipeline);
+        };
+        db.Rules.Add(rule);
         await db.SaveChangesAsync();
 
         _gateways.Target = new FakeQbtActionTarget();
@@ -64,17 +67,30 @@ public class PipelineRunnerTests : IAsyncLifetime
             new TorrentView { Hash = "h1", Name = "Small.File", Category = "x", Size = 500, Tags = [] },
             new TorrentView { Hash = "h2", Name = "Big.File", Category = "x", Size = 5_000_000_000, Tags = [] },
         ];
-        return pipeline.Id;
+        return rule.Id;
+    }
+
+    private IRuleEngineRunner Runner(IServiceScope scope) => scope.ServiceProvider.GetRequiredService<IRuleEngineRunner>();
+
+    [Fact]
+    public async Task No_enabled_rules_produces_no_run()
+    {
+        await SeedAsync("(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}", enabled: false);
+
+        await using var scope = _sp.CreateAsyncScope();
+        var runId = await Runner(scope).RunAsync(RunTrigger.Manual, dryRunOverride: null, CancellationToken.None);
+
+        runId.Should().BeNull();
+        (await scope.ServiceProvider.GetRequiredService<AppDbContext>().RunHistory.CountAsync()).Should().Be(0);
     }
 
     [Fact]
     public async Task Dry_run_evaluates_but_applies_nothing()
     {
-        var id = await SeedPipelineAsync(dryRun: true, "(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}");
+        await SeedAsync("(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}");
 
         await using var scope = _sp.CreateAsyncScope();
-        var runner = scope.ServiceProvider.GetRequiredService<IPipelineRunner>();
-        var runId = await runner.RunAsync(id, RunTrigger.Manual, dryRunOverride: null, CancellationToken.None);
+        var runId = await Runner(scope).RunAsync(RunTrigger.Manual, dryRunOverride: true, CancellationToken.None);
 
         _gateways.Target!.Calls.Should().BeEmpty();
 
@@ -82,7 +98,7 @@ public class PipelineRunnerTests : IAsyncLifetime
         var run = await db.RunHistory.Include(r => r.RuleResults).FirstAsync(r => r.Id == runId);
         run.Status.Should().Be(RunStatus.Succeeded);
         run.TorrentsEvaluated.Should().Be(2);
-        run.ActionsWouldApply.Should().Be(1);   // only the small file
+        run.ActionsWouldApply.Should().Be(1);
         run.ActionsApplied.Should().Be(0);
         run.RuleResults.Single().SuccessCount.Should().Be(1);
         run.RuleResults.Single().FailureCount.Should().Be(1);
@@ -91,21 +107,34 @@ public class PipelineRunnerTests : IAsyncLifetime
     [Fact]
     public async Task Live_run_applies_the_matching_action_only()
     {
-        var id = await SeedPipelineAsync(dryRun: false, "(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}");
+        await SeedAsync("(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}");
 
         await using var scope = _sp.CreateAsyncScope();
-        var runner = scope.ServiceProvider.GetRequiredService<IPipelineRunner>();
-        var runId = await runner.RunAsync(id, RunTrigger.Manual, dryRunOverride: null, CancellationToken.None);
+        var runId = await Runner(scope).RunAsync(RunTrigger.Manual, dryRunOverride: false, CancellationToken.None);
 
         _gateways.Target!.Calls.Should().ContainSingle().Which.Should().Be("addTag:h1:small");
 
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-        var run = await db.RunHistory.FirstAsync(r => r.Id == runId);
-        run.ActionsApplied.Should().Be(1);
+        (await db.RunHistory.FirstAsync(r => r.Id == runId)).ActionsApplied.Should().Be(1);
+    }
 
-        var pipeline = await db.Pipelines.FirstAsync(p => p.Id == id);
-        pipeline.NextRunUtc.Should().NotBeNull();
-        pipeline.IsRunning.Should().BeFalse();
+    [Fact]
+    public async Task Cooldown_suppresses_a_second_live_fire()
+    {
+        await SeedAsync("(<Size> < 1073741824)", "tag.sync", "{\"tag\":\"small\"}", cooldown: 3600);
+
+        await using var scope = _sp.CreateAsyncScope();
+        var runner = Runner(scope);
+        await runner.RunAsync(RunTrigger.Manual, dryRunOverride: false, CancellationToken.None);
+        _gateways.Target!.Calls.Clear();
+
+        var runId = await runner.RunAsync(RunTrigger.Manual, dryRunOverride: false, CancellationToken.None);
+
+        _gateways.Target!.Calls.Should().BeEmpty();   // still in cooldown
+        var run = await scope.ServiceProvider.GetRequiredService<AppDbContext>()
+            .RunHistory.FirstAsync(r => r.Id == runId);
+        run.ActionsApplied.Should().Be(0);
+        run.ActionsSkipped.Should().Be(1);
     }
 
     private sealed class FakeGatewayFactory : IQbtGatewayFactory, IQbtAdapter

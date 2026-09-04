@@ -18,40 +18,28 @@
 <section class="panel">
     <div class="spread">
         <div><h1>Dashboard</h1><span class="muted">@Model.Sources.Total source(s) · @Model.Sources.Healthy healthy · @Model.Sources.Bad down · analytics @Ago(Model.AnalyticsLastRun)</span></div>
-        <a class="btn ghost" href="/Pipelines">New pipeline</a>
+        <a class="btn ghost" href="/Rules">Edit rules</a>
     </div>
 </section>
 
-<section>
-    <h2>Pipelines</h2>
-    <div class="panel scroll-x">
-        <table>
-            <tr><th>Name</th><th>State</th><th>Schedule</th><th>Rules</th><th>Last</th><th>Next</th><th></th></tr>
-            @if (Model.Pipelines.Count == 0)
-            {
-                <tr><td colspan="7" class="muted">No pipelines yet. <a href="/Pipelines">Create one</a> or import a legacy config.json.</td></tr>
-            }
-            @foreach (var p in Model.Pipelines)
-            {
-                <tr>
-                    <td><a href="/Rules?pipelineId=@p.Id"><b>@p.Name</b></a></td>
-                    <td>
-                        @if (p.IsRunning) { <span class="pill run">running</span> }
-                        else if (p.Enabled) { <span class="pill ok">enabled</span> }
-                        else { <span class="pill">disabled</span> }
-                        @if (p.DryRun) { <span class="pill">dry&#8209;run</span> }
-                    </td>
-                    <td class="muted">@p.Schedule</td>
-                    <td>@p.RuleCount</td>
-                    <td class="muted">@Ago(p.LastRunUtc)</td>
-                    <td class="muted">@Ago(p.NextRunUtc)</td>
-                    <td>
-                        <form class="inline" method="post" asp-page-handler="Run" asp-route-id="@p.Id"><button>Run now</button></form>
-                        <form class="inline" method="post" asp-page-handler="Toggle" asp-route-id="@p.Id"><button class="ghost">@(p.Enabled ? "Disable" : "Enable")</button></form>
-                    </td>
-                </tr>
-            }
-        </table>
+<section class="panel">
+    <div class="spread">
+        <div>
+            <h2>Rule engine</h2>
+            <span class="muted">
+                @if (Model.EngineRunning) { <span class="pill run">running</span> }
+                else if (Model.Engine.Enabled) { <span class="pill ok">enabled</span> }
+                else { <span class="pill">paused</span> }
+                @if (Model.Engine.DryRun) { <span class="pill">dry&#8209;run</span> }
+                · @Model.EnabledRules of @Model.TotalRules rule(s) enabled
+                · every @Model.Engine.IntervalSeconds s
+                · last @Ago(Model.LastRunUtc) · next @Ago(Model.NextRunUtc)
+            </span>
+        </div>
+        <div class="row">
+            <form class="inline" method="post" asp-page-handler="Run"><button>Run now</button></form>
+            <form class="inline" method="post" asp-page-handler="Toggle"><button class="ghost">@(Model.Engine.Enabled ? "Pause" : "Resume")</button></form>
+        </div>
     </div>
 </section>
 
@@ -59,12 +47,11 @@
     <h2>Recent runs</h2>
     <div class="panel scroll-x">
         <table>
-            <tr><th>Pipeline</th><th>Status</th><th>Started</th><th>Duration</th><th>Applied</th><th>Would</th><th>Errors</th><th></th></tr>
-            @if (Model.Runs.Count == 0) { <tr><td colspan="8" class="muted">No runs yet.</td></tr> }
+            <tr><th>Status</th><th>Started</th><th>Duration</th><th>Applied</th><th>Would</th><th>Errors</th><th></th></tr>
+            @if (Model.Runs.Count == 0) { <tr><td colspan="7" class="muted">No runs yet.</td></tr> }
             @foreach (var r in Model.Runs)
             {
                 <tr>
-                    <td>@r.Pipeline</td>
                     <td>
                         <span class="pill @(r.Status switch { "Succeeded" => "ok", "Running" => "run", "Failed" => "err", _ => "" })">@r.Status.ToLower()</span>
                         @if (r.DryRun) { <span class="pill">dry</span> }

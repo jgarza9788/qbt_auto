@@ -7,7 +7,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cronos" Version="0.13.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.19" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.19" />
     <PackageReference Include="Scrutor" Version="6.1.0" />

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using QbitFlow.Engine;
-using QbitFlow.Engine.Scheduling;
+using QbitFlow.Engine.RuleEngine;
 using QbitFlow.Infrastructure;
 using QbitFlow.Infrastructure.Data;
 using QbitFlow.Web.Api;
@@ -29,11 +29,12 @@ try
     builder.Services.AddQbitFlowEngine();
     builder.Services.AddSingleton<RunLogBus>();
     builder.Services.AddSingleton<QbitFlow.Core.Abstractions.IRunLogPublisher>(sp => sp.GetRequiredService<RunLogBus>());
+    builder.Services.AddScoped<QbitFlow.Web.Api.RuleWriter>();
 
     // Background schedulers are noise in integration tests.
     if (!builder.Environment.IsEnvironment("Testing"))
     {
-        builder.Services.AddHostedService(sp => sp.GetRequiredService<SchedulerService>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<RuleEngineService>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<QbitFlow.Engine.Health.SourceHealthService>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<QbitFlow.Engine.Health.PathDiagnosticsService>());
         builder.Services.AddHostedService(sp => sp.GetRequiredService<QbitFlow.Engine.Analytics.AnalyticsRefreshService>());
@@ -62,7 +63,7 @@ try
 
     app.MapHealthEndpoints();
     app.MapMetaApi();
-    app.MapPipelinesApi();
+    app.MapEngineApi();
     app.MapRulesApi();
     app.MapRunsApi();
     app.MapSourcesApi();

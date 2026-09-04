@@ -5,11 +5,25 @@ using QbitFlow.Infrastructure.Config;
 
 namespace QbitFlow.Web.Pages;
 
+/// <summary>
+/// Every global knob in one place. The engine section replaced what used to be per-pipeline columns;
+/// values are read and written through <see cref="AppSettingStore"/> so <see cref="EngineDefaults"/>
+/// stays the single source of truth for what an unset key means.
+/// </summary>
 public class SettingsModel(AppSettingStore settings) : PageModel
 {
+    // Rule engine
+    [BindProperty] public bool EngineEnabled { get; set; }
+    [BindProperty] public bool EngineDryRun { get; set; }
+    [BindProperty] public string CpuSpeed { get; set; } = CpuSpeedMap.DefaultLabel;
+    [BindProperty] public bool StopOnFirstMatch { get; set; }
+    [BindProperty] public int RuleCheckSeconds { get; set; }
+
+    // Analytics
     [BindProperty] public int AnalyticsIntervalMinutes { get; set; }
     [BindProperty] public string AnalyticsWeights { get; set; } = "";
-    [BindProperty] public int QbtFreshnessSeconds { get; set; }
+
+    // Access
     [BindProperty] public string AuthMode { get; set; } = "none";
     [BindProperty] public string? AuthSecret { get; set; }
 
@@ -18,11 +32,19 @@ public class SettingsModel(AppSettingStore settings) : PageModel
     public bool AuthSecretSet { get; private set; }
     public Dictionary<string, string?> EnvStatus { get; private set; } = [];
 
+    public IEnumerable<string> CpuSpeeds => CpuSpeedMap.Tiers.Select(t => t.Label);
+
     public async Task OnGetAsync()
     {
+        var engine = await settings.GetEngineSettingsAsync();
+        EngineEnabled = engine.Enabled;
+        EngineDryRun = engine.DryRun;
+        CpuSpeed = CpuSpeedMap.ToLabel(engine.MaxParallelism);
+        StopOnFirstMatch = engine.StopOnFirstMatch;
+        RuleCheckSeconds = engine.IntervalSeconds;
+
         AnalyticsIntervalMinutes = await settings.GetIntAsync(AppSetting.AnalyticsIntervalMinutes, 360);
         AnalyticsWeights = await settings.GetAsync(AppSetting.AnalyticsWeights) ?? "(defaults: all .01 / year .5 / month .9 / week 1.0)";
-        QbtFreshnessSeconds = await settings.GetIntAsync(AppSetting.QbtFreshnessSeconds, 60);
         SecretsEncryption = Environment.GetEnvironmentVariable("SECRETS_ENCRYPTION") ?? "none";
 
         var envMode = Environment.GetEnvironmentVariable("AUTH_MODE");
@@ -37,8 +59,14 @@ public class SettingsModel(AppSettingStore settings) : PageModel
 
     public async Task<IActionResult> OnPostAsync()
     {
+        await settings.SetAsync(AppSetting.EngineEnabled, EngineEnabled.ToString());
+        await settings.SetAsync(AppSetting.EngineDryRun, EngineDryRun.ToString());
+        await settings.SetAsync(AppSetting.EngineMaxParallelism, CpuSpeedMap.ToValue(CpuSpeed).ToString());
+        await settings.SetAsync(AppSetting.EngineStopOnFirstMatch, StopOnFirstMatch.ToString());
+        // Clamp on write as well as read, so a hand-edited form can't push the engine below the floor.
+        await settings.SetAsync(AppSetting.QbtFreshnessSeconds, EngineDefaults.ClampInterval(RuleCheckSeconds).ToString());
+
         await settings.SetAsync(AppSetting.AnalyticsIntervalMinutes, Math.Max(5, AnalyticsIntervalMinutes).ToString());
-        await settings.SetAsync(AppSetting.QbtFreshnessSeconds, Math.Max(5, QbtFreshnessSeconds).ToString());
         if (!string.IsNullOrWhiteSpace(AnalyticsWeights) && AnalyticsWeights.TrimStart().StartsWith('{'))
             await settings.SetAsync(AppSetting.AnalyticsWeights, AnalyticsWeights.Trim());
 

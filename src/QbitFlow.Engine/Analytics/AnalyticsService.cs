@@ -24,12 +24,12 @@ public interface IAnalyticsService
 /// The ONLY thing that talks to Plex / Jellyfin. Pulls media + watch data across every enabled
 /// media source, aggregates a recency-weighted watch total per media item, matches every torrent on
 /// every qBittorrent instance to a media item, buckets by qBt category, and quantile-normalises each
-/// bucket into a 0..1 hot/cold score in <see cref="MediaScoreCache"/>. Pipeline runs read that cache.
+/// bucket into a 0..1 watch-popularity score in <see cref="MediaScoreCache"/>. Rule passes read that cache.
 /// </summary>
 public sealed class AnalyticsService(
     IDbContextFactory<AppDbContext> dbFactory,
     ISourceAdapterFactory adapters,
-    IQbtGatewayFactory qbt,
+    Sources.TorrentSnapshotCache snapshots,
     IMediaMatcher matcher,
     ILogger<AnalyticsService> log) : IAnalyticsService
 {
@@ -132,7 +132,9 @@ public sealed class AnalyticsService(
             IReadOnlyList<Core.Contracts.TorrentView> torrents;
             try
             {
-                torrents = await qbt.GetAdapter(qbtId).FetchTorrentsAsync(ct);
+                // Share the rule engine's snapshot: analytics runs far less often, so a snapshot a
+                // few minutes old is fine and saves a duplicate pull.
+                torrents = await snapshots.GetAsync(qbtId, TimeSpan.FromMinutes(5), ct);
             }
             catch (Exception ex)
             {
@@ -179,7 +181,7 @@ public sealed class AnalyticsService(
                         MediaItemId = r.MediaId,
                         Category = category,
                         WatchTotal = r.Total,
-                        HotColdScore = scoreByHash.GetValueOrDefault(r.Hash),
+                        WatchPopularity = scoreByHash.GetValueOrDefault(r.Hash),
                         DaysSinceLastWatched = r.DaysSince,
                         IsMediaMatched = r.Matched,
                         ComputedUtc = now,

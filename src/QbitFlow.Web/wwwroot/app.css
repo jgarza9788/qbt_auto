@@ -20,13 +20,17 @@ header { display: flex; align-items: baseline; gap: 22px; padding: 14px 24px; bo
 header nav { display: flex; gap: 16px; }
 header nav a { color: var(--muted); font-size: 13px; }
 header nav a.active, header nav a:hover { color: var(--text); text-decoration: none; }
+header .ver { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 
 main { max-width: 1080px; margin: 0 auto; padding: 24px; display: grid; gap: 26px; }
 h1 { font-size: 20px; margin: 0 0 4px; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .9px; color: var(--muted); margin: 0 0 12px; }
 p.muted, .muted { color: var(--muted); }
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+.panel { 
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; 
+  margin-bottom: 18px;
+}
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .spread { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 
@@ -65,3 +69,23 @@ pre.log .lvl-Error { color: var(--err); }
 .compiled.bad { border-color: #ff7b7255; color: var(--err); }
 .bar { height: 6px; background: #0d0f14; border-radius: 999px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: linear-gradient(90deg, #2a6df4, #7ee787); }
+
+/* right-side slide-over (field reference) */
+dialog.slideover {
+  margin: 0 0 0 auto; height: 100dvh; max-height: 100dvh;
+  width: min(460px, 94vw); border: 0; border-left: 1px solid var(--line);
+  background: var(--panel); color: var(--text); padding: 0;
+  transition: translate .18s ease, overlay .18s allow-discrete, display .18s allow-discrete;
+  translate: 0 0;
+}
+dialog.slideover:not([open]) { translate: 100% 0; }
+@starting-style { dialog.slideover[open] { translate: 100% 0; } }
+dialog.slideover::backdrop { background: #0007; }
+.slideover-inner { display: flex; flex-direction: column; gap: 12px; padding: 18px; height: 100%; overflow-y: auto; }
+.slideover-inner h3 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .9px; color: var(--muted); }
+.slideover-inner h3:first-of-type { margin-top: 4px; }
+#fields-filter { position: sticky; top: 0; }
+.fref { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.fref + .fref { border-top: 0; }
+#fields-list > h3 + .fref { border-top: 0; }
+.fref:last-of-type { border-bottom: 0; }

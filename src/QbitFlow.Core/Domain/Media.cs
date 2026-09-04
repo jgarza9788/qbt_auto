@@ -53,7 +53,7 @@ public class MediaSourceStat
     public DateTimeOffset FetchedUtc { get; set; } = DateTimeOffset.UtcNow;
 }
 
-/// <summary>The per-torrent hot/cold result, produced by the analytics job and read by pipeline runs.</summary>
+/// <summary>The per-torrent watch-popularity result, produced by the analytics job and read by rule runs.</summary>
 public class MediaScoreCache
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
@@ -64,7 +64,9 @@ public class MediaScoreCache
     public string Category { get; set; } = "";
 
     public double WatchTotal { get; set; }
-    public double HotColdScore { get; set; }
+
+    /// <summary>0..1 quantile of the matched media's watch total, within this torrent's qBt category.</summary>
+    public double WatchPopularity { get; set; }
     public double? DaysSinceLastWatched { get; set; }
     public bool IsMediaMatched { get; set; }
 

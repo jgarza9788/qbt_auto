@@ -10,7 +10,7 @@ public class UiSmokeTests(QbitFlowFactory factory) : IClassFixture<QbitFlowFacto
 {
     [Theory]
     [InlineData("/")]
-    [InlineData("/Pipelines")]
+    [InlineData("/Rules")]
     [InlineData("/Sources")]
     [InlineData("/Runs")]
     [InlineData("/Analytics")]

@@ -9,8 +9,7 @@ using QbitFlow.Engine.Derived;
 using QbitFlow.Engine.Evaluation;
 using QbitFlow.Engine.Health;
 using QbitFlow.Engine.Matching;
-using QbitFlow.Engine.Pipelines;
-using QbitFlow.Engine.Scheduling;
+using QbitFlow.Engine.RuleEngine;
 using QbitFlow.Engine.Sources;
 
 namespace QbitFlow.Engine;
@@ -23,7 +22,7 @@ public static class EngineServiceCollectionExtensions
         services.AddSingleton<ConditionCompiler>();
         services.AddSingleton<DriveDataProvider>();
 
-        // Media matching + hot/cold analytics.
+        // Media matching + watch-popularity analytics.
         services.AddSingleton<IMediaMatcher, FilenameMediaMatcher>();
         services.AddSingleton<IAnalyticsService, AnalyticsService>();
         services.AddSingleton<AnalyticsRefreshService>();
@@ -39,7 +38,12 @@ public static class EngineServiceCollectionExtensions
             .WithScopedLifetime());
         services.AddScoped<ActionRegistry>();
 
-        services.AddScoped<IPipelineRunner, PipelineRunner>();
+        // Shared per-instance torrent snapshot + the cooldown map are process-wide, hence singletons;
+        // the runner is scoped because it uses a scoped AppSettingStore / AppDbContext.
+        services.AddSingleton<TorrentSnapshotCache>();
+        services.AddSingleton<SourceCacheInvalidator>();
+        services.AddSingleton<RuleCooldownTracker>();
+        services.AddScoped<IRuleEngineRunner, RuleEngineRunner>();
         services.TryAddSingleton<IRunLogPublisher, NullRunLogPublisher>();
 
         // Named HTTP clients for the media adapters.
@@ -61,7 +65,7 @@ public static class EngineServiceCollectionExtensions
         services.AddSingleton<ISourceAdapterFactory>(sp => sp.GetRequiredService<SourceAdapterFactory>());
         services.AddSingleton<IQbtGatewayFactory>(sp => sp.GetRequiredService<SourceAdapterFactory>());
 
-        services.AddSingleton<SchedulerService>();
+        services.AddSingleton<RuleEngineService>();
         services.AddSingleton<SourceHealthService>();
         services.AddSingleton<PathDiagnosticsService>();
 

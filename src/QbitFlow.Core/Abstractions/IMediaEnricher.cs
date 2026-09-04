@@ -3,9 +3,9 @@ using QbitFlow.Core.Contracts;
 namespace QbitFlow.Core.Abstractions;
 
 /// <summary>
-/// Supplies the media / derived (<c>hotcold</c>, <c>watch_total</c>, …) fields for a torrent, read
-/// from the analytics cache. Phase 1 ships <c>NullMediaEnricher</c> (everything unmatched / zero);
-/// Phase 3 wires the real cache-backed implementation.
+/// Supplies the media / derived (<c>watch_popularity</c>, <c>watch_total</c>, …) fields for a
+/// torrent, read from the analytics cache. <c>NullMediaEnricher</c> returns everything unmatched /
+/// zero; <c>CachedMediaEnricher</c> is the real cache-backed implementation.
 /// </summary>
 public interface IMediaEnricher
 {
@@ -29,6 +29,7 @@ public sealed class NullMediaEnricher : IMediaEnricher
         ["plex_rating"] = 0d,
         ["plex_viewCount"] = 0,
         ["plex_nview"] = 0d,
+        ["watch_popularity"] = 0d,
         ["hotcold"] = 0d,
         ["watch_total"] = 0d,
         ["days_since_last_watched"] = 99999d,

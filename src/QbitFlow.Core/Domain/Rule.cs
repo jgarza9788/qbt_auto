@@ -3,15 +3,27 @@ namespace QbitFlow.Core.Domain;
 public class Rule
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
-    public Guid PipelineId { get; set; }
-    public Pipeline? Pipeline { get; set; }
 
     public string Name { get; set; } = "";
+
+    /// <summary>Position in the single global rule list; lower runs first.</summary>
     public int Order { get; set; }
     public bool Enabled { get; set; } = true;
 
-    /// <summary>Overrides <see cref="Pipeline.StopOnFirstMatch"/> when set.</summary>
+    /// <summary>Overrides the global <c>StopOnFirstMatch</c> setting when set.</summary>
     public bool? StopOnMatch { get; set; }
+
+    /// <summary>
+    /// JSON array of qBittorrent <see cref="SourceConnection"/> ids this rule acts on.
+    /// Null or empty = every enabled qBittorrent source.
+    /// </summary>
+    public string? TargetFilterJson { get; set; }
+
+    /// <summary>
+    /// When set, this rule won't fire its action against the same torrent more than once per this
+    /// many seconds. Null = no throttle (re-evaluated every engine pass).
+    /// </summary>
+    public int? CooldownSeconds { get; set; }
 
     public RuleConditionMode ConditionMode { get; set; } = RuleConditionMode.Raw;
 

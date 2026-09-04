@@ -113,14 +113,14 @@ public class AnalyticsServiceTests : IAsyncLifetime
         // Movies bucket: matrix (0.15) hottest, then fresh film (0.08), cartoon (0), ISO in its own bucket.
         var movies = await db.MediaScoreCache.Where(s => s.Category == "Movies").ToListAsync();
         movies.Should().HaveCount(3);
-        movies.Single(s => s.TorrentHash == "hm").HotColdScore.Should().Be(1.0);
-        movies.Single(s => s.TorrentHash == "hc").HotColdScore.Should().Be(0.0);
+        movies.Single(s => s.TorrentHash == "hm").WatchPopularity.Should().Be(1.0);
+        movies.Single(s => s.TorrentHash == "hc").WatchPopularity.Should().Be(0.0);
         movies.Single(s => s.TorrentHash == "hm").IsMediaMatched.Should().BeTrue();
 
         var linux = await db.MediaScoreCache.Where(s => s.Category == "Linux").ToListAsync();
         linux.Should().ContainSingle();
         linux[0].IsMediaMatched.Should().BeFalse();
-        linux[0].HotColdScore.Should().Be(1.0);   // only member of its bucket
+        linux[0].WatchPopularity.Should().Be(1.0);   // only member of its bucket
         linux[0].WatchTotal.Should().Be(0);
     }
 

@@ -51,10 +51,10 @@ public class AuthGateTests
         using var f = Factory("apikey");
         var client = f.CreateClient();
 
-        (await client.GetAsync("/api/pipelines")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await client.GetAsync("/api/rules")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         client.DefaultRequestHeaders.Add("X-Api-Key", Secret);
-        (await client.GetAsync("/api/pipelines")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.GetAsync("/api/rules")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -63,13 +63,13 @@ public class AuthGateTests
         using var f = Factory("basic");
         var client = f.CreateClient();
 
-        var challenge = await client.GetAsync("/Pipelines");
+        var challenge = await client.GetAsync("/Rules");
         challenge.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         challenge.Headers.WwwAuthenticate.ToString().Should().Contain("Basic");
 
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"admin:{Secret}")));
-        (await client.GetAsync("/Pipelines")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await client.GetAsync("/Rules")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]

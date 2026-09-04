@@ -38,33 +38,33 @@ internal static class SourcesApi
             return Results.Created($"/api/sources/{s.Id}", ToDto(s));
         });
 
-        api.MapPut("/{id:guid}", async (Guid id, SourceInput input, AppDbContext db, ISecretProtector secrets, SourceAdapterFactory adapters) =>
+        api.MapPut("/{id:guid}", async (Guid id, SourceInput input, AppDbContext db, ISecretProtector secrets, SourceCacheInvalidator caches) =>
         {
             var s = await db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id);
             if (s is null) return Results.NotFound();
             Apply(s, input, secrets, isNew: false);
             s.UpdatedUtc = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
-            adapters.Invalidate(id);
+            caches.Invalidate(id);   // the edit may have changed the URL or credentials
             return Results.Json(ToDto(s));
         });
 
-        api.MapDelete("/{id:guid}", async (Guid id, AppDbContext db, SourceAdapterFactory adapters) =>
+        api.MapDelete("/{id:guid}", async (Guid id, AppDbContext db, SourceCacheInvalidator caches) =>
         {
             var s = await db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id);
             if (s is null) return Results.NotFound();
             db.SourceConnections.Remove(s);
             await db.SaveChangesAsync();
-            adapters.Invalidate(id);
+            caches.Invalidate(id);
             return Results.NoContent();
         });
 
-        api.MapPost("/{id:guid}/test", async (Guid id, AppDbContext db, SourceAdapterFactory adapters, CancellationToken ct) =>
+        api.MapPost("/{id:guid}/test", async (Guid id, AppDbContext db, SourceAdapterFactory adapters, SourceCacheInvalidator caches, CancellationToken ct) =>
         {
             var s = await db.SourceConnections.FirstOrDefaultAsync(x => x.Id == id, ct);
             if (s is null) return Results.NotFound();
 
-            adapters.Invalidate(id);   // pick up any just-saved edit
+            caches.Invalidate(id);   // pick up any just-saved edit
             HealthResult result;
             try
             {

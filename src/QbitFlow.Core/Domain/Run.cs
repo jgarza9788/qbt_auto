@@ -3,8 +3,6 @@ namespace QbitFlow.Core.Domain;
 public class RunHistory
 {
     public Guid Id { get; set; } = Guid.CreateVersion7();
-    public Guid PipelineId { get; set; }
-    public Pipeline? Pipeline { get; set; }
 
     public RunTrigger Trigger { get; set; }
     public bool DryRun { get; set; }

@@ -3,61 +3,91 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using QbitFlow.Core.Domain;
 using QbitFlow.Engine.Analytics;
-using QbitFlow.Engine.Scheduling;
+using QbitFlow.Engine.RuleEngine;
+using QbitFlow.Infrastructure.Config;
 using QbitFlow.Infrastructure.Data;
 
 namespace QbitFlow.Web.Pages;
 
-public class IndexModel(AppDbContext db, SchedulerService scheduler, IAnalyticsService analytics) : PageModel
+/// <summary>
+/// Dashboard: engine state at a glance plus recent runs. Read-only except for the two controls that
+/// map onto <see cref="RuleEngineService"/> — run a pass now, and pause/resume the engine.
+/// </summary>
+public class IndexModel(
+    AppDbContext db,
+    RuleEngineService engine,
+    AppSettingStore settings,
+    IAnalyticsService analytics) : PageModel
 {
-    public record PipelineCard(Guid Id, string Name, bool Enabled, bool DryRun, bool IsRunning,
-        string Schedule, int RuleCount, DateTimeOffset? LastRunUtc, DateTimeOffset? NextRunUtc);
-    public record RunRow(Guid Id, string Pipeline, string Status, bool DryRun, DateTimeOffset StartedUtc,
+    public record RunRow(Guid Id, string Status, bool DryRun, DateTimeOffset StartedUtc,
         long? DurationMs, int Applied, int WouldApply, int Errors);
 
-    public List<PipelineCard> Pipelines { get; private set; } = [];
+    public EngineSettings Engine { get; private set; } = EngineSettings.Fallback;
+    public bool EngineRunning { get; private set; }
+    public int EnabledRules { get; private set; }
+    public int TotalRules { get; private set; }
+    public DateTimeOffset? LastRunUtc { get; private set; }
+
+    /// <summary>
+    /// Approximate: the loop sleeps one interval after each pass, so the next one lands about an
+    /// interval after the last started. It is a hint for the user, not a scheduled time — there is no
+    /// stored next-run because there is no schedule.
+    /// </summary>
+    public DateTimeOffset? NextRunUtc { get; private set; }
+
     public List<RunRow> Runs { get; private set; } = [];
     public (int Total, int Healthy, int Bad) Sources { get; private set; }
     public DateTimeOffset? AnalyticsLastRun { get; private set; }
 
     public async Task OnGetAsync()
     {
-        var pipelines = await db.Pipelines.AsNoTracking()
-            .Select(p => new { p.Id, p.Name, p.Enabled, p.DryRun, p.IsRunning, p.ScheduleKind, p.CronExpression, p.IntervalSeconds, p.LastRunUtc, p.NextRunUtc, Rules = p.Rules.Count })
-            .ToListAsync();
+        var ct = HttpContext.RequestAborted;
 
-        Pipelines = pipelines.OrderBy(p => p.Name).Select(p => new PipelineCard(
-            p.Id, p.Name, p.Enabled, p.DryRun, p.IsRunning,
-            p.ScheduleKind == ScheduleKind.Cron ? (p.CronExpression ?? "cron") : $"every {Math.Max(p.IntervalSeconds ?? 300, 300)}s",
-            p.Rules, p.LastRunUtc, p.NextRunUtc)).ToList();
+        Engine = await settings.GetEngineSettingsAsync(ct);
+        EngineRunning = engine.IsRunning;
 
-        var names = pipelines.ToDictionary(p => p.Id, p => p.Name);
-        var runs = await db.RunHistory.AsNoTracking().OrderByDescending(r => r.StartedUtc).Take(12).ToListAsync();
-        Runs = runs.Select(r => new RunRow(r.Id, names.GetValueOrDefault(r.PipelineId, "—"),
-            r.Status.ToString(), r.DryRun, r.StartedUtc, r.DurationMs, r.ActionsApplied, r.ActionsWouldApply, r.ErrorCount)).ToList();
+        TotalRules = await db.Rules.CountAsync(ct);
+        EnabledRules = await db.Rules.CountAsync(r => r.Enabled, ct);
 
-        var srcs = await db.SourceConnections.AsNoTracking().Select(s => s.HealthState).ToListAsync();
-        Sources = (srcs.Count, srcs.Count(h => h == HealthState.Healthy), srcs.Count(h => h is HealthState.Unreachable or HealthState.Degraded));
+        LastRunUtc = await db.RunHistory.AsNoTracking()
+            .OrderByDescending(r => r.StartedUtc)
+            .Select(r => (DateTimeOffset?)r.StartedUtc)
+            .FirstOrDefaultAsync(ct);
+        NextRunUtc = (LastRunUtc ?? DateTimeOffset.UtcNow) + Engine.Interval;
 
-        AnalyticsLastRun = await analytics.LastRunUtcAsync(HttpContext.RequestAborted);
+        Runs = await db.RunHistory.AsNoTracking().OrderByDescending(r => r.StartedUtc).Take(12)
+            .Select(r => new RunRow(r.Id, r.Status.ToString(), r.DryRun, r.StartedUtc,
+                r.DurationMs, r.ActionsApplied, r.ActionsWouldApply, r.ErrorCount))
+            .ToListAsync(ct);
+
+        var health = await db.SourceConnections.AsNoTracking().Select(s => s.HealthState).ToListAsync(ct);
+        Sources = (health.Count,
+            health.Count(h => h == HealthState.Healthy),
+            health.Count(h => h is HealthState.Unreachable or HealthState.Degraded));
+
+        AnalyticsLastRun = await analytics.LastRunUtcAsync(ct);
     }
 
-    public async Task<IActionResult> OnPostRunAsync(Guid id)
+    /// <summary>Runs a pass immediately. Reports back when the engine was paused or already busy.</summary>
+    public async Task<IActionResult> OnPostRunAsync()
     {
-        await scheduler.TriggerNowAsync(id, dryRun: null, HttpContext.RequestAborted);
-        TempData["Msg"] = "Run queued.";
+        TempData["Msg"] = await engine.TriggerAsync(dryRun: null, HttpContext.RequestAborted) switch
+        {
+            TriggerOutcome.Started => "Rule pass triggered.",
+            TriggerOutcome.AlreadyRunning => "A pass is already running.",
+            TriggerOutcome.Paused => "Engine is paused — resume it first.",
+            _ => "Could not start a pass.",
+        };
         return RedirectToPage();
     }
 
-    public async Task<IActionResult> OnPostToggleAsync(Guid id)
+    /// <summary>Pauses or resumes the loop. Does not touch an in-flight pass or the rules themselves.</summary>
+    public async Task<IActionResult> OnPostToggleAsync()
     {
-        var p = await db.Pipelines.FirstOrDefaultAsync(x => x.Id == id);
-        if (p is not null)
-        {
-            p.Enabled = !p.Enabled;
-            if (p.Enabled && p.NextRunUtc is null) p.NextRunUtc = DateTimeOffset.UtcNow;
-            await db.SaveChangesAsync();
-        }
+        var ct = HttpContext.RequestAborted;
+        var enabled = (await settings.GetEngineSettingsAsync(ct)).Enabled;
+        await settings.SetAsync(AppSetting.EngineEnabled, (!enabled).ToString(), ct);
+        TempData["Msg"] = enabled ? "Engine paused." : "Engine resumed.";
         return RedirectToPage();
     }
 }

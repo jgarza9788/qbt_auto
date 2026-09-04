@@ -1,7 +1,12 @@
 # Pipeline editor consolidation — design
 
 **Date:** 2026-09-03
-**Status:** Approved (scope: full redesign, all 4 parts)
+**Status:** ~~Implemented~~ → **SUPERSEDED 2026-09-04.** Kept for history only.
+
+> The `/Pipeline` page this document designed no longer exists. The day after it
+> shipped, the whole pipeline concept was removed in favour of one global rule
+> list on a shared engine tick — see [`docs/engine.md`](../../engine.md). Read
+> this only to understand why the code looked the way it did in between.
 
 ## Problem
 

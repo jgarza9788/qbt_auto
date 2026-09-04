@@ -9,7 +9,7 @@ namespace QbitFlow.Web.Pages;
 public class AnalyticsModel(AppDbContext db, IAnalyticsService analytics, AnalyticsRefreshService refresher) : PageModel
 {
     public record Bucket(string Instance, string Category, int Torrents, int Matched, double AvgWatch);
-    public record ScoreRow(string Category, string Hash, double WatchTotal, double HotCold, bool Matched);
+    public record ScoreRow(string Category, string Hash, double WatchTotal, double Popularity, bool Matched);
 
     public DateTimeOffset? LastRun { get; private set; }
     public int MediaItems { get; private set; }
@@ -35,11 +35,11 @@ public class AnalyticsModel(AppDbContext db, IAnalyticsService analytics, Analyt
             .ToList();
 
         Hottest = scores.Where(s => s.IsMediaMatched)
-            .OrderByDescending(s => s.HotColdScore).Take(15)
-            .Select(s => new ScoreRow(s.Category, s.TorrentHash, s.WatchTotal, s.HotColdScore, true)).ToList();
+            .OrderByDescending(s => s.WatchPopularity).Take(15)
+            .Select(s => new ScoreRow(s.Category, s.TorrentHash, s.WatchTotal, s.WatchPopularity, true)).ToList();
 
         Unmatched = scores.Where(s => !s.IsMediaMatched).Take(25)
-            .Select(s => new ScoreRow(s.Category, s.TorrentHash, 0, s.HotColdScore, false)).ToList();
+            .Select(s => new ScoreRow(s.Category, s.TorrentHash, 0, s.WatchPopularity, false)).ToList();
     }
 
     public async Task<IActionResult> OnPostRefreshAsync()

@@ -6,9 +6,9 @@ using QbitFlow.Infrastructure.Data;
 namespace QbitFlow.Engine.Analytics;
 
 /// <summary>
-/// Serves the media / derived (<c>hotcold</c>, <c>watch_total</c>, …) fields for a torrent straight
-/// from <see cref="Core.Domain.MediaScoreCache"/> + <see cref="Core.Domain.MediaItem"/> — the rows
-/// the analytics job last wrote. A pipeline run never fetches from Plex/Jellyfin itself.
+/// Serves the media / derived (<c>watch_popularity</c>, <c>watch_total</c>, …) fields for a torrent
+/// straight from <see cref="Core.Domain.MediaScoreCache"/> + <see cref="Core.Domain.MediaItem"/> —
+/// the rows the analytics job last wrote. A rule pass never fetches from Plex/Jellyfin itself.
 /// </summary>
 public sealed class CachedMediaEnricher(IDbContextFactory<AppDbContext> dbFactory) : IMediaEnricher
 {
@@ -24,7 +24,7 @@ public sealed class CachedMediaEnricher(IDbContextFactory<AppDbContext> dbFactor
             ? await db.MediaItems.AsNoTracking().FirstOrDefaultAsync(m => m.Id == mid, ct)
             : null;
 
-        var hotcold = score?.HotColdScore ?? 0d;
+        var popularity = score?.WatchPopularity ?? 0d;
         var watchTotal = score?.WatchTotal ?? 0d;
         var daysSince = score?.DaysSinceLastWatched ?? 99999d;
         var matched = score?.IsMediaMatched ?? false;
@@ -42,10 +42,11 @@ public sealed class CachedMediaEnricher(IDbContextFactory<AppDbContext> dbFactor
             ["plex_year"] = media?.Year ?? 0,
             ["plex_rating"] = media?.Rating ?? 0d,
             ["plex_viewCount"] = media is null ? 0 : (int)Math.Round(media.WeightedWatchTotal),
-            ["plex_nview"] = hotcold,                       // alias
+            ["plex_nview"] = popularity,                    // alias of watch_popularity
             ["plex_nview_legacy"] = media?.LegacyScore ?? 0d,
 
-            ["hotcold"] = hotcold,
+            ["watch_popularity"] = popularity,
+            ["hotcold"] = popularity,                       // legacy alias of watch_popularity
             ["watch_total"] = watchTotal,
             ["days_since_last_watched"] = daysSince,
             ["is_media_matched"] = matched,

@@ -6,16 +6,6 @@ public enum SourceAuthMode { UserPassword = 0, ApiKey = 1, PlexToken = 2 }
 
 public enum HealthState { Unknown = 0, Healthy = 1, Degraded = 2, Unreachable = 3 }
 
-public enum ScheduleKind { Interval = 0, Cron = 1 }
-
-[Flags]
-public enum PipelineSourceRoles
-{
-    None = 0,
-    Data = 1,
-    ActionTarget = 2,
-}
-
 public enum RunTrigger { Schedule = 0, Manual = 1, Api = 2 }
 
 public enum RunStatus { Running = 0, Succeeded = 1, Failed = 2, Cancelled = 3 }

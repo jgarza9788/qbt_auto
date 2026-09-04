@@ -6,12 +6,11 @@
 
 <section class="panel scroll-x">
     <table>
-        <tr><th>Pipeline</th><th>Trigger</th><th>Status</th><th>Started</th><th>Duration</th><th>Torrents</th><th>Applied</th><th>Would</th><th>Errors</th><th></th></tr>
-        @if (Model.Runs.Count == 0) { <tr><td colspan="10" class="muted">No runs yet.</td></tr> }
+        <tr><th>Trigger</th><th>Status</th><th>Started</th><th>Duration</th><th>Torrents</th><th>Applied</th><th>Would</th><th>Errors</th><th></th></tr>
+        @if (Model.Runs.Count == 0) { <tr><td colspan="9" class="muted">No runs yet.</td></tr> }
         @foreach (var r in Model.Runs)
         {
             <tr>
-                <td>@r.Pipeline</td>
                 <td class="muted">@r.Trigger</td>
                 <td><span class="pill @(r.Status switch { "Succeeded" => "ok", "Running" => "run", "Failed" => "err", _ => "" })">@r.Status.ToLower()</span>@(r.DryRun ? " dry" : "")</td>
                 <td class="muted">@r.StartedUtc.ToLocalTime().ToString("MM-dd HH:mm")</td>
