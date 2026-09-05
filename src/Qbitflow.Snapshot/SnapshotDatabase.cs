@@ -60,11 +60,17 @@ public class SnapshotDatabase : IDisposable
             INSERT INTO torrents
             (instance_id, instance_name, hash, name, category, tags, save_path, content_path, path_key,
              size_bytes, progress, state, downloaded_bytes, uploaded_bytes, ratio, added_on, completion_on,
-             upload_limit_bps, download_limit_bps)
+             upload_limit_bps, download_limit_bps, tracker, total_size_bytes, amount_left_bytes, completed_bytes,
+             dl_speed_bps, up_speed_bps, eta_seconds, seeding_time_seconds, active_time_seconds,
+             connected_seeds, total_seeds, connected_leechers, total_leechers, availability, auto_tmm,
+             ratio_limit, seeding_time_limit_minutes, last_activity, seen_complete)
             VALUES
             ($instance_id, $instance_name, $hash, $name, $category, $tags, $save_path, $content_path, $path_key,
              $size_bytes, $progress, $state, $downloaded_bytes, $uploaded_bytes, $ratio, $added_on, $completion_on,
-             $upload_limit_bps, $download_limit_bps)
+             $upload_limit_bps, $download_limit_bps, $tracker, $total_size_bytes, $amount_left_bytes, $completed_bytes,
+             $dl_speed_bps, $up_speed_bps, $eta_seconds, $seeding_time_seconds, $active_time_seconds,
+             $connected_seeds, $total_seeds, $connected_leechers, $total_leechers, $availability, $auto_tmm,
+             $ratio_limit, $seeding_time_limit_minutes, $last_activity, $seen_complete)
             """;
 
         foreach (var t in torrents)
@@ -89,6 +95,25 @@ public class SnapshotDatabase : IDisposable
             insert.Parameters.AddWithValue("$completion_on", DbValues.Of(t.CompletionOn));
             insert.Parameters.AddWithValue("$upload_limit_bps", t.UploadLimitBytesPerSec);
             insert.Parameters.AddWithValue("$download_limit_bps", t.DownloadLimitBytesPerSec);
+            insert.Parameters.AddWithValue("$tracker", DbValues.Of(t.Tracker));
+            insert.Parameters.AddWithValue("$total_size_bytes", t.TotalSizeBytes);
+            insert.Parameters.AddWithValue("$amount_left_bytes", t.AmountLeftBytes);
+            insert.Parameters.AddWithValue("$completed_bytes", t.CompletedBytes);
+            insert.Parameters.AddWithValue("$dl_speed_bps", t.DownloadSpeedBytesPerSec);
+            insert.Parameters.AddWithValue("$up_speed_bps", t.UploadSpeedBytesPerSec);
+            insert.Parameters.AddWithValue("$eta_seconds", t.EtaSeconds);
+            insert.Parameters.AddWithValue("$seeding_time_seconds", t.SeedingTimeSeconds);
+            insert.Parameters.AddWithValue("$active_time_seconds", t.ActiveTimeSeconds);
+            insert.Parameters.AddWithValue("$connected_seeds", t.ConnectedSeeds);
+            insert.Parameters.AddWithValue("$total_seeds", t.TotalSeeds);
+            insert.Parameters.AddWithValue("$connected_leechers", t.ConnectedLeechers);
+            insert.Parameters.AddWithValue("$total_leechers", t.TotalLeechers);
+            insert.Parameters.AddWithValue("$availability", t.Availability);
+            insert.Parameters.AddWithValue("$auto_tmm", t.AutoTmmEnabled ? 1 : 0);
+            insert.Parameters.AddWithValue("$ratio_limit", t.RatioLimit);
+            insert.Parameters.AddWithValue("$seeding_time_limit_minutes", t.SeedingTimeLimitMinutes);
+            insert.Parameters.AddWithValue("$last_activity", DbValues.Of(t.LastActivityOn));
+            insert.Parameters.AddWithValue("$seen_complete", DbValues.Of(t.SeenCompleteOn));
             insert.ExecuteNonQuery();
         }
     }

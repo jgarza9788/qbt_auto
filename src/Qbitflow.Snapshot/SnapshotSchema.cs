@@ -31,11 +31,31 @@ internal static class SnapshotSchema
             completion_on TEXT,
             upload_limit_bps INTEGER NOT NULL,
             download_limit_bps INTEGER NOT NULL,
+            tracker TEXT,
+            total_size_bytes INTEGER NOT NULL,
+            amount_left_bytes INTEGER NOT NULL,
+            completed_bytes INTEGER NOT NULL,
+            dl_speed_bps INTEGER NOT NULL,
+            up_speed_bps INTEGER NOT NULL,
+            eta_seconds INTEGER NOT NULL,
+            seeding_time_seconds INTEGER NOT NULL,
+            active_time_seconds INTEGER NOT NULL,
+            connected_seeds INTEGER NOT NULL,
+            total_seeds INTEGER NOT NULL,
+            connected_leechers INTEGER NOT NULL,
+            total_leechers INTEGER NOT NULL,
+            availability REAL NOT NULL,
+            auto_tmm INTEGER NOT NULL,
+            ratio_limit REAL NOT NULL,
+            seeding_time_limit_minutes INTEGER NOT NULL,
+            last_activity TEXT,
+            seen_complete TEXT,
             PRIMARY KEY (instance_id, hash)
         );
         CREATE INDEX ix_torrents_path_key ON torrents(path_key);
         CREATE INDEX ix_torrents_category ON torrents(category);
         CREATE INDEX ix_torrents_state ON torrents(state);
+        CREATE INDEX ix_torrents_tracker ON torrents(tracker);
 
         CREATE TABLE torrent_files (
             instance_id INTEGER NOT NULL,

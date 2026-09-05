@@ -79,7 +79,26 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
             AddedOn = t.AddedOn > 0 ? DateTimeOffset.FromUnixTimeSeconds(t.AddedOn) : null,
             CompletionOn = t.CompletionOn > 0 ? DateTimeOffset.FromUnixTimeSeconds(t.CompletionOn) : null,
             UploadLimitBytesPerSec = t.UpLimit,
-            DownloadLimitBytesPerSec = t.DlLimit
+            DownloadLimitBytesPerSec = t.DlLimit,
+            Tracker = string.IsNullOrEmpty(t.Tracker) ? null : t.Tracker,
+            TotalSizeBytes = t.TotalSize,
+            AmountLeftBytes = t.AmountLeft,
+            CompletedBytes = t.Completed,
+            DownloadSpeedBytesPerSec = t.DlSpeed,
+            UploadSpeedBytesPerSec = t.UpSpeed,
+            EtaSeconds = t.Eta,
+            SeedingTimeSeconds = t.SeedingTime,
+            ActiveTimeSeconds = t.TimeActive,
+            ConnectedSeeds = t.NumSeeds,
+            TotalSeeds = t.NumComplete,
+            ConnectedLeechers = t.NumLeechs,
+            TotalLeechers = t.NumIncomplete,
+            Availability = t.Availability,
+            AutoTmmEnabled = t.AutoTmm,
+            RatioLimit = t.RatioLimit,
+            SeedingTimeLimitMinutes = t.SeedingTimeLimit,
+            LastActivityOn = t.LastActivity > 0 ? DateTimeOffset.FromUnixTimeSeconds(t.LastActivity) : null,
+            SeenCompleteOn = t.SeenComplete > 0 ? DateTimeOffset.FromUnixTimeSeconds(t.SeenComplete) : null
         }).ToList();
 
         return new SourceFetchResult { Torrents = records };
@@ -325,6 +344,25 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         [JsonPropertyName("completion_on")] public long CompletionOn { get; set; }
         [JsonPropertyName("up_limit")] public long UpLimit { get; set; }
         [JsonPropertyName("dl_limit")] public long DlLimit { get; set; }
+        [JsonPropertyName("tracker")] public string? Tracker { get; set; }
+        [JsonPropertyName("total_size")] public long TotalSize { get; set; }
+        [JsonPropertyName("amount_left")] public long AmountLeft { get; set; }
+        [JsonPropertyName("completed")] public long Completed { get; set; }
+        [JsonPropertyName("dlspeed")] public long DlSpeed { get; set; }
+        [JsonPropertyName("upspeed")] public long UpSpeed { get; set; }
+        [JsonPropertyName("eta")] public long Eta { get; set; }
+        [JsonPropertyName("seeding_time")] public long SeedingTime { get; set; }
+        [JsonPropertyName("time_active")] public long TimeActive { get; set; }
+        [JsonPropertyName("num_seeds")] public long NumSeeds { get; set; }
+        [JsonPropertyName("num_complete")] public long NumComplete { get; set; }
+        [JsonPropertyName("num_leechs")] public long NumLeechs { get; set; }
+        [JsonPropertyName("num_incomplete")] public long NumIncomplete { get; set; }
+        [JsonPropertyName("availability")] public double Availability { get; set; }
+        [JsonPropertyName("auto_tmm")] public bool AutoTmm { get; set; }
+        [JsonPropertyName("ratio_limit")] public double RatioLimit { get; set; }
+        [JsonPropertyName("seeding_time_limit")] public long SeedingTimeLimit { get; set; }
+        [JsonPropertyName("last_activity")] public long LastActivity { get; set; }
+        [JsonPropertyName("seen_complete")] public long SeenComplete { get; set; }
     }
 
     private sealed class QbtTorrentFileDto

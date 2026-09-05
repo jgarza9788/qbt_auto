@@ -18,7 +18,7 @@ public class QbtAdapterTests
             Assert.Equal("/api/v2/torrents/info", req.RequestUri!.AbsolutePath);
             const string json = """
             [
-              {"hash":"abc123","name":"Ubuntu ISO","category":"linux","tags":"iso, verified","save_path":"/downloads","content_path":"/downloads/ubuntu.iso","size":123456,"progress":1.0,"state":"uploading","downloaded":123456,"uploaded":50000,"ratio":0.4,"added_on":1700000000,"completion_on":1700005000,"up_limit":0,"dl_limit":0}
+              {"hash":"abc123","name":"Ubuntu ISO","category":"linux","tags":"iso, verified","save_path":"/downloads","content_path":"/downloads/ubuntu.iso","size":123456,"progress":1.0,"state":"uploading","downloaded":123456,"uploaded":50000,"ratio":0.4,"added_on":1700000000,"completion_on":1700005000,"up_limit":0,"dl_limit":0,"tracker":"udp://tracker.example.org:451/announce","total_size":200000,"amount_left":0,"completed":123456,"dlspeed":0,"upspeed":1048576,"eta":8640000,"seeding_time":86400,"time_active":172800,"num_seeds":3,"num_complete":12,"num_leechs":1,"num_incomplete":50,"availability":1.0,"auto_tmm":true,"ratio_limit":-2,"seeding_time_limit":-2,"last_activity":1700009000,"seen_complete":1700008000}
             ]
             """;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
@@ -45,6 +45,18 @@ public class QbtAdapterTests
         Assert.Equal(123456, torrent.SizeBytes);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700000000), torrent.AddedOn);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700005000), torrent.CompletionOn);
+        Assert.Equal("udp://tracker.example.org:451/announce", torrent.Tracker);
+        Assert.Equal(200000, torrent.TotalSizeBytes);
+        Assert.Equal(1048576, torrent.UploadSpeedBytesPerSec);
+        Assert.Equal(8640000, torrent.EtaSeconds);
+        Assert.Equal(86400, torrent.SeedingTimeSeconds);
+        Assert.Equal(3, torrent.ConnectedSeeds);
+        Assert.Equal(12, torrent.TotalSeeds);
+        Assert.Equal(50, torrent.TotalLeechers);
+        Assert.True(torrent.AutoTmmEnabled);
+        Assert.Equal(-2, torrent.RatioLimit);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700009000), torrent.LastActivityOn);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1700008000), torrent.SeenCompleteOn);
     }
 
     [Fact]

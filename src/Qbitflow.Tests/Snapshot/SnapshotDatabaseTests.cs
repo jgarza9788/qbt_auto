@@ -47,6 +47,42 @@ public class SnapshotDatabaseTests : IDisposable
     }
 
     [Fact]
+    public void Rebuild_InsertsExtendedTorrentFields_AndDerivedColumnsCompute()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            Torrents =
+            [
+                new TorrentRecord
+                {
+                    InstanceId = 1, InstanceName = "Main", Hash = "h1", Name = "T", SizeBytes = 1, Progress = 1,
+                    Tracker = "udp://tracker.example.org:451/announce",
+                    TotalSizeBytes = 8_000_000_000, SeedingTimeSeconds = 172_800, ActiveTimeSeconds = 259_200,
+                    TotalSeeds = 0, ConnectedSeeds = 0, AutoTmmEnabled = true, RatioLimit = -2,
+                    LastActivityOn = DateTimeOffset.UtcNow.AddDays(-5)
+                }
+            ]
+        });
+
+        using var cmd = _db.Connection.CreateCommand();
+        cmd.CommandText = "SELECT tracker, total_size_bytes, auto_tmm FROM torrents WHERE hash = 'h1'";
+        using (var reader = cmd.ExecuteReader())
+        {
+            Assert.True(reader.Read());
+            Assert.Equal("udp://tracker.example.org:451/announce", reader.GetString(0));
+            Assert.Equal(8_000_000_000, reader.GetInt64(1));
+            Assert.Equal(1L, reader.GetInt64(2));
+        }
+
+        using var derived = _db.Connection.CreateCommand();
+        derived.CommandText = "SELECT seeding_time_seconds / 86400.0, days_since(last_activity) FROM torrents WHERE hash = 'h1'";
+        using var dr = derived.ExecuteReader();
+        Assert.True(dr.Read());
+        Assert.Equal(2.0, dr.GetDouble(0), precision: 6);
+        Assert.InRange(dr.GetDouble(1), 4.9, 5.1);
+    }
+
+    [Fact]
     public void Rebuild_JoinsTorrentsToMediaItems_ViaPathKey_AfterPathMapping()
     {
         var rules = new List<PathMappingRule>

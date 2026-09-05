@@ -21,4 +21,43 @@ public class TorrentRecord
     public DateTimeOffset? CompletionOn { get; init; }
     public long UploadLimitBytesPerSec { get; init; }
     public long DownloadLimitBytesPerSec { get; init; }
+
+    /// <summary>Currently-working tracker URL (empty when qBittorrent has no working tracker).</summary>
+    public string? Tracker { get; init; }
+    /// <summary>Full size of all selected files (>= <see cref="SizeBytes"/>, which counts wanted files only).</summary>
+    public long TotalSizeBytes { get; init; }
+    /// <summary>Bytes still to download (0 once complete).</summary>
+    public long AmountLeftBytes { get; init; }
+    /// <summary>Bytes of the selected content already downloaded.</summary>
+    public long CompletedBytes { get; init; }
+    /// <summary>Current download rate in bytes/sec.</summary>
+    public long DownloadSpeedBytesPerSec { get; init; }
+    /// <summary>Current upload rate in bytes/sec.</summary>
+    public long UploadSpeedBytesPerSec { get; init; }
+    /// <summary>Estimated seconds to completion. qBittorrent reports 8640000 (100 days) as "infinity".</summary>
+    public long EtaSeconds { get; init; }
+    /// <summary>Seconds spent seeding.</summary>
+    public long SeedingTimeSeconds { get; init; }
+    /// <summary>Seconds the torrent has been active (downloading or seeding).</summary>
+    public long ActiveTimeSeconds { get; init; }
+    /// <summary>Connected seeds (peers with the full torrent we're connected to).</summary>
+    public long ConnectedSeeds { get; init; }
+    /// <summary>Seeds in the swarm as reported by the tracker (num_complete).</summary>
+    public long TotalSeeds { get; init; }
+    /// <summary>Connected leechers.</summary>
+    public long ConnectedLeechers { get; init; }
+    /// <summary>Leechers in the swarm as reported by the tracker (num_incomplete).</summary>
+    public long TotalLeechers { get; init; }
+    /// <summary>Fraction of the torrent available across connected peers; qBittorrent reports -1 when unknown.</summary>
+    public double Availability { get; init; }
+    /// <summary>Whether Automatic Torrent Management is enabled for this torrent.</summary>
+    public bool AutoTmmEnabled { get; init; }
+    /// <summary>Per-torrent share-ratio limit: -2 = use global, -1 = unlimited, otherwise the ratio.</summary>
+    public double RatioLimit { get; init; }
+    /// <summary>Per-torrent seeding-time limit in minutes: -2 = use global, -1 = unlimited, otherwise minutes.</summary>
+    public long SeedingTimeLimitMinutes { get; init; }
+    /// <summary>When the torrent last had tracker/peer activity.</summary>
+    public DateTimeOffset? LastActivityOn { get; init; }
+    /// <summary>When a complete copy was last seen in the swarm.</summary>
+    public DateTimeOffset? SeenCompleteOn { get; init; }
 }
