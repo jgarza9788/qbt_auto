@@ -16,6 +16,9 @@
             }
         })();
     </script>
+    @* crossorigin is required even same-origin -- font fetches are always CORS-mode,
+       and omitting it causes the font to be downloaded twice. *@
+    <link rel="preload" as="font" type="font/woff2" href="~/fonts/jetbrainsmono-nerd-v1.woff2" crossorigin />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Qbitflow.Web.styles.css" asp-append-version="true" />
@@ -43,10 +46,16 @@
                         </ul>
                         <ul class="navbar-nav">
                             <li class="nav-item d-flex align-items-center">
-                                <div class="btn-group qf-theme-toggle" role="group" aria-label="Theme">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-theme-choice="light" title="Light">☀</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-theme-choice="dark" title="Dark">☾</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-theme-choice="auto" title="Match system">◐</button>
+                                <div class="qf-theme-toggle" role="group" aria-label="Theme">
+                                    <button type="button" class="btn" data-theme-choice="light" title="Light" aria-label="Light" aria-pressed="false">
+                                        <span class="qf-icon qf-icon--sun" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="btn" data-theme-choice="dark" title="Dark" aria-label="Dark" aria-pressed="false">
+                                        <span class="qf-icon qf-icon--moon" aria-hidden="true"></span>
+                                    </button>
+                                    <button type="button" class="btn" data-theme-choice="auto" title="Match system" aria-label="Match system" aria-pressed="false">
+                                        <span class="qf-icon qf-icon--auto" aria-hidden="true"></span>
+                                    </button>
                                 </div>
                             </li>
                             <li class="nav-item">
@@ -89,7 +98,9 @@
                 }
                 try { localStorage.setItem('qbitflow-theme', theme); } catch (e) {}
                 buttons.forEach(function (b) {
-                    b.classList.toggle('active', b.getAttribute('data-theme-choice') === theme);
+                    var on = b.getAttribute('data-theme-choice') === theme;
+                    b.classList.toggle('active', on);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
                 });
             }
             buttons.forEach(function (b) {

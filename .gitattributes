@@ -4,3 +4,17 @@
 *.cshtml text eol=lf
 *.csproj text eol=lf
 *.sln text eol=crlf
+
+# Binary assets -- the "* text=auto eol=lf" rule above would otherwise
+# line-ending-normalise these and silently corrupt them.
+*.woff2 binary
+*.woff binary
+*.ttf binary
+*.otf binary
+*.eot binary
+*.ico binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary

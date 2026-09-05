@@ -1,3 +1,65 @@
+/* ---- Fonts ---- */
+
+/* Subset of JetBrainsMono Nerd Font Mono -- see tools/fonts/ for the
+   regeneration command. Serves both the icon glyphs and every monospace
+   surface. The -v1 in the filename is the cache-buster: @font-face src in a
+   static stylesheet can't be stamped by asp-append-version. */
+@font-face {
+  font-family: "JetBrainsMono Nerd Font";
+  src: url("../fonts/jetbrainsmono-nerd-v1.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Bootstrap declares --bs-font-monospace on ":root,[data-bs-theme=light]".
+   A bare :root ties on specificity, so name all three selectors to win under
+   every theme value. .qf-sql-preview / .qf-field-key / .qf-muted-mono already
+   read this variable, so they pick the font up with no edits of their own. */
+:root,
+[data-bs-theme="light"],
+[data-bs-theme="dark"] {
+  --bs-font-monospace: "JetBrainsMono Nerd Font", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---- Icons ---- */
+
+/* Codepoints live here and nowhere else. Keeping them out of .cshtml avoids
+   putting invisible Private-Use characters into Razor source, where an editor
+   or git's text normalisation can silently mangle them -- and it keeps the
+   name -> codepoint map in one file. Always pair with aria-hidden="true" and a
+   .visually-hidden label so screen readers never reach the glyph. */
+.qf-icon {
+  font-family: "JetBrainsMono Nerd Font";
+  font-style: normal;
+  font-weight: 400;
+  font-variant: normal;
+  line-height: 1;
+  display: inline-block;
+  text-transform: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.qf-icon::before {
+  display: inline-block;
+}
+
+.qf-icon--sun::before { content: "\f185"; }
+.qf-icon--moon::before { content: "\f186"; }
+.qf-icon--auto::before { content: "\f042"; }
+.qf-icon--copy::before { content: "\f0c5"; }
+.qf-icon--check::before { content: "\f00c"; }
+.qf-icon--close::before { content: "\f00d"; }
+.qf-icon--chevron::before { content: "\f078"; }
+.qf-icon--database::before { content: "\f1c0"; }
+.qf-icon--clock::before { content: "\f017"; }
+.qf-icon--play::before { content: "\f04b"; }
+.qf-icon--warning::before { content: "\f071"; }
+.qf-icon--tag::before { content: "\f02b"; }
+.qf-icon--folder::before { content: "\f07b"; }
+.qf-icon--gear::before { content: "\f013"; }
+
 html {
   font-size: 15px;
 }
@@ -25,8 +87,49 @@ body {
   font-size: 0.85em;
 }
 
+/* Segmented pill: a recessed track holding three equal segments, the selected
+   one raised. Every colour is a Bootstrap token, so it inverts correctly under
+   data-bs-theme="dark" with no separate dark rules. */
 .qf-theme-toggle {
+  display: inline-flex;
+  align-items: stretch;
   margin-right: 0.75rem;
+  padding: 0.1875rem;
+  background-color: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color-translucent);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.qf-theme-toggle .btn {
+  --bs-btn-hover-bg: transparent;
+  --bs-btn-active-bg: transparent;
+  --bs-btn-active-border-color: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--bs-secondary-color);
+  background-color: transparent;
+  box-shadow: none;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.qf-theme-toggle .btn .qf-icon {
+  font-size: 0.95rem;
+}
+
+.qf-theme-toggle .btn:hover {
+  color: var(--bs-emphasis-color);
+}
+
+.qf-theme-toggle .btn:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+  z-index: 1;
 }
 
 .qf-logo-link {
@@ -41,10 +144,13 @@ body {
   display: block;
 }
 
-.qf-theme-toggle .btn.active {
+/* Raised chip for the selected segment. */
+.qf-theme-toggle .btn.active,
+.qf-theme-toggle .btn.active:hover {
   background-color: var(--bs-primary);
   color: #fff;
-  border-color: var(--bs-primary);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 }
 
 .qf-content {
@@ -59,7 +165,8 @@ body {
   background: var(--bs-body-bg);
   border: 1px solid var(--bs-border-color-translucent);
   border-radius: 0.6rem;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  /* box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); */
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.5);
 }
 
 .qf-card-header {

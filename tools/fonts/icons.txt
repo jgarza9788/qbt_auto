@@ -1,0 +1,36 @@
+# Unicode set for the qbitflow web font subset.
+# Consumed by subset-font.sh via `pyftsubset --unicodes-file=`.
+# Blank lines and #-comments are ignored by pyftsubset.
+#
+# To add an icon: find it with dump-cmap.py, add a line here, re-run subset-font.sh
+# (bumping the -vN filename), then add a .qf-icon--<name> rule in site.css.
+
+# ---- Latin text: keeps every monospace surface fully renderable ----
+U+0020-007E   # printable ASCII
+U+00A0-00FF   # Latin-1 Supplement
+U+2010-2015   # hyphens / en / em dashes
+U+2018-201F   # curly quotes
+U+2026        # horizontal ellipsis
+U+2032-2033   # prime, double prime
+U+20AC        # euro sign
+U+2190-2193   # arrows
+U+2212        # minus sign
+U+25CF        # black circle (used by .qf-badge-dot fallback)
+
+# ---- Nerd Font icons (Font Awesome range) ----
+# Verified against JetBrainsMonoNerdFontMono-Regular.ttf @ NF_TAG v3.4.0
+# with dump-cmap.py. Glyph name is recorded next to each codepoint.
+U+F185        # fa-sun_o               -> theme: light
+U+F186        # fa-moon_o              -> theme: dark
+U+F042        # fa-circle_half_stroke  -> theme: auto / match system
+U+F0C5        # fa-files_o             -> copy
+U+F00C        # fa-check               -> success / applied
+U+F00D        # fa-xmark               -> close / remove
+U+F078        # fa-chevron_down        -> disclosure
+U+F1C0        # fa-database            -> snapshot / SQL
+U+F017        # fa-clock_o             -> schedule / cron
+U+F04B        # fa-play                -> run now
+U+F071        # fa-warning             -> validation error
+U+F02B        # fa-tag                 -> tags
+U+F07B        # fa-folder              -> paths / storage
+U+F013        # fa-gear                -> settings

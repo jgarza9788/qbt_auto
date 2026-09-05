@@ -1,0 +1,50 @@
+Attribution for jetbrainsmono-nerd-v1.woff2
+===========================================
+
+This file is a size-only subset of:
+
+    JetBrainsMonoNerdFontMono-Regular.ttf
+    from Nerd Fonts release v3.4.0
+    https://github.com/ryanoasis/nerd-fonts/releases/tag/v3.4.0
+
+No glyph outlines were altered. The subset keeps ASCII + Latin-1 plus 14
+individually selected icon codepoints; see tools/fonts/icons.txt in the
+qbitflow repository for the exact list and tools/fonts/subset-font.sh for
+the command that produced it.
+
+
+1. Base typeface -- JetBrains Mono (version 2.304)
+--------------------------------------------------
+Copyright 2020 The JetBrains Mono Project Authors
+https://github.com/JetBrains/JetBrainsMono
+
+Licensed under the SIL Open Font License, Version 1.1.
+Full license text: see OFL.txt beside this file.
+The OFL notice and URL are also embedded in the .woff2 itself
+(name table IDs 13 and 14).
+
+No Reserved Font Name is declared by the JetBrains Mono OFL.
+
+
+2. Patching project -- Nerd Fonts
+----------------------------------
+Copyright (c) 2014, Ryan L McIntyre
+https://github.com/ryanoasis/nerd-fonts
+Licensed under the MIT License.
+
+
+3. Icon glyphs bundled by Nerd Fonts
+-------------------------------------
+The icon codepoints used by this subset are all drawn from the Font Awesome
+range (U+F000-U+F2FF):
+
+    Font Awesome -- https://fontawesome.com
+    Copyright Dave Gandy / Fonticons, Inc.
+    Font files: SIL OFL 1.1
+    Icon designs: CC BY 4.0
+
+Nerd Fonts also aggregates glyphs from Material Design Icons (SIL OFL 1.1 /
+Apache-2.0), Octicons (MIT), Devicons (MIT), Weather Icons (SIL OFL 1.1),
+Powerline (MIT) and Codicons (CC BY 4.0). None of those ranges are included
+in this subset, but the notice is retained here in case the subset is later
+widened to cover them.

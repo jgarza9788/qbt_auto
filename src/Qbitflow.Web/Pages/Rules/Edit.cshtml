@@ -129,6 +129,9 @@
     <div class="qf-card mb-3">
         <div class="qf-card-header">
             <h2>Condition</h2>
+            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#fieldRefPanel">
+                Field reference
+            </button>
             <div class="d-flex align-items-center gap-2">
                 <span class="qf-field-type" id="conditionModeLabel">@(Model.Input.UseAdvancedSql ? "Advanced SQL" : "Basic builder")</span>
                 <input type="hidden" asp-for="Input.UseAdvancedSql" id="useAdvancedSqlValue" />
