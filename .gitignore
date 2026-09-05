@@ -1,4 +1,4 @@
-.venv/
+#.venv/
 __pycache__/
 *.pyc
 *.egg-info/
@@ -12,5 +12,5 @@ config/
 *.db-shm
 .pytest_cache/
 .ruff_cache/
-#.env
+.env
 src/qbitflow/web/static/app.css
