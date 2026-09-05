@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Qbitflow.Core\Qbitflow.Core.csproj" />
+    <ProjectReference Include="..\Qbitflow.Sources\Qbitflow.Sources.csproj" />
+    <ProjectReference Include="..\Qbitflow.Snapshot\Qbitflow.Snapshot.csproj" />
+    <ProjectReference Include="..\Qbitflow.Infrastructure\Qbitflow.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Qbitflow.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CronExpressionDescriptor" Version="2.42.0" />
+    <PackageReference Include="Cronos" Version="0.10.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

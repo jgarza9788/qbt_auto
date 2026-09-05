@@ -1,0 +1,12 @@
+@model Qbitflow.Core.Domain.RunOutcome
+@{
+    var (cls, label) = Model switch
+    {
+        Qbitflow.Core.Domain.RunOutcome.Success => ("qf-badge-success", "Success"),
+        Qbitflow.Core.Domain.RunOutcome.PartialFailure => ("qf-badge-warning", "Partial failure"),
+        Qbitflow.Core.Domain.RunOutcome.Failed => ("qf-badge-danger", "Failed"),
+        Qbitflow.Core.Domain.RunOutcome.Skipped => ("qf-badge-secondary", "Skipped"),
+        _ => ("qf-badge-secondary", Model.ToString())
+    };
+}
+<span class="qf-badge @cls"><span class="qf-badge-dot"></span>@label</span>

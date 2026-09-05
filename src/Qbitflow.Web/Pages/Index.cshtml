@@ -1,0 +1,141 @@
+@page
+@model Qbitflow.Web.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+@if (Model.Settings.GlobalKillSwitch || Model.Settings.GlobalDryRun)
+{
+    <div class="alert alert-warning d-flex align-items-center gap-2 mb-3" role="alert">
+        <strong>Heads up:</strong>
+        @if (Model.Settings.GlobalKillSwitch)
+        {
+            <span>the global kill switch is <strong>ON</strong> &mdash; no rule will execute any action.</span>
+        }
+        @if (Model.Settings.GlobalDryRun)
+        {
+            <span>global dry-run is <strong>ON</strong> &mdash; actions are being previewed, not applied.</span>
+        }
+        <a asp-page="/Settings/Index" class="ms-auto btn btn-sm btn-outline-warning">Settings</a>
+    </div>
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="qf-card qf-stat">
+            <div class="qf-stat-value">@Model.EnabledInstanceCount<span class="text-secondary fs-6">/@Model.TotalInstanceCount</span></div>
+            <div class="qf-stat-label">Instances enabled</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="qf-card qf-stat">
+            <div class="qf-stat-value">@Model.EnabledRuleCount<span class="text-secondary fs-6">/@Model.TotalRuleCount</span></div>
+            <div class="qf-stat-label">Rules enabled</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="qf-card qf-stat">
+            <div class="qf-stat-value">@Model.MatchedLast24h</div>
+            <div class="qf-stat-label">Matched, last 24h</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="qf-card qf-stat">
+            <div class="qf-stat-value @(Model.FailedLast24h > 0 ? "text-danger" : "")">@Model.FailedLast24h</div>
+            <div class="qf-stat-label">Failed runs, last 24h</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="qf-card mb-3">
+            <div class="qf-card-header">
+                <h2>Instances</h2>
+                <a asp-page="/Instances/Index" class="btn btn-sm btn-outline-primary">Manage</a>
+            </div>
+            <div class="qf-card-body p-0">
+                @if (Model.Instances.Count == 0)
+                {
+                    <div class="qf-empty">
+                        <div class="qf-empty-icon">&#128268;</div>
+                        <p class="mb-2">No data sources configured yet.</p>
+                        <a asp-page="/Instances/Index" class="btn btn-sm btn-primary">Add an instance</a>
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                        @foreach (var instance in Model.Instances)
+                        {
+                            <tr>
+                                <td>
+                                    @if (instance.Enabled)
+                                    {
+                                        <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>on</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="qf-badge qf-badge-secondary"><span class="qf-badge-dot"></span>off</span>
+                                    }
+                                </td>
+                                <td class="fw-medium">@instance.Name</td>
+                                <td class="text-secondary">@instance.SourceType</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="qf-card">
+            <div class="qf-card-header">
+                <h2>Recent runs</h2>
+                <a asp-page="/History/Index" class="btn btn-sm btn-outline-primary">Full history</a>
+            </div>
+            <div class="qf-card-body p-0">
+                @if (Model.RecentRuns.Count == 0)
+                {
+                    <div class="qf-empty">
+                        <div class="qf-empty-icon">&#128203;</div>
+                        <p class="mb-0">No rules have run yet. Once a rule's schedule fires, its runs will show up here.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0 align-middle">
+                            <thead>
+                            <tr>
+                                <th>Rule</th>
+                                <th>Started</th>
+                                <th>Outcome</th>
+                                <th class="text-end">Matched</th>
+                                <th class="text-end">Applied</th>
+                                <th class="text-end">Failed</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach (var run in Model.RecentRuns)
+                            {
+                                <tr>
+                                    <td>@(Model.RuleNamesById.GetValueOrDefault(run.RuleId, "(deleted rule)"))</td>
+                                    <td class="text-secondary">@run.StartedAt.LocalDateTime.ToString("g")</td>
+                                    <td><partial name="_StatusBadge" model="run.Outcome" /></td>
+                                    <td class="text-end">@run.MatchedCount</td>
+                                    <td class="text-end">@run.ActionsExecutedCount</td>
+                                    <td class="text-end @(run.ActionsFailedCount > 0 ? "text-danger fw-semibold" : "")">@run.ActionsFailedCount</td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>

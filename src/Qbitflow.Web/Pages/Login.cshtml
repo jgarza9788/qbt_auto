@@ -1,0 +1,35 @@
+@page
+@model Qbitflow.Web.Pages.LoginModel
+@{
+    ViewData["Title"] = "Log in";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Log in - qbitflow</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+</head>
+<body>
+    <div class="container" style="max-width: 380px; margin-top: 6rem;">
+        <h1 class="h3 mb-3">qbitflow</h1>
+
+        <div asp-validation-summary="All" class="text-danger"></div>
+
+        <form method="post">
+            <input type="hidden" asp-for="ReturnUrl" />
+            <div class="mb-3">
+                <label asp-for="Input.Username" class="form-label"></label>
+                <input asp-for="Input.Username" class="form-control" autofocus autocomplete="username" />
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.Password" class="form-label"></label>
+                <input asp-for="Input.Password" type="password" class="form-control" autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Log in</button>
+        </form>
+    </div>
+</body>
+</html>

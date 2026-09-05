@@ -1,0 +1,21 @@
+services:
+  qbitflow:
+    build: .
+    image: qbitflow:latest
+    container_name: qbitflow
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Override any of these to point at your own timezone / log level once
+      # Settings exist in the UI; this env var only affects container startup logs.
+      - TZ=UTC
+    volumes:
+      - qbitflow-data:/data
+      # Uncomment to let qbitflow verify "move" actions against real media paths
+      # that match the mounts your qBittorrent/Plex/Jellyfin containers use:
+      # - /path/to/downloads:/downloads
+      # - /path/to/media:/media
+
+volumes:
+  qbitflow-data:

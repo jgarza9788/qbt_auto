@@ -1,0 +1,217 @@
+html {
+  font-size: 15px;
+}
+
+body {
+  background-color: var(--bs-tertiary-bg);
+}
+
+.qf-navbar {
+  background-color: var(--bs-body-bg);
+}
+
+.qf-brand {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.qf-brand-mark {
+  display: inline-block;
+  background: linear-gradient(135deg, #3d8bfd, #6f42c1);
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  margin-right: 0.15rem;
+  font-size: 0.85em;
+}
+
+.qf-theme-toggle {
+  margin-right: 0.75rem;
+}
+
+.qf-theme-toggle .btn.active {
+  background-color: var(--bs-primary);
+  color: #fff;
+  border-color: var(--bs-primary);
+}
+
+.qf-content {
+  max-width: 1320px;
+  padding-top: 1.5rem;
+  padding-bottom: 3rem;
+}
+
+/* ---- Cards & sections ---- */
+
+.qf-card {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color-translucent);
+  border-radius: 0.6rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.qf-card-header {
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.qf-card-header h2, .qf-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.qf-card-body {
+  padding: 1.25rem;
+}
+
+.qf-stat {
+  padding: 1.1rem 1.25rem;
+}
+
+.qf-stat .qf-stat-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.qf-stat .qf-stat-label {
+  color: var(--bs-secondary-color);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.35rem;
+}
+
+/* ---- Empty / loading / error states ---- */
+
+.qf-empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  color: var(--bs-secondary-color);
+}
+
+.qf-empty .qf-empty-icon {
+  font-size: 2rem;
+  opacity: 0.5;
+  margin-bottom: 0.5rem;
+}
+
+.qf-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--bs-secondary-color);
+}
+
+/* ---- Status badges ---- */
+
+.qf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25em 0.6em;
+  border-radius: 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.qf-badge-dot {
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.qf-badge-success { background: rgba(25, 135, 84, 0.12); color: #146c43; }
+.qf-badge-success .qf-badge-dot { background: #198754; }
+.qf-badge-danger { background: rgba(220, 53, 69, 0.12); color: #b02a37; }
+.qf-badge-danger .qf-badge-dot { background: #dc3545; }
+.qf-badge-warning { background: rgba(255, 193, 7, 0.15); color: #997404; }
+.qf-badge-warning .qf-badge-dot { background: #ffc107; }
+.qf-badge-secondary { background: rgba(108, 117, 125, 0.12); color: #565e64; }
+.qf-badge-secondary .qf-badge-dot { background: #6c757d; }
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-bs-theme="light"]) .qf-badge-success { background: rgba(25, 135, 84, 0.2); color: #75dda3; }
+  html:not([data-bs-theme="light"]) .qf-badge-danger { background: rgba(220, 53, 69, 0.2); color: #ea868f; }
+  html:not([data-bs-theme="light"]) .qf-badge-warning { background: rgba(255, 193, 7, 0.2); color: #ffda6a; }
+  html:not([data-bs-theme="light"]) .qf-badge-secondary { background: rgba(173, 181, 189, 0.2); color: #ced4da; }
+}
+
+[data-bs-theme="dark"] .qf-badge-success { background: rgba(25, 135, 84, 0.2); color: #75dda3; }
+[data-bs-theme="dark"] .qf-badge-danger { background: rgba(220, 53, 69, 0.2); color: #ea868f; }
+[data-bs-theme="dark"] .qf-badge-warning { background: rgba(255, 193, 7, 0.2); color: #ffda6a; }
+[data-bs-theme="dark"] .qf-badge-secondary { background: rgba(173, 181, 189, 0.2); color: #ced4da; }
+
+/* ---- Condition / action builder ---- */
+
+.qf-cond-group {
+  border: 1px dashed var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  background: var(--bs-tertiary-bg);
+}
+
+.qf-cond-row {
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color-translucent);
+  border-radius: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.qf-sql-preview {
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color-translucent);
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Field reference panel ---- */
+
+.qf-field-row {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+  cursor: pointer;
+}
+
+.qf-field-row:hover {
+  background: var(--bs-tertiary-bg);
+}
+
+.qf-field-key {
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+}
+
+.qf-field-type {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+
+/* ---- Misc ---- */
+
+.qf-muted-mono {
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85em;
+  color: var(--bs-secondary-color);
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+  color: var(--bs-secondary-color);
+  text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+  text-align: start;
+}

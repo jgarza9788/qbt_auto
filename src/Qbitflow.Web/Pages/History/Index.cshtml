@@ -1,0 +1,147 @@
+@page
+@model Qbitflow.Web.Pages.History.IndexModel
+@{
+    ViewData["Title"] = "Run history";
+}
+
+<div class="qf-card mb-3">
+    <div class="qf-card-body">
+        <form method="get" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small mb-1">Rule</label>
+                <select name="RuleId" class="form-select form-select-sm">
+                    <option value="">All rules</option>
+                    @foreach (var rule in Model.AllRules)
+                    {
+                        <option value="@rule.Id" selected="@(Model.RuleId == rule.Id)">@rule.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">Outcome</label>
+                <select name="Outcome" class="form-select form-select-sm">
+                    <option value="">Any</option>
+                    @foreach (var outcome in Enum.GetValues<Qbitflow.Core.Domain.RunOutcome>())
+                    {
+                        <option value="@outcome" selected="@(Model.Outcome == outcome)">@outcome</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">From</label>
+                <input type="date" name="From" class="form-control form-control-sm" value="@(Model.From?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small mb-1">To</label>
+                <input type="date" name="To" class="form-control form-control-sm" value="@(Model.To?.ToString("yyyy-MM-dd"))" />
+            </div>
+            <div class="col-md-3">
+                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                <a asp-page="/History/Index" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="qf-card">
+    <div class="qf-card-body p-0">
+        @if (Model.Runs.Count == 0)
+        {
+            <div class="qf-empty">
+                <div class="qf-empty-icon">&#128203;</div>
+                <p class="mb-0">No runs match these filters.</p>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th></th>
+                        <th>Rule</th>
+                        <th>Started</th>
+                        <th>Duration</th>
+                        <th>Outcome</th>
+                        <th class="text-end">Matched</th>
+                        <th class="text-end">Applied</th>
+                        <th class="text-end">Skipped</th>
+                        <th class="text-end">Failed</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var run in Model.Runs)
+                    {
+                        var detailId = $"details-{run.Id}";
+                        var details = Qbitflow.Web.Pages.History.IndexModel.ParseDetails(run.DetailsJson);
+                        var duration = run.FinishedAt is not null ? (run.FinishedAt.Value - run.StartedAt) : (TimeSpan?)null;
+                        <tr>
+                            <td>
+                                @if (details.Count > 0 || run.ErrorMessage is not null)
+                                {
+                                    <button class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#@detailId">+</button>
+                                }
+                            </td>
+                            <td>@(Model.RuleNamesById.GetValueOrDefault(run.RuleId, "(deleted rule)"))</td>
+                            <td class="text-secondary">@run.StartedAt.LocalDateTime.ToString("g")</td>
+                            <td class="text-secondary">@(duration is not null ? $"{duration.Value.TotalSeconds:0.0}s" : "—")</td>
+                            <td>
+                                <partial name="_StatusBadge" model="run.Outcome" />
+                                @if (run.WasDryRun)
+                                {
+                                    <span class="qf-badge qf-badge-secondary ms-1">dry-run</span>
+                                }
+                            </td>
+                            <td class="text-end">@run.MatchedCount</td>
+                            <td class="text-end">@run.ActionsExecutedCount</td>
+                            <td class="text-end">@run.ActionsSkippedCount</td>
+                            <td class="text-end @(run.ActionsFailedCount > 0 ? "text-danger fw-semibold" : "")">@run.ActionsFailedCount</td>
+                        </tr>
+                        <tr class="collapse" id="@detailId">
+                            <td colspan="9" class="bg-body-tertiary">
+                                @if (run.ErrorMessage is not null)
+                                {
+                                    <div class="alert alert-danger py-2 mb-2">@run.ErrorMessage</div>
+                                }
+                                @if (details.Count > 0)
+                                {
+                                    <table class="table table-sm mb-0">
+                                        <thead><tr><th>Torrent hash</th><th>Action</th><th>Outcome</th><th>Error</th></tr></thead>
+                                        <tbody>
+                                        @foreach (var d in details)
+                                        {
+                                            <tr>
+                                                <td class="qf-muted-mono">@d.TorrentHash</td>
+                                                <td>@d.ActionType</td>
+                                                <td>@d.Outcome</td>
+                                                <td class="text-danger">@d.Error</td>
+                                            </tr>
+                                        }
+                                        </tbody>
+                                    </table>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Model.TotalPages > 1)
+            {
+                <nav class="p-3">
+                    <ul class="pagination pagination-sm mb-0">
+                        @for (var p = 1; p <= Model.TotalPages; p++)
+                        {
+                            <li class="page-item @(p == Model.PageNumber ? "active" : "")">
+                                <a class="page-link" asp-page="/History/Index"
+                                   asp-route-PageNumber="@p" asp-route-RuleId="@Model.RuleId" asp-route-Outcome="@Model.Outcome"
+                                   asp-route-From="@Model.From?.ToString("yyyy-MM-dd")" asp-route-To="@Model.To?.ToString("yyyy-MM-dd")">@p</a>
+                            </li>
+                        }
+                    </ul>
+                </nav>
+            }
+        }
+    </div>
+</div>

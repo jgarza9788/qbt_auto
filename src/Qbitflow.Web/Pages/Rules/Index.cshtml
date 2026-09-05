@@ -1,0 +1,87 @@
+@page
+@model Qbitflow.Web.Pages.Rules.IndexModel
+@{
+    ViewData["Title"] = "Rules";
+}
+
+<div class="qf-card">
+    <div class="qf-card-header">
+        <h2>Rules</h2>
+        <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary">Add rule</a>
+    </div>
+    <div class="qf-card-body p-0">
+        @if (Model.Rules.Count == 0)
+        {
+            <div class="qf-empty">
+                <div class="qf-empty-icon">&#9881;</div>
+                <p class="mb-2">No rules yet. A rule is a schedule, a condition, and one or more actions.</p>
+                <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary">Create your first rule</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Name</th>
+                        <th>Schedule</th>
+                        <th>Last run</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var rule in Model.Rules)
+                    {
+                        <tr>
+                            <td>
+                                <form method="post" asp-page-handler="ToggleEnabled" asp-route-id="@rule.Id">
+                                    <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                                        @if (rule.Enabled)
+                                        {
+                                            <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>on</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="qf-badge qf-badge-secondary"><span class="qf-badge-dot"></span>off</span>
+                                        }
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="text-secondary">@rule.Priority</td>
+                            <td>
+                                <div class="fw-medium">@rule.Name</div>
+                                @if (!string.IsNullOrEmpty(rule.Description))
+                                {
+                                    <div class="small text-secondary">@rule.Description</div>
+                                }
+                                @if (rule.DryRun)
+                                {
+                                    <span class="qf-badge qf-badge-secondary">dry-run</span>
+                                }
+                            </td>
+                            <td class="small">
+                                @Qbitflow.Engine.Scheduling.CronDescriptionService.Describe(rule.CronExpression)
+                                <div class="qf-muted-mono">@rule.CronExpression (@rule.TimeZoneId)</div>
+                            </td>
+                            <td class="text-secondary small">@(rule.LastRunAt is not null ? rule.LastRunAt.Value.LocalDateTime.ToString("g") : "never")</td>
+                            <td class="text-end">
+                                <form method="post" asp-page-handler="RunNow" asp-route-id="@rule.Id" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">Run now</button>
+                                </form>
+                                <a asp-page="/Rules/Edit" asp-route-id="@rule.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <form method="post" asp-page-handler="Delete" asp-route-id="@rule.Id" class="d-inline"
+                                      onsubmit="return confirm('Delete rule &quot;@rule.Name&quot;?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

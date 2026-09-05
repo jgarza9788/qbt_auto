@@ -1,0 +1,78 @@
+@page "{id:int?}"
+@model Qbitflow.Web.Pages.Instances.EditModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Add instance" : "Edit instance";
+}
+
+<div class="qf-card" style="max-width: 640px;">
+    <div class="qf-card-header">
+        <h2>@(Model.IsNew ? "Add instance" : $"Edit instance: {Model.Input.Name}")</h2>
+    </div>
+    <div class="qf-card-body">
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <form method="post">
+            <input type="hidden" asp-for="Input.Id" />
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Input.Name" class="form-label"></label>
+                    <input asp-for="Input.Name" class="form-control" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.SourceType" class="form-label"></label>
+                    <select asp-for="Input.SourceType" class="form-select" asp-items="Html.GetEnumSelectList<Qbitflow.Core.Domain.SourceType>()"></select>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.BaseUrl" class="form-label"></label>
+                    <input asp-for="Input.BaseUrl" class="form-control" placeholder="http://192.168.1.10:8080" />
+                </div>
+
+                <div class="col-md-6">
+                    <label asp-for="Input.Username" class="form-label"></label>
+                    <input asp-for="Input.Username" class="form-control" autocomplete="off" />
+                    <div class="form-text">Used by qBittorrent's username/password login.</div>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.Password" class="form-label"></label>
+                    <input asp-for="Input.Password" type="password" class="form-control" autocomplete="new-password"
+                           placeholder="@(Model.Input.HasExistingPassword ? "Leave blank to keep existing" : "")" />
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.ApiKey" class="form-label"></label>
+                    <input asp-for="Input.ApiKey" type="password" class="form-control" autocomplete="new-password"
+                           placeholder="@(Model.Input.HasExistingApiKey ? "Leave blank to keep existing" : "")" />
+                    <div class="form-text">Used by Plex (X-Plex-Token), Jellyfin, Tautulli, Jellystat, and Jellyglance.</div>
+                </div>
+
+                <div class="col-md-4">
+                    <label asp-for="Input.TimeoutSeconds" class="form-label"></label>
+                    <input asp-for="Input.TimeoutSeconds" type="number" class="form-control" />
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Input.VerifySsl" class="form-check-input" />
+                        <label asp-for="Input.VerifySsl" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Input.Enabled" class="form-check-input" />
+                        <label asp-for="Input.Enabled" class="form-check-label"></label>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label asp-for="Input.ExtraConfigJson" class="form-label"></label>
+                    <textarea asp-for="Input.ExtraConfigJson" class="form-control qf-muted-mono" rows="3" placeholder='{"historyPath": "/api/getHistory"}'></textarea>
+                    <div class="form-text">Advanced, source-specific overrides (e.g. Jellystat/Jellyglance history endpoint shape). Leave blank for defaults.</div>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a asp-page="/Instances/Index" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

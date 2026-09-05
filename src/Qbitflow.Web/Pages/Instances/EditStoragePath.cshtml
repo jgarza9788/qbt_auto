@@ -1,0 +1,45 @@
+@page "{id:int?}"
+@model Qbitflow.Web.Pages.Instances.EditStoragePathModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Add storage path" : "Edit storage path";
+}
+
+<div class="qf-card" style="max-width: 560px;">
+    <div class="qf-card-header">
+        <h2>@(Model.IsNew ? "Add storage path" : $"Edit storage path: {Model.Input.Name}")</h2>
+    </div>
+    <div class="qf-card-body">
+        <div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+        <form method="post">
+            <input type="hidden" asp-for="Input.Id" />
+
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label asp-for="Input.Name" class="form-label"></label>
+                    <input asp-for="Input.Name" class="form-control" placeholder="downloads" />
+                    <div class="form-text">Referenced in rules as <code>storage.@("{name}")​.used_percent</code>, etc.</div>
+                </div>
+                <div class="col-md-7">
+                    <label asp-for="Input.Path" class="form-label"></label>
+                    <input asp-for="Input.Path" class="form-control qf-muted-mono" placeholder="/downloads" />
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Input.FolderSizeScanIntervalMinutes" class="form-label"></label>
+                    <input asp-for="Input.FolderSizeScanIntervalMinutes" type="number" class="form-control" />
+                </div>
+                <div class="col-md-6 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Input.Enabled" class="form-check-input" />
+                        <label asp-for="Input.Enabled" class="form-check-label"></label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Save</button>
+                <a asp-page="/Instances/Index" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>

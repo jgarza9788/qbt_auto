@@ -1,0 +1,13 @@
+@model Qbitflow.Core.Domain.SourceData.ConnectionTestResult
+@if (Model.Success)
+{
+    <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>Connected (@Model.Duration.TotalMilliseconds.ToString("0")ms)</span>
+}
+else
+{
+    <span class="qf-badge qf-badge-danger"><span class="qf-badge-dot"></span>Failed</span>
+}
+@if (!string.IsNullOrEmpty(Model.Message))
+{
+    <div class="small text-secondary mt-1">@Model.Message</div>
+}

@@ -1,0 +1,174 @@
+@page
+@model Qbitflow.Web.Pages.Settings.IndexModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="qf-card mb-4">
+            <div class="qf-card-header">
+                <h2>General</h2>
+            </div>
+            <div class="qf-card-body">
+                @if (Model.SettingsSaved)
+                {
+                    <div class="alert alert-success py-2">Settings saved.</div>
+                }
+                <form method="post" asp-page-handler="SaveSettings">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label asp-for="Input.ParallelismLevel" class="form-label"></label>
+                            <select asp-for="Input.ParallelismLevel" class="form-select" asp-items="Html.GetEnumSelectList<Qbitflow.Core.Domain.ParallelismLevel>()"></select>
+                            <div class="form-text">Low=2, Medium=4, High=8, Very High=16 concurrent requests per host.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.TimeZoneId" class="form-label"></label>
+                            <input asp-for="Input.TimeZoneId" class="form-control" placeholder="UTC" />
+                            <div class="form-text">Default timezone for new rules, e.g. UTC or America/New_York.</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.Theme" class="form-label"></label>
+                            <select asp-for="Input.Theme" class="form-select">
+                                <option value="system">Match system</option>
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label asp-for="Input.LogLevel" class="form-label"></label>
+                            <select asp-for="Input.LogLevel" class="form-select">
+                                <option>Trace</option>
+                                <option>Debug</option>
+                                <option>Information</option>
+                                <option>Warning</option>
+                                <option>Error</option>
+                                <option>Critical</option>
+                            </select>
+                            <div class="form-text">Takes effect after the container/app restarts.</div>
+                        </div>
+                        <div class="col-12">
+                            <hr />
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input asp-for="Input.GlobalDryRun" class="form-check-input" role="switch" />
+                                <label asp-for="Input.GlobalDryRun" class="form-check-label"></label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input asp-for="Input.GlobalKillSwitch" class="form-check-input role" role="switch" />
+                                <label asp-for="Input.GlobalKillSwitch" class="form-check-label text-danger"></label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary">Save settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="qf-card">
+            <div class="qf-card-header">
+                <h2>Path mappings</h2>
+                <a asp-page="/Settings/EditPathMapping" class="btn btn-sm btn-primary">Add mapping</a>
+            </div>
+            <div class="qf-card-body p-0">
+                @if (Model.PathMappingRules.Count == 0)
+                {
+                    <div class="qf-empty">
+                        <p class="mb-0">No path mappings configured. Only needed if your qBittorrent and media-server containers mount the same files at different paths.</p>
+                    </div>
+                }
+                else
+                {
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                        <tr><th>Status</th><th>Source prefix</th><th></th><th>Canonical prefix</th><th class="text-end">Actions</th></tr>
+                        </thead>
+                        <tbody>
+                        @foreach (var rule in Model.PathMappingRules)
+                        {
+                            <tr>
+                                <td>
+                                    <form method="post" asp-page-handler="TogglePathMapping" asp-route-id="@rule.Id">
+                                        <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                                            @if (rule.Enabled)
+                                            {
+                                                <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>on</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="qf-badge qf-badge-secondary"><span class="qf-badge-dot"></span>off</span>
+                                            }
+                                        </button>
+                                    </form>
+                                </td>
+                                <td class="qf-muted-mono">@rule.SourcePrefix</td>
+                                <td class="text-secondary">&rarr;</td>
+                                <td class="qf-muted-mono">@rule.CanonicalPrefix</td>
+                                <td class="text-end">
+                                    <a asp-page="/Settings/EditPathMapping" asp-route-id="@rule.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                    <form method="post" asp-page-handler="DeletePathMapping" asp-route-id="@rule.Id" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="qf-card">
+            <div class="qf-card-header">
+                <h2>Config import / export</h2>
+            </div>
+            <div class="qf-card-body">
+                @if (Model.ImportError is not null)
+                {
+                    <div class="alert alert-danger py-2">@Model.ImportError</div>
+                }
+                @if (Model.ImportSuccess is not null)
+                {
+                    <div class="alert alert-success py-2">@Model.ImportSuccess</div>
+                }
+
+                <h3 class="h6">Export</h3>
+                <p class="text-secondary small">Instance credentials are never included in an export.</p>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <a class="btn btn-sm btn-outline-secondary" asp-page-handler="ExportConfig" asp-route-format="Json">Config (JSON)</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-page-handler="ExportConfig" asp-route-format="Yaml">Config (YAML)</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-page-handler="ExportRules" asp-route-format="Json">Rules (JSON)</a>
+                    <a class="btn btn-sm btn-outline-secondary" asp-page-handler="ExportRules" asp-route-format="Yaml">Rules (YAML)</a>
+                </div>
+
+                <h3 class="h6">Import</h3>
+                <form method="post" asp-page-handler="ImportConfig" enctype="multipart/form-data">
+                    <div class="mb-2">
+                        <select name="importKind" class="form-select form-select-sm">
+                            <option value="config">Config (instances + settings)</option>
+                            <option value="rules">Rules</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <select name="importFormat" class="form-select form-select-sm">
+                            <option value="Json">JSON</option>
+                            <option value="Yaml">YAML</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <input type="file" name="importFile" class="form-control form-control-sm" accept=".json,.yaml,.yml" />
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Import</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

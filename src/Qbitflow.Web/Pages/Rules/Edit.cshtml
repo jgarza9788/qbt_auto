@@ -1,0 +1,405 @@
+@page "{id:int?}"
+@model Qbitflow.Web.Pages.Rules.EditModel
+@{
+    ViewData["Title"] = Model.IsNew ? "Add rule" : "Edit rule";
+}
+
+<div id="qf-rule-editor-data"
+     data-field-registry="@Model.FieldRegistryJson"
+     data-storage-paths="@Model.StoragePathNamesJson"
+     hidden></div>
+<script>
+    (function () {
+        var el = document.getElementById('qf-rule-editor-data');
+        window.qfFieldRegistry = JSON.parse(el.dataset.fieldRegistry);
+        window.qfStoragePathNames = JSON.parse(el.dataset.storagePaths);
+        window.qfUdfHelpers = [
+        @foreach (var h in Model.UdfHelpers)
+        {
+            @: { signature: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(h.Signature)), description: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(h.Description)) },
+        }
+        ];
+    })();
+</script>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h4 mb-0">@(Model.IsNew ? "Add rule" : $"Edit rule: {Model.Input.Name}")</h1>
+    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#fieldRefPanel">
+        Field reference
+    </button>
+</div>
+
+<div asp-validation-summary="All" class="text-danger mb-3"></div>
+
+<form method="post">
+    <input type="hidden" asp-for="Input.Id" />
+
+    <div class="qf-card mb-3">
+        <div class="qf-card-header"><h2>Basics</h2></div>
+        <div class="qf-card-body">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label asp-for="Input.Name" class="form-label"></label>
+                    <input asp-for="Input.Name" class="form-control" />
+                </div>
+                <div class="col-md-2">
+                    <label asp-for="Input.Priority" class="form-label"></label>
+                    <input asp-for="Input.Priority" type="number" class="form-control" />
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Input.Enabled" class="form-check-input" />
+                        <label asp-for="Input.Enabled" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check">
+                        <input asp-for="Input.DryRun" class="form-check-input" />
+                        <label asp-for="Input.DryRun" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Input.Description" class="form-label"></label>
+                    <input asp-for="Input.Description" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input asp-for="Input.StopOnMatch" class="form-check-input" />
+                        <label asp-for="Input.StopOnMatch" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label class="form-label">Target qBittorrent instances</label>
+                    @if (Model.QbtInstances.Count == 0)
+                    {
+                        <div class="text-secondary small">No qBittorrent instances configured yet. <a asp-page="/Instances/Edit">Add one</a>.</div>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-3">
+                            @foreach (var instance in Model.QbtInstances)
+                            {
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="Input.TargetInstanceIds" value="@instance.Id"
+                                           id="target-@instance.Id" checked="@Model.Input.TargetInstanceIds.Contains(instance.Id)" />
+                                    <label class="form-check-label" for="target-@instance.Id">@instance.Name</label>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="qf-card mb-3">
+        <div class="qf-card-header"><h2>Schedule</h2></div>
+        <div class="qf-card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label asp-for="Input.CronExpression" class="form-label"></label>
+                    <input asp-for="Input.CronExpression" id="cronExpressionInput" class="form-control qf-muted-mono" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Common schedules</label>
+                    <select class="form-select" onchange="if(this.value){document.getElementById('cronExpressionInput').value=this.value;}">
+                        <option value="">Choose one…</option>
+                        @foreach (var preset in Qbitflow.Engine.Scheduling.CommonSchedulePresets.Presets)
+                        {
+                            <option value="@preset.CronExpression">@preset.Label</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label asp-for="Input.TimeZoneId" class="form-label"></label>
+                    <input asp-for="Input.TimeZoneId" class="form-control" placeholder="UTC" />
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-outline-primary w-100"
+                            hx-post="?handler=PreviewSchedule" hx-target="#schedule-preview" hx-swap="innerHTML">
+                        Preview
+                    </button>
+                </div>
+            </div>
+            <div class="form-text mb-2">Minimum interval is 5 minutes; faster schedules are rejected with an explanation.</div>
+            <pre id="schedule-preview" class="qf-sql-preview mb-0" style="display:@(string.IsNullOrEmpty(Model.Input.CronExpression) ? "none" : "block")"></pre>
+        </div>
+    </div>
+
+    <div class="qf-card mb-3">
+        <div class="qf-card-header">
+            <h2>Condition</h2>
+            <div class="form-check form-switch">
+                <input asp-for="Input.UseAdvancedSql" class="form-check-input" id="useAdvancedSqlToggle"
+                       onchange="document.getElementById('visualBuilder').style.display = this.checked ? 'none' : 'block'; document.getElementById('advancedSqlBuilder').style.display = this.checked ? 'block' : 'none';" />
+                <label asp-for="Input.UseAdvancedSql" class="form-check-label">Advanced SQL mode</label>
+            </div>
+        </div>
+        <div class="qf-card-body">
+            <div id="visualBuilder" style="display:@(Model.Input.UseAdvancedSql ? "none" : "block")">
+                <div id="qf-condition-builder-root" data-initial="@Model.Input.ConditionTreeJson"
+                     x-data="conditionBuilder($el.dataset.initial, qfFieldRegistry, qfStoragePathNames)">
+                    <input type="hidden" name="Input.ConditionTreeJson" :value="serialize()" />
+
+                    <div class="qf-cond-group">
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="small text-secondary">Match</span>
+                            <select x-model="root.Operator" class="form-select form-select-sm w-auto">
+                                <option value="And">ALL of</option>
+                                <option value="Or">ANY of</option>
+                            </select>
+                            <span class="small text-secondary">the following:</span>
+                        </div>
+
+                        <template x-for="(row, idx) in root.Children" :key="idx">
+                            <div>
+                                <template x-if="row.kind === 'comparison'">
+                                    <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
+                                        <select class="form-select form-select-sm w-auto" x-model="row.Field" @@change="onFieldChange(row, fieldsFor('torrents'))">
+                                            <template x-for="f in fieldsFor('torrents')" :key="f.key">
+                                                <option :value="f.key" x-text="f.key"></option>
+                                            </template>
+                                        </select>
+                                        <select class="form-select form-select-sm w-auto" x-model="row.Operator">
+                                            <template x-for="op in operatorsFor(row._valueType)" :key="op">
+                                                <option :value="op" x-text="operatorLabel(op)"></option>
+                                            </template>
+                                        </select>
+                                        <template x-if="row.Operator === 'In' || row.Operator === 'NotIn'">
+                                            <input class="form-control form-control-sm" style="min-width:180px" placeholder="comma, separated, values" x-model="row._rawListValue" />
+                                        </template>
+                                        <template x-if="row.Operator !== 'In' && row.Operator !== 'NotIn' && row.Operator !== 'IsNull' && row.Operator !== 'IsNotNull'">
+                                            <input class="form-control form-control-sm w-auto" x-model="row._rawValue" />
+                                        </template>
+                                        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(root.Children, row)">&times;</button>
+                                    </div>
+                                </template>
+
+                                <template x-if="row.kind === 'exists'">
+                                    <div class="qf-cond-row">
+                                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Negate">
+                                                <option :value="true">There is NO</option>
+                                                <option :value="false">There IS</option>
+                                            </select>
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Relation" @@change="row.Condition = { kind: 'comparison', Field: fieldsFor(row.Relation)[0].key, Operator: 'Eq', Value: '', _valueType: fieldsFor(row.Relation)[0].valueType, _rawValue: '', _rawListValue: '' }">
+                                                <option value="watch_history">watch history</option>
+                                                <option value="media_items">media item</option>
+                                                <option value="play_counts">play-count record</option>
+                                            </select>
+                                            <span class="small text-secondary">matching:</span>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(root.Children, row)">&times;</button>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Field" @@change="onFieldChange(row.Condition, fieldsFor(row.Relation))">
+                                                <template x-for="f in fieldsFor(row.Relation)" :key="f.key">
+                                                    <option :value="f.key" x-text="f.key"></option>
+                                                </template>
+                                            </select>
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Operator">
+                                                <template x-for="op in operatorsFor(row.Condition._valueType)" :key="op">
+                                                    <option :value="op" x-text="operatorLabel(op)"></option>
+                                                </template>
+                                            </select>
+                                            <input class="form-control form-control-sm w-auto" x-show="row.Condition.Operator !== 'IsNull' && row.Condition.Operator !== 'IsNotNull'" x-model="row.Condition._rawValue" />
+                                        </div>
+                                    </div>
+                                </template>
+
+                                <template x-if="row.kind === 'group'">
+                                    <div class="qf-cond-group">
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <span class="small text-secondary">Match</span>
+                                            <select x-model="row.Operator" class="form-select form-select-sm w-auto">
+                                                <option value="And">ALL of</option>
+                                                <option value="Or">ANY of</option>
+                                            </select>
+                                            <span class="small text-secondary">(nested group):</span>
+                                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(root.Children, row)">Remove group &times;</button>
+                                        </div>
+
+                                        <template x-for="(subRow, subIdx) in row.Children" :key="subIdx">
+                                            <div>
+                                                <template x-if="subRow.kind === 'comparison'">
+                                                    <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Field" @@change="onFieldChange(subRow, fieldsFor('torrents'))">
+                                                            <template x-for="f in fieldsFor('torrents')" :key="f.key">
+                                                                <option :value="f.key" x-text="f.key"></option>
+                                                            </template>
+                                                        </select>
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Operator">
+                                                            <template x-for="op in operatorsFor(subRow._valueType)" :key="op">
+                                                                <option :value="op" x-text="operatorLabel(op)"></option>
+                                                            </template>
+                                                        </select>
+                                                        <template x-if="subRow.Operator === 'In' || subRow.Operator === 'NotIn'">
+                                                            <input class="form-control form-control-sm" style="min-width:180px" placeholder="comma, separated, values" x-model="subRow._rawListValue" />
+                                                        </template>
+                                                        <template x-if="subRow.Operator !== 'In' && subRow.Operator !== 'NotIn' && subRow.Operator !== 'IsNull' && subRow.Operator !== 'IsNotNull'">
+                                                            <input class="form-control form-control-sm w-auto" x-model="subRow._rawValue" />
+                                                        </template>
+                                                        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(row.Children, subRow)">&times;</button>
+                                                    </div>
+                                                </template>
+                                                <template x-if="subRow.kind === 'exists'">
+                                                    <div class="qf-cond-row">
+                                                        <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Negate">
+                                                                <option :value="true">There is NO</option>
+                                                                <option :value="false">There IS</option>
+                                                            </select>
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Relation">
+                                                                <option value="watch_history">watch history</option>
+                                                                <option value="media_items">media item</option>
+                                                                <option value="play_counts">play-count record</option>
+                                                            </select>
+                                                            <span class="small text-secondary">matching:</span>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(row.Children, subRow)">&times;</button>
+                                                        </div>
+                                                        <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Field" @@change="onFieldChange(subRow.Condition, fieldsFor(subRow.Relation))">
+                                                                <template x-for="f in fieldsFor(subRow.Relation)" :key="f.key">
+                                                                    <option :value="f.key" x-text="f.key"></option>
+                                                                </template>
+                                                            </select>
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Operator">
+                                                                <template x-for="op in operatorsFor(subRow.Condition._valueType)" :key="op">
+                                                                    <option :value="op" x-text="operatorLabel(op)"></option>
+                                                                </template>
+                                                            </select>
+                                                            <input class="form-control form-control-sm w-auto" x-show="subRow.Condition.Operator !== 'IsNull' && subRow.Condition.Operator !== 'IsNotNull'" x-model="subRow.Condition._rawValue" />
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </template>
+
+                                        <div class="d-flex gap-2 mt-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @@click="addSubComparison(row)">+ Condition</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @@click="addSubExists(row)">+ Watch-history check</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+
+                        <div class="d-flex gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @@click="addComparison()">+ Condition</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @@click="addExists()">+ Watch-history check</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" @@click="addGroup()">+ Group (nested AND/OR)</button>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" hx-post="?handler=PreviewCondition" hx-target="#condition-sql-preview" hx-swap="innerHTML">Preview SQL</button>
+                    </div>
+                    <pre id="condition-sql-preview" class="qf-sql-preview mt-2" style="display:none"></pre>
+                </div>
+            </div>
+
+            <div id="advancedSqlBuilder" style="display:@(Model.Input.UseAdvancedSql ? "block" : "none")">
+                <label asp-for="Input.AdvancedSqlWhere" class="form-label"></label>
+                <textarea asp-for="Input.AdvancedSqlWhere" class="form-control qf-muted-mono" rows="4"
+                          placeholder="category = 'linux' AND size_gb(size_bytes) > 5"></textarea>
+                <div class="form-text">A boolean WHERE-clause expression against the documented schema (see field reference). Runs read-only, single-statement only.</div>
+                <button type="button" class="btn btn-sm btn-outline-primary mt-2"
+                        hx-post="?handler=ValidateAdvancedSql" hx-target="#advanced-sql-preview" hx-swap="innerHTML">
+                    Validate
+                </button>
+                <pre id="advanced-sql-preview" class="qf-sql-preview mt-2" style="display:none"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="qf-card mb-3">
+        <div class="qf-card-header"><h2>Actions</h2></div>
+        <div class="qf-card-body">
+            <div id="qf-action-builder-root" data-initial="@Model.Input.ActionsJson" x-data="actionBuilder($el.dataset.initial)">
+                <input type="hidden" name="Input.ActionsJson" :value="serialize()" />
+
+                <template x-for="(action, idx) in actions" :key="idx">
+                    <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
+                        <select class="form-select form-select-sm w-auto" x-model="action.type">
+                            <option value="add_tags">Add tag(s)</option>
+                            <option value="remove_tags">Remove tag(s)</option>
+                            <option value="set_category">Set category</option>
+                            <option value="move">Move</option>
+                            <option value="set_upload_limit">Set upload limit</option>
+                            <option value="set_download_limit">Set download limit</option>
+                        </select>
+
+                        <template x-if="action.type === 'add_tags' || action.type === 'remove_tags'">
+                            <input class="form-control form-control-sm" placeholder="tag1, tag2" x-model="action._tags" />
+                        </template>
+                        <template x-if="action.type === 'set_category'">
+                            <input class="form-control form-control-sm w-auto" placeholder="category" x-model="action.Category" />
+                        </template>
+                        <template x-if="action.type === 'move'">
+                            <span class="d-flex flex-wrap gap-2 align-items-center">
+                                <input class="form-control form-control-sm" placeholder="/media/cold-storage" x-model="action.DestinationPath" />
+                                <label class="form-check form-check-inline small mb-0">
+                                    <input type="checkbox" class="form-check-input" x-model="action.WaitForCompletion" /> wait for completion
+                                </label>
+                            </span>
+                        </template>
+                        <template x-if="action.type === 'set_upload_limit' || action.type === 'set_download_limit'">
+                            <input type="number" class="form-control form-control-sm w-auto" placeholder="bytes/sec, 0=unlimited" x-model="action.LimitBytesPerSec" />
+                        </template>
+
+                        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeAction(idx)">&times;</button>
+                    </div>
+                </template>
+
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" @@click="addAction('add_tags')">+ Action</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 mb-5">
+        <button type="submit" formaction="?handler=Save" class="btn btn-primary">Save rule</button>
+        <a asp-page="/Rules/Index" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="fieldRefPanel" style="width: 440px;"
+     x-data="fieldReferencePanel(qfFieldRegistry, qfStoragePathNames, qfUdfHelpers)">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title">Field reference</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0 d-flex flex-column">
+        <div class="p-3 border-bottom">
+            <input type="search" class="form-control form-control-sm mb-2" placeholder="Search fields…" x-model="search" />
+            <select class="form-select form-select-sm" x-model="relationFilter">
+                <option value="">All sources</option>
+                <option value="torrents">Torrents</option>
+                <option value="watch_history">Watch history</option>
+                <option value="media_items">Media items</option>
+                <option value="play_counts">Play counts</option>
+                <option value="storage">Storage</option>
+            </select>
+        </div>
+        <div style="overflow-y: auto; flex: 1;">
+            <template x-for="row in filteredRows" :key="row.relation + '.' + row.key">
+                <div class="qf-field-row" @@click="copy(row.key)" title="Click to copy">
+                    <div class="qf-field-key" x-text="row.key"></div>
+                    <div class="qf-field-type" x-text="row.valueType + ' · ' + row.relation"></div>
+                    <div class="small text-secondary" x-text="row.description"></div>
+                </div>
+            </template>
+        </div>
+        <div class="p-3 border-top">
+            <h6 class="small text-uppercase text-secondary">Helper functions</h6>
+            <template x-for="h in udfHelpers" :key="h.signature">
+                <div class="mb-2">
+                    <div class="qf-field-key" x-text="h.signature"></div>
+                    <div class="small text-secondary" x-text="h.description"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/js/rule-editor.js" asp-append-version="true"></script>
+}

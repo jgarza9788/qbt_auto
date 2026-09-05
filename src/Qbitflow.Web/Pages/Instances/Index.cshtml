@@ -1,0 +1,141 @@
+@page
+@model Qbitflow.Web.Pages.Instances.IndexModel
+@{
+    ViewData["Title"] = "Instances";
+}
+
+<div class="qf-card mb-4">
+    <div class="qf-card-header">
+        <h2>Data source instances</h2>
+        <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary">Add instance</a>
+    </div>
+    <div class="qf-card-body p-0">
+        @if (Model.Instances.Count == 0)
+        {
+            <div class="qf-empty">
+                <div class="qf-empty-icon">&#128268;</div>
+                <p class="mb-2">No instances configured. qbitflow needs at least one qBittorrent instance to do anything.</p>
+                <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary">Add your first instance</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Name</th>
+                        <th>Type</th>
+                        <th>Base URL</th>
+                        <th>Connection</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var instance in Model.Instances)
+                    {
+                        <tr>
+                            <td>
+                                <form method="post" asp-page-handler="ToggleEnabled" asp-route-id="@instance.Id">
+                                    <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent" title="@(instance.Enabled ? "Enabled - click to disable" : "Disabled - click to enable")">
+                                        @if (instance.Enabled)
+                                        {
+                                            <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>on</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="qf-badge qf-badge-secondary"><span class="qf-badge-dot"></span>off</span>
+                                        }
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="fw-medium">@instance.Name</td>
+                            <td class="text-secondary">@instance.SourceType</td>
+                            <td class="qf-muted-mono">@instance.BaseUrl</td>
+                            <td>
+                                <form method="post" asp-page-handler="TestConnection" asp-route-id="@instance.Id"
+                                      hx-post="?handler=TestConnection&id=@instance.Id" hx-target="#test-result-@instance.Id" hx-swap="innerHTML">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Test</button>
+                                </form>
+                                <div id="test-result-@instance.Id" class="mt-1"></div>
+                            </td>
+                            <td class="text-end">
+                                <a asp-page="/Instances/Edit" asp-route-id="@instance.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <form method="post" asp-page-handler="DeleteInstance" asp-route-id="@instance.Id" class="d-inline"
+                                      onsubmit="return confirm('Delete instance &quot;@instance.Name&quot;? Rules targeting it will stop matching anything on it.');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="qf-card">
+    <div class="qf-card-header">
+        <h2>Storage paths</h2>
+        <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary">Add storage path</a>
+    </div>
+    <div class="qf-card-body p-0">
+        @if (Model.StoragePaths.Count == 0)
+        {
+            <div class="qf-empty">
+                <div class="qf-empty-icon">&#128193;</div>
+                <p class="mb-2">No storage paths monitored yet. Add one to use <code>storage.&lt;name&gt;.*</code> fields in rules.</p>
+                <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary">Add a storage path</a>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Name</th>
+                        <th>Path</th>
+                        <th>Folder scan interval</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var path in Model.StoragePaths)
+                    {
+                        <tr>
+                            <td>
+                                <form method="post" asp-page-handler="ToggleStoragePath" asp-route-id="@path.Id">
+                                    <button type="submit" class="btn btn-sm p-0 border-0 bg-transparent">
+                                        @if (path.Enabled)
+                                        {
+                                            <span class="qf-badge qf-badge-success"><span class="qf-badge-dot"></span>on</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="qf-badge qf-badge-secondary"><span class="qf-badge-dot"></span>off</span>
+                                        }
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="fw-medium">@path.Name</td>
+                            <td class="qf-muted-mono">@path.Path</td>
+                            <td class="text-secondary">every @path.FolderSizeScanIntervalMinutes min</td>
+                            <td class="text-end">
+                                <a asp-page="/Instances/EditStoragePath" asp-route-id="@path.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <form method="post" asp-page-handler="DeleteStoragePath" asp-route-id="@path.Id" class="d-inline"
+                                      onsubmit="return confirm('Delete storage path &quot;@path.Name&quot;?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

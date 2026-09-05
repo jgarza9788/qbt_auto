@@ -1,0 +1,42 @@
+@page
+@model Qbitflow.Web.Pages.SetupModel
+@{
+    ViewData["Title"] = "Setup";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Setup - qbitflow</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+</head>
+<body>
+    <div class="container" style="max-width: 420px; margin-top: 4rem;">
+        <h1 class="h3 mb-3">Welcome to qbitflow</h1>
+        <p class="text-muted">Create the admin account to get started.</p>
+
+        <div asp-validation-summary="All" class="text-danger"></div>
+
+        <form method="post">
+            <div class="mb-3">
+                <label asp-for="Input.Username" class="form-label"></label>
+                <input asp-for="Input.Username" class="form-control" autofocus autocomplete="username" />
+                <span asp-validation-for="Input.Username" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.Password" class="form-label"></label>
+                <input asp-for="Input.Password" type="password" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="Input.Password" class="text-danger"></span>
+            </div>
+            <div class="mb-3">
+                <label asp-for="Input.ConfirmPassword" class="form-label"></label>
+                <input asp-for="Input.ConfirmPassword" type="password" class="form-control" autocomplete="new-password" />
+                <span asp-validation-for="Input.ConfirmPassword" class="text-danger"></span>
+            </div>
+            <button type="submit" class="btn btn-primary w-100">Create admin account</button>
+        </form>
+    </div>
+</body>
+</html>
