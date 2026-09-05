@@ -3,7 +3,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging.Console;
+using NLog;
+using NLog.Extensions.Logging;
 using Qbitflow.Core.Interfaces;
 using Qbitflow.Engine;
 using Qbitflow.Engine.Actions;
@@ -16,6 +17,7 @@ using Qbitflow.Infrastructure.Persistence;
 using Qbitflow.Infrastructure.Security;
 using Qbitflow.Infrastructure.Settings;
 using Qbitflow.Sources;
+using Qbitflow.Web.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,17 +27,26 @@ var dataDir = Environment.GetEnvironmentVariable("QBITFLOW_DATA_DIR")
     ?? Path.Combine(builder.Environment.ContentRootPath, "data");
 Directory.CreateDirectory(dataDir);
 
+// Logs get their own directory / volume (see docker-compose.yml, Dockerfile).
+var logDir = Environment.GetEnvironmentVariable("QBITFLOW_LOG_DIR")
+    ?? Path.Combine(builder.Environment.ContentRootPath, "log");
+
 var dbPath = Path.Combine(dataDir, "qbitflow.db");
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
-// Structured (JSON) logging to stdout/stderr, so `docker logs` yields parseable lines.
-// The minimum level is whatever was last saved on the Settings page; since that's a DB
-// value (not an IConfiguration source), it can't hot-reload -- it takes effect on the
-// next restart, which is read here directly (before the DI container / DbContext exist).
+// NLog: a rolling daily file under logDir (7-day retention) plus JSON lines on stdout so
+// `docker compose logs` stays parseable. The minimum level is whatever was last saved on the
+// Settings page (a DB value, read here directly before the DI container exists) and can also
+// be overridden with QBITFLOW_LOG_LEVEL; the Settings page re-applies it live via
+// NLogSetup.ApplyMinLevel, so a level change no longer needs a restart.
+var logLevelName = Environment.GetEnvironmentVariable("QBITFLOW_LOG_LEVEL")
+    ?? ReadPersistedLogLevelName(dbPath);
+var includeFileLog = !builder.Environment.IsEnvironment("Testing");
+LogManager.Configuration = NLogSetup.Build(logDir, NLogSetup.MapLevel(logLevelName), includeFileLog);
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options => options.FormatterName = ConsoleFormatterNames.Json);
-builder.Logging.SetMinimumLevel(ReadPersistedLogLevel(dbPath));
+builder.Logging.SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace);
+builder.Logging.AddNLog();
 
 builder.Services.AddDataProtection()
     .SetApplicationName("qbitflow")
@@ -139,11 +150,14 @@ app.MapRazorPages()
 
 app.Run();
 
-static LogLevel ReadPersistedLogLevel(string dbPath)
+// Reads AppSettings.LogLevel straight from SQLite before the DI container / DbContext exist.
+// Returns the raw Microsoft-style name ("Information", "Debug", ...); NLogSetup.MapLevel turns
+// it into an NLog level.
+static string ReadPersistedLogLevelName(string dbPath)
 {
     if (!File.Exists(dbPath))
     {
-        return LogLevel.Information;
+        return "Information";
     }
 
     try
@@ -152,20 +166,11 @@ static LogLevel ReadPersistedLogLevel(string dbPath)
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT LogLevel FROM AppSettings WHERE Id = 1";
-        return (command.ExecuteScalar() as string) switch
-        {
-            "Trace" => LogLevel.Trace,
-            "Debug" => LogLevel.Debug,
-            "Information" => LogLevel.Information,
-            "Warning" => LogLevel.Warning,
-            "Error" => LogLevel.Error,
-            "Critical" => LogLevel.Critical,
-            _ => LogLevel.Information
-        };
+        return command.ExecuteScalar() as string ?? "Information";
     }
     catch
     {
         // First run before migrations, or an unreadable file -- fall back to a sane default.
-        return LogLevel.Information;
+        return "Information";
     }
 }

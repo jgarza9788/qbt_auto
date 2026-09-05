@@ -7,10 +7,11 @@
 set -e
 
 DATA_DIR="${QBITFLOW_DATA_DIR:-/data}"
-mkdir -p "$DATA_DIR"
+LOG_DIR="${QBITFLOW_LOG_DIR:-/log}"
+mkdir -p "$DATA_DIR" "$LOG_DIR"
 
 if [ "$(id -u)" = "0" ]; then
-    chown -R app:app "$DATA_DIR"
+    chown -R app:app "$DATA_DIR" "$LOG_DIR"
     exec gosu app "$@"
 fi
 

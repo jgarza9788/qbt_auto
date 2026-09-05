@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Qbitflow.Core.Domain;
 using Qbitflow.Infrastructure.Config;
 using Qbitflow.Infrastructure.Persistence;
+using Qbitflow.Web.Logging;
 
 namespace Qbitflow.Web.Pages.Settings;
 
@@ -55,6 +56,9 @@ public class IndexModel(AppDbContext db, IConfigPortabilityService configService
         settings.LogLevel = Input.LogLevel;
         settings.TimeZoneId = Input.TimeZoneId;
         await db.SaveChangesAsync(ct);
+
+        // Apply the new log level to the running NLog config immediately (no restart).
+        NLogSetup.ApplyMinLevel(NLogSetup.MapLevel(settings.LogLevel));
 
         SettingsSaved = true;
         await LoadAsync(ct);

@@ -104,7 +104,61 @@ public class QbtAdapterTests
             VerifySsl = true
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => adapter.FetchAsync(connection));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => adapter.FetchAsync(connection));
+        Assert.Contains("Fails.", ex.Message);
+        Assert.Contains("Tools", ex.Message); // the "check its Tools -> Log" ban hint
+    }
+
+    [Fact]
+    public async Task LoginAsync_Throws_WithHttpStatus_WhenAuthEndpointReturnsForbidden()
+    {
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            Assert.Equal("/api/v2/auth/login", req.RequestUri!.AbsolutePath);
+            return new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("Ban expired in 3540 seconds") };
+        });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        var connection = new SourceConnectionInfo
+        {
+            InstanceId = 1,
+            InstanceName = "Main",
+            SourceType = SourceType.Qbittorrent,
+            BaseUrl = "http://localhost:8080",
+            Username = "admin",
+            Password = "pw",
+            TimeoutSeconds = 5,
+            VerifySsl = true
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => adapter.FetchAsync(connection));
+        Assert.Contains("HTTP 403", ex.Message);
+        Assert.Contains("Ban expired", ex.Message);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_ReturnsFailureWithStatus_WhenAuthForbidden()
+    {
+        var handler = new FakeHttpMessageHandler(_ =>
+            new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("forbidden") });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        var connection = new SourceConnectionInfo
+        {
+            InstanceId = 1,
+            InstanceName = "Main",
+            SourceType = SourceType.Qbittorrent,
+            BaseUrl = "http://localhost:8080",
+            Username = "admin",
+            Password = "pw",
+            TimeoutSeconds = 5,
+            VerifySsl = true
+        };
+
+        var result = await adapter.TestConnectionAsync(connection);
+
+        Assert.False(result.Success);
+        Assert.Contains("HTTP 403", result.Message);
     }
 
     [Fact]

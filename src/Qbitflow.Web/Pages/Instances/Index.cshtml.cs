@@ -9,7 +9,11 @@ using Qbitflow.Sources.Adapters;
 
 namespace Qbitflow.Web.Pages.Instances;
 
-public class IndexModel(AppDbContext db, ISecretProtector secretProtector, ISourceAdapterResolver adapterResolver) : PageModel
+public class IndexModel(
+    AppDbContext db,
+    ISecretProtector secretProtector,
+    ISourceAdapterResolver adapterResolver,
+    ILogger<IndexModel> logger) : PageModel
 {
     public List<Instance> Instances { get; private set; } = [];
     public List<StoragePathConfig> StoragePaths { get; private set; } = [];
@@ -42,8 +46,23 @@ public class IndexModel(AppDbContext db, ISecretProtector secretProtector, ISour
             ExtraConfigJson = instance.ExtraConfigJson
         };
 
+        logger.LogInformation(
+            "Connection test requested for instance {InstanceId} '{InstanceName}' ({SourceType})",
+            instance.Id, instance.Name, instance.SourceType);
+
         var adapter = adapterResolver.Resolve(instance.SourceType);
         var result = await adapter.TestConnectionAsync(connection, ct);
+
+        if (result.Success)
+        {
+            logger.LogInformation(
+                "Connection test OK for '{InstanceName}': {Message}", instance.Name, result.Message);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Connection test FAILED for '{InstanceName}': {Message}", instance.Name, result.Message);
+        }
 
         return Partial("_ConnectionTestResult", result);
     }

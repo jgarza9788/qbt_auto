@@ -26,11 +26,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
-# /data holds the SQLite DB and the data-protection key ring; chown it now so the
-# non-root "app" user (built into the aspnet image since .NET 8) can write to it.
-# A bind mount will re-set this to the host dir's owner, which is why the
-# entrypoint re-applies the chown at runtime.
-RUN mkdir -p /data && chown app:app /data
+# /data holds the SQLite DB and the data-protection key ring; /log holds the rolling
+# log files. chown them now so the non-root "app" user (built into the aspnet image
+# since .NET 8) can write to them. A bind mount will re-set this to the host dir's
+# owner, which is why the entrypoint re-applies the chown at runtime.
+RUN mkdir -p /data /log && chown app:app /data /log
 
 COPY --from=build /app .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -39,13 +39,14 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
     QBITFLOW_DATA_DIR=/data \
+    QBITFLOW_LOG_DIR=/log \
     DOTNET_EnableDiagnostics=0
 
 EXPOSE 8080
-VOLUME ["/data"]
+VOLUME ["/data", "/log"]
 
 # Deliberately NOT `USER app` here: the entrypoint starts as root so it can chown
-# a freshly bind-mounted /data, then exec's the app as "app" via gosu.
+# freshly bind-mounted /data and /log, then exec's the app as "app" via gosu.
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1

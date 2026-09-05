@@ -1,6 +1,7 @@
 **/bin/
 **/obj/
 **/data/
+**/log/
 .git/
 .vs/
 .vscode/

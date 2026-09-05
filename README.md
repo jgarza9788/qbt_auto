@@ -37,14 +37,17 @@ instance credentials at rest) lives under one directory, configurable via:
 | Env var | Default | Purpose |
 |---|---|---|
 | `QBITFLOW_DATA_DIR` | `/data` in the container, `./data` when run locally | SQLite DB + key ring |
+| `QBITFLOW_LOG_DIR` | `/log` in the container, `./log` when run locally | Rolling log files (see [Troubleshooting](#troubleshooting)) |
+| `QBITFLOW_LOG_LEVEL` | _(unset)_ | Overrides the Settings-page log level when set (`Trace`/`Debug`/`Information`/`Warning`/`Error`/`Critical`) |
 
 Everything else (parallelism level, dry-run, kill switch, theme, log level, timezone,
 path mappings) is configured from the **Settings** page, not environment variables —
 this is what gets backed up when you export config, and what gets applied without a
-restart (except log level, which takes effect on the next restart).
+restart. The log level now applies immediately on save too.
 
-`docker-compose.yml` mounts a single named volume, `qbitflow-data`, at `/data`. Back
-that volume up and you have your entire configuration, rules, and run history.
+`docker-compose.yml` mounts `${QBITFLOW_LOCATION}/data` at `/data` (your entire
+configuration, rules, and run history — back this up) and `${QBITFLOW_LOCATION}/log`
+at `/log` (the rolling log files, safe to discard).
 
 If you use the **move** action and want qbitflow to verify the move against the same
 paths your qBittorrent/Plex/Jellyfin containers see, mount those paths into the
@@ -102,6 +105,41 @@ completed-and-unwatched torrents to cold storage, flag large torrents, flag low 
 space, remove an upload cap for a priority category, flag old never-watched
 torrents). Import it from **Settings → Config import / export → Import → Rules**.
 Every example ships with dry-run on — review what it matches before disabling that.
+
+## Troubleshooting
+
+**Logs.** qbitflow writes a rolling file per day to `/log` inside the container
+(`qbitflow-YYYY-MM-DD.log`, the last 7 days are kept). With the default compose file
+that's `${QBITFLOW_LOCATION}/log/` on the host, so you can read it directly:
+
+```bash
+tail -f "${QBITFLOW_LOCATION}/log/qbitflow-$(date +%F).log"
+# or, from inside the container:
+docker compose exec qbitflow sh -c 'tail -f /log/qbitflow-$(date +%F).log'
+```
+
+The same lines also go to stdout as JSON: `docker compose logs -f qbitflow`.
+
+**Log level.** Set it on the **Settings** page (`Information` by default) — it takes
+effect immediately, no restart. `QBITFLOW_LOG_LEVEL` overrides it if you need to set a
+level before the app can reach its database.
+
+**qBittorrent connection test fails.**
+
+- *"qBittorrent rejected the login …"* — the WebUI credentials are wrong, **or**
+  qBittorrent has temporarily banned qbitflow's IP after repeated failed logins
+  (Options → Web UI → "Ban client after consecutive failures", default 5 / 3600 s).
+  Restart qBittorrent or wait out the ban, then retry. Newer qBittorrent generates a
+  random admin password on first run (printed to its own log) — `adminadmin` won't work.
+- *"qBittorrent auth returned HTTP 403 / 401"* — usually qBittorrent's host-header
+  validation rejecting the request, or the WebUI not actually listening where you think.
+- *"Could not reach qBittorrent at …"* — DNS/networking; from inside the qbitflow
+  container the qBittorrent URL must be resolvable (use the compose service name or a
+  reachable IP, not `localhost`).
+
+The connection test and its failure reason are logged at `INFO` / `WARN`, so the log
+file above will show exactly what qBittorrent returned. qBittorrent's own log (WebUI →
+Tools → Log) is the authoritative source for a rejected login.
 
 ## Architecture
 

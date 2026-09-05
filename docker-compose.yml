@@ -27,6 +27,9 @@ services:
       # be re-entered.
       - ${QBITFLOW_LOCATION}/data:/data
 
+      # Rolling log files (qbitflow-YYYY-MM-DD.log, last 7 days kept).
+      - ${QBITFLOW_LOCATION}/log:/log
+
       # Mount every path you want disk-usage rules for, and/or that "move"
       # actions need to see to verify a move completed. Path mappings in the
       # Settings page translate between these and whatever qBittorrent/Plex
