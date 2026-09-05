@@ -27,21 +27,34 @@ Collect data from multiple media/download services, evaluate user-defined rules 
 
 Each instance is configured with: name, base URL, credentials/API key, enabled flag, timeout, verify-SSL flag. Every source is optional — the app must run fine with only qBittorrent configured. Use a provider/adapter interface so new sources can be added by dropping in one file.
 
+### AutoRule
+
+* an AutoRule is a cron schedule, a query, and an action to perform, and a list of qbittorrent instances for those actions to work on.
+
+
+### Flow
+
+1. when a cron rule is true, hydrate the datasources (if needed i.e not stale ) ( not all datasources will be used by all the rules, just hydrate the needed ones ) ...  data stored in SQLite memory tables
+2. run the query and collect the items 
+3. for each item perform the action
+4. log 1-4 to be easily found
+
+
 ### Shared data layer (important)
 
 - One fetch per source per refresh cycle, shared across ALL rules — never let N rules cause N API calls.
 - In-memory cache with per-source TTL, plus explicit invalidation and a "refresh now" action.
 - A rule declares which datasets it needs; the scheduler resolves the union of needs, refreshes only what is stale, then evaluates.
-- Normalize source data into a stable internal schema (torrents, torrent_files, media_items, watch_history, play_counts, storage_paths) so rules aren't written against raw vendor JSON. Include a path-matching layer that links a qBittorrent torrent's files to Plex/Jellyfin library items (handle differing container mount paths via configurable path mappings). Store a normalized `path_key` column at ingest time — do the messy path normalization once, in Python, not repeatedly at query time.
+- Normalize source data into a stable internal schema (torrents, torrent_files, media_items, watch_history, play_counts, storage_paths) so rules aren't written against raw vendor JSON. Include a path-matching layer that links a qBittorrent torrent's files to Plex/Jellyfin library items (handle differing container mount paths via configurable path mappings). Store a normalized `path_key` column at ingest time — do the messy path normalization once, in C++/C#, not repeatedly at query time.
 - **Materialize each refresh into an in-memory SQLite snapshot database** (`:memory:` or tmpfs), with indexes on the join and filter columns. Rebuild or upsert it on refresh; all rules in a cycle evaluate against the same immutable snapshot so results are consistent. Persist only config, rules, and run history to the on-disk SQLite DB.
 - Concurrent fetches, per-source failure isolation: one dead service must not break the run.
 
 ### Rules
 
 - Each rule: name, description, enabled, target instance(s), condition, actions, schedule, dry-run flag.
-- **Conditions compile to SQL and run as set-based queries against the snapshot DB.** A rule's condition is stored as a structured condition tree (JSON), and the engine compiles it to a parameterized `SELECT torrent_id FROM torrents ... WHERE ...` — never string-concatenated user input, never `eval` of Python. The matched set comes back in one query instead of looping over every torrent in Python.
+- **Conditions compile to SQL and run as set-based queries against the snapshot DB.** A rule's condition is stored as a structured condition tree (JSON), and the engine compiles it to a parameterized `SELECT torrent_id FROM torrents ... WHERE ...` — never string-concatenated user input, never `eval` of C++/C#. The matched set comes back in one query instead of looping over every torrent in C++/C#.
 - Support AND/OR/NOT, nested groups, comparisons, dates/durations, string ops, `IN`, `LIKE`, and aggregate/EXISTS subqueries over related sources (e.g. "no watch history in the last 90 days across any Tautulli or Jellystat instance").
-- Register Python helpers as SQLite user-defined functions (`create_function`) so things like `days_since(...)`, `size_gb(...)`, `path_matches(...)` are callable from within the compiled SQL. Prefer precomputed columns over UDFs in hot paths — a UDF forces a row-by-row callback.
+- Register C++/C# helpers as SQLite user-defined functions (`create_function`) so things like `days_since(...)`, `size_gb(...)`, `path_matches(...)` are callable from within the compiled SQL. Prefer precomputed columns over UDFs in hot paths — a UDF forces a row-by-row callback.
 - **Advanced mode**: let power users write a raw SQL `WHERE` clause (or a full query returning `torrent_id`) against the documented snapshot schema. Execute it on a read-only connection with `authorizer` restrictions, a statement timeout, and a row limit; validate with `EXPLAIN` before saving. Keep the visual condition builder as the default path for everyone else.
 - The visual builder, the SQL preview, and the stored condition tree must stay in sync — show users the generated SQL read-only so the abstraction is inspectable.
 - Provide BOTH a plain-text expression editor with autocomplete/validation and a visual condition builder for non-technical users.
@@ -81,7 +94,8 @@ Actions must be batched where the qBittorrent API allows, idempotent, and safely
 
 ## Suggested stack (change if you have a better justified choice)
 
-Python + FastAPI, APScheduler for cron, SQLite via SQLAlchemy, httpx for async I/O, qbittorrent-api for qBittorrent, and a compact frontend (React+Vite with Tailwind, or htmx/Alpine if you want it lighter) served as static files from the same container.
+C++ or C# , Cron for scheduling , SQlite for storing and quering the data, httpx for async I/O, qbittorrent-api, htmx/Alpin, and bootstrap  css
+
 
 ## Must also include
 
