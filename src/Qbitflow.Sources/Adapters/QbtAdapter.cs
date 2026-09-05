@@ -139,19 +139,43 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
             ["tags"] = string.Join(',', tags)
         }, ct);
 
-    public Task SetCategoryAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, string category, CancellationToken ct = default) =>
-        PostFormAsync(connection, "/api/v2/torrents/setCategory", new Dictionary<string, string>
+    public async Task SetCategoryAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, string category, CancellationToken ct = default)
+    {
+        var joinedHashes = string.Join('|', hashes);
+
+        await PostFormAsync(connection, "/api/v2/torrents/setCategory", new Dictionary<string, string>
         {
-            ["hashes"] = string.Join('|', hashes),
+            ["hashes"] = joinedHashes,
             ["category"] = category
         }, ct);
 
-    public Task SetLocationAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, string location, CancellationToken ct = default) =>
-        PostFormAsync(connection, "/api/v2/torrents/setLocation", new Dictionary<string, string>
+        // Re-enable Automatic Torrent Management so qBittorrent relocates the torrents to the
+        // category's configured save path (the mirror of SetLocationAsync, which turns it off).
+        await PostFormAsync(connection, "/api/v2/torrents/setAutoManagement", new Dictionary<string, string>
         {
-            ["hashes"] = string.Join('|', hashes),
+            ["hashes"] = joinedHashes,
+            ["enable"] = "true"
+        }, ct);
+    }
+
+    public async Task SetLocationAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, string location, CancellationToken ct = default)
+    {
+        var joinedHashes = string.Join('|', hashes);
+
+        // qBittorrent ignores (or immediately re-moves) a manual location while Automatic Torrent
+        // Management is on, so switch it off for these torrents before pointing them at the new path.
+        await PostFormAsync(connection, "/api/v2/torrents/setAutoManagement", new Dictionary<string, string>
+        {
+            ["hashes"] = joinedHashes,
+            ["enable"] = "false"
+        }, ct);
+
+        await PostFormAsync(connection, "/api/v2/torrents/setLocation", new Dictionary<string, string>
+        {
+            ["hashes"] = joinedHashes,
             ["location"] = location
         }, ct);
+    }
 
     public Task SetUploadLimitAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, long bytesPerSec, CancellationToken ct = default) =>
         PostFormAsync(connection, "/api/v2/torrents/setUploadLimit", new Dictionary<string, string>

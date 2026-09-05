@@ -29,6 +29,18 @@ body {
   margin-right: 0.75rem;
 }
 
+.qf-logo-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.25rem 0.25rem 0.6rem;
+}
+
+.qf-logo {
+  height: 30px;
+  width: 30px;
+  display: block;
+}
+
 .qf-theme-toggle .btn.active {
   background-color: var(--bs-primary);
   color: #fff;

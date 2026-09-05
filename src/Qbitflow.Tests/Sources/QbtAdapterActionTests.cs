@@ -57,38 +57,43 @@ public class QbtAdapterActionTests
     }
 
     [Fact]
-    public async Task SetCategoryAsync_PostsExpectedForm()
+    public async Task SetCategoryAsync_PostsCategory_ThenEnablesAutoTmm()
     {
-        string? capturedPath = null;
-        string? capturedBody = null;
+        var calls = new List<(string Path, string Body)>();
         var handler = new FakeHttpMessageHandler(req =>
         {
-            capturedPath = req.RequestUri!.AbsolutePath;
-            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            calls.Add((req.RequestUri!.AbsolutePath, req.Content!.ReadAsStringAsync().GetAwaiter().GetResult()));
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
 
         var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
         await adapter.SetCategoryAsync(Connection(), ["h1", "h2"], "archived");
 
-        Assert.Equal("/api/v2/torrents/setCategory", capturedPath);
-        Assert.Equal("hashes=h1%7Ch2&category=archived", capturedBody);
+        Assert.Equal(2, calls.Count);
+        Assert.Equal("/api/v2/torrents/setCategory", calls[0].Path);
+        Assert.Equal("hashes=h1%7Ch2&category=archived", calls[0].Body);
+        Assert.Equal("/api/v2/torrents/setAutoManagement", calls[1].Path);
+        Assert.Equal("hashes=h1%7Ch2&enable=true", calls[1].Body);
     }
 
     [Fact]
-    public async Task SetLocationAsync_PostsExpectedForm()
+    public async Task SetLocationAsync_DisablesAutoTmm_ThenPostsLocation()
     {
-        string? capturedBody = null;
+        var calls = new List<(string Path, string Body)>();
         var handler = new FakeHttpMessageHandler(req =>
         {
-            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            calls.Add((req.RequestUri!.AbsolutePath, req.Content!.ReadAsStringAsync().GetAwaiter().GetResult()));
             return new HttpResponseMessage(HttpStatusCode.OK);
         });
 
         var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
         await adapter.SetLocationAsync(Connection(), ["h1"], "/media/cold-storage");
 
-        Assert.Equal("hashes=h1&location=%2Fmedia%2Fcold-storage", capturedBody);
+        Assert.Equal(2, calls.Count);
+        Assert.Equal("/api/v2/torrents/setAutoManagement", calls[0].Path);
+        Assert.Equal("hashes=h1&enable=false", calls[0].Body);
+        Assert.Equal("/api/v2/torrents/setLocation", calls[1].Path);
+        Assert.Equal("hashes=h1&location=%2Fmedia%2Fcold-storage", calls[1].Body);
     }
 
     [Fact]
