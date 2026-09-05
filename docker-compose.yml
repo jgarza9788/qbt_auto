@@ -1,21 +1,42 @@
+# 192.168.1.106:8087 -> qbitflow:8080
+#
+# Only QBITFLOW_DATA_DIR and QBITFLOW_LOCATION are real -- see README.md for what
+# every setting actually does. Everything else (parallelism, dry-run, kill switch,
+# theme, log level, timezone, path mappings, instance credentials) is configured
+# from the Settings/Instances pages after first boot, not env vars.
+
 services:
   qbitflow:
-    build: .
-    image: qbitflow:latest
-    container_name: qbitflow
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      # Override any of these to point at your own timezone / log level once
-      # Settings exist in the UI; this env var only affects container startup logs.
-      - TZ=UTC
-    volumes:
-      - qbitflow-data:/data
-      # Uncomment to let qbitflow verify "move" actions against real media paths
-      # that match the mounts your qBittorrent/Plex/Jellyfin containers use:
-      # - /path/to/downloads:/downloads
-      # - /path/to/media:/media
+    build:
+      context: /home/tbp/projects/qbitflow/
+      dockerfile: Dockerfile
 
-volumes:
-  qbitflow-data:
+    container_name: qbitflow
+    ports:
+      - "8087:8080"
+    environment:
+      TZ: ${TIMEZONE}
+
+      # SQLite DB + Data Protection key ring (credential encryption). Already
+      # defaults to /data in the image; only set this if you want it elsewhere.
+      QBITFLOW_DATA_DIR: "/data"
+
+    volumes:
+      # SQLite db + Data Protection keys. Back this up -- losing the key ring
+      # means every stored instance credential becomes unreadable and has to
+      # be re-entered.
+      - ${QBITFLOW_LOCATION}/data:/data
+
+      # Mount every path you want disk-usage rules for, and/or that "move"
+      # actions need to see to verify a move completed. Path mappings in the
+      # Settings page translate between these and whatever qBittorrent/Plex
+      # report, so the mount points don't have to match exactly.
+      # - /mnt/media:/mnt/media
+      # - /mnt/downloads:/mnt/downloads
+
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
