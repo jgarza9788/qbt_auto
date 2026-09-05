@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% block title %}Dashboard · qbitflow{% endblock %}
+
+{% block content %}
+<div x-data="dashboard()" x-init="load()" class="space-y-5">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="page-title">Dashboard</h1>
+      <p class="page-subtitle" x-text="subtitle()"></p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <button @click="refresh()" :disabled="busy" class="btn">
+        <template x-if="busy === 'refresh'"><span class="spinner"></span></template>
+        {{ icon('refresh') }} Refresh data
+      </button>
+      <button @click="run(true)" :disabled="busy" class="btn">
+        <template x-if="busy === 'dry'"><span class="spinner"></span></template>
+        {{ icon('eye') }} Dry run
+      </button>
+      <button @click="run(false)" :disabled="busy" class="btn btn-primary">
+        <template x-if="busy === 'live'"><span class="spinner"></span></template>
+        {{ icon('play') }} Run now
+      </button>
+      <button @click="togglePause()" :disabled="busy" class="btn">
+        <template x-if="engine.enabled"><span>{{ icon('pause') }}</span></template>
+        <template x-if="!engine.enabled"><span>{{ icon('play') }}</span></template>
+        <span x-text="engine.enabled ? 'Pause engine' : 'Resume engine'"></span>
+      </button>
+    </div>
+  </div>
+
+  {# First run: the four steps, in order, each disappearing as it is done.
+     A dashboard of zeroes with no next action is where new installs stall. #}
+  <template x-if="!loading && checklist().some(function (s) { return !s.done; })">
+    <section class="card overflow-hidden">
+      <div class="card-header">
+        <h2 class="section-title">Getting started</h2>
+        <span class="text-xs text-zinc-500"
+              x-text="checklist().filter(function (s) { return s.done; }).length + ' of ' +
+                      checklist().length + ' done'"></span>
+      </div>
+      <ol class="divide-rows">
+        <template x-for="(step, i) in checklist()" :key="step.title">
+          <li class="flex items-start gap-3 px-4 py-3">
+            <span class="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-xs font-semibold"
+                  :class="step.done
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                    : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'">
+              <template x-if="step.done"><span>{{ icon('check', 'h-3 w-3') }}</span></template>
+              <template x-if="!step.done"><span x-text="i + 1"></span></template>
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium" :class="step.done ? 'text-zinc-400 line-through' : ''"
+                 x-text="step.title"></p>
+              <p class="text-xs text-zinc-500 dark:text-zinc-400" x-text="step.hint"></p>
+            </div>
+            <a x-show="!step.done" :href="step.href" class="btn btn-sm" x-text="step.action"></a>
+          </li>
+        </template>
+      </ol>
+    </section>
+  </template>
+
+  <template x-if="engine.startup_error">
+    <div class="notice notice-warn">
+      {{ icon('alert', 'h-4 w-4 shrink-0') }}
+      <span><strong>Startup problem:</strong> <span x-text="engine.startup_error"></span></span>
+    </div>
+  </template>
+
+  <template x-if="engine.dry_run">
+    <div class="notice notice-dry">
+      {{ icon('eye', 'h-4 w-4 shrink-0') }}
+      <span>
+        <strong>Dry-run mode is on.</strong> Rules are evaluated and reported, but
+        nothing is changed in qBittorrent. Turn it off in
+        <a href="/settings" class="link">Settings</a> once the matches look right.
+      </span>
+    </div>
+  </template>
+
+  {# Stat cards #}
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <template x-if="loading">
+      <template x-for="i in 4" :key="i">
+        <div class="card card-body space-y-2">
+          <div class="skeleton h-3 w-20"></div>
+          <div class="skeleton h-7 w-16"></div>
+          <div class="skeleton h-3 w-28"></div>
+        </div>
+      </template>
+    </template>
+    <template x-if="!loading">
+      <template x-for="card in cards()" :key="card.label">
+        <div class="card card-body">
+          <p class="eyebrow" x-text="card.label"></p>
+          <p class="mt-1 text-2xl font-semibold tabular-nums" x-text="card.value"></p>
+          <p class="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400" x-text="card.hint"></p>
+        </div>
+      </template>
+    </template>
+  </div>
+
+  {# Instances #}
+  <section class="card">
+    <div class="card-header">
+      <h2 class="section-title">Instances</h2>
+      <a href="/sources" class="link text-sm">Manage</a>
+    </div>
+
+    <div x-show="loading" class="space-y-2 p-4">
+      <div class="skeleton h-5 w-1/2"></div>
+      <div class="skeleton h-5 w-1/3"></div>
+    </div>
+
+    <template x-if="!loading && sources.length === 0">
+      <div class="empty">
+        <p class="empty-title">No instances configured</p>
+        <p class="empty-hint">qbitflow needs at least one qBittorrent instance to do anything.</p>
+        <a href="/sources" class="btn btn-primary mt-2">Add an instance</a>
+      </div>
+    </template>
+
+    <ul class="divide-rows">
+      <template x-for="source in sources" :key="source.id">
+        <li class="flex items-center gap-3 px-4 py-2.5 text-sm">
+          {# Green means "answered last cycle", not merely "switched on" -- a dot
+             that stays green while the instance is unreachable is worse than none. #}
+          <span class="h-2 w-2 shrink-0 rounded-full" :title="dotTitle(source)"
+                :class="dotClass(source)"></span>
+          <span class="font-medium" x-text="source.name"></span>
+          <span class="badge badge-muted" x-text="source.kind"></span>
+          <span class="truncate text-xs text-zinc-500" x-text="source.base_url"></span>
+          <span x-show="lastError(source)" class="badge badge-error"
+                :title="lastError(source)">unreachable</span>
+          <button @click="test(source)" class="btn btn-sm ml-auto">Test</button>
+          <template x-if="health[source.id]">
+            <span class="badge w-28 justify-center" :class="health[source.id].cls"
+                  :title="health[source.id].error || ''" x-text="health[source.id].text"></span>
+          </template>
+        </li>
+      </template>
+    </ul>
+  </section>
+
+  {# Recent runs -- rendered server-side, so it is there before Alpine boots. #}
+  <section class="card">
+    <div class="card-header">
+      <h2 class="section-title">Recent runs</h2>
+      <a href="/runs" class="link text-sm">All runs</a>
+    </div>
+    {% if not recent_runs %}
+      <div class="empty">
+        <p class="empty-title">Nothing has run yet</p>
+        <p class="empty-hint">
+          Enable a rule and press <em>Run now</em> — or leave it to the schedule.
+        </p>
+      </div>
+    {% else %}
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Trigger</th>
+              <th>Status</th>
+              <th class="num">Matched</th>
+              <th class="num">Applied</th>
+              <th class="num">Errors</th>
+              <th class="num">Took</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for run in recent_runs %}
+              <tr>
+                <td>
+                  <a href="/runs/{{ run.id }}" class="link">
+                    {{ run.started_at.strftime("%Y-%m-%d %H:%M:%S") }}
+                  </a>
+                </td>
+                <td class="text-zinc-500">
+                  {{ run.trigger }}{% if run.dry_run %} · dry{% endif %}
+                </td>
+                <td>
+                  <span class="badge
+                    {% if run.status == 'succeeded' %}badge-ok
+                    {% elif run.status == 'failed' %}badge-error
+                    {% elif run.status == 'running' %}badge-info
+                    {% else %}badge-muted{% endif %}">{{ run.status }}</span>
+                </td>
+                <td class="num">{{ run.torrents_matched }}</td>
+                <td class="num">
+                  {{ run.actions_applied }}{% if run.actions_would_apply %}
+                    <span class="text-violet-500">({{ run.actions_would_apply }})</span>{% endif %}
+                </td>
+                <td class="num {% if run.error_count %}text-rose-600 dark:text-rose-400{% else %}text-zinc-400{% endif %}">
+                  {{ run.error_count }}
+                </td>
+                <td class="num text-zinc-500">
+                  {% if run.duration_ms is not none %}{{ (run.duration_ms / 1000) | round(1) }}s{% else %}—{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+function dashboard() {
+  return {
+    engine: {}, sources: [], storage: [], rules: [], health: {},
+    loading: true, busy: null,
+
+    async load() {
+      try {
+        this.engine = await api('GET', '/api/engine');
+        this.sources = await api('GET', '/api/sources');
+        this.storage = await api('GET', '/api/storage');
+        this.rules = await api('GET', '/api/rules');
+      } catch (e) { toast(e.message, false); } finally { this.loading = false; }
+    },
+
+    /* The order a new install actually needs, each step falling away once done.
+       Deliberately not persisted: it is derived from real state, so it cannot
+       claim something is set up when it is not. */
+    checklist() {
+      var hasQbt = this.sources.some(function (s) {
+        return s.kind === 'qbittorrent' && s.enabled;
+      });
+      return [
+        {
+          title: 'Connect a qBittorrent instance',
+          hint: 'The only required source. Everything else is optional.',
+          href: '/sources', action: 'Add', done: hasQbt
+        },
+        {
+          title: 'Name a storage path',
+          hint: 'So rules can say “when this drive passes 85%”.',
+          href: '/sources', action: 'Add', done: this.storage.length > 0
+        },
+        {
+          title: 'Add a rule',
+          hint: 'Ten worked examples ship with the app — import and adjust one.',
+          href: '/rules', action: 'Add', done: this.rules.length > 0
+        },
+        {
+          title: 'Turn off dry-run when you are happy',
+          hint: 'Until then nothing in qBittorrent is changed.',
+          href: '/settings', action: 'Settings',
+          done: this.engine.dry_run === false
+        }
+      ];
+    },
+
+    /* The last snapshot records, per source, why it could not be read. Matching
+       on the "<name>: " prefix the fetch layer writes keeps this honest without
+       adding a second health endpoint to poll. */
+    lastError(source) {
+      var errors = (this.engine.snapshot && this.engine.snapshot.source_errors) || [];
+      var prefix = source.name + ':';
+      var hit = errors.find(function (e) { return String(e).indexOf(prefix) === 0; });
+      return hit || null;
+    },
+
+    dotClass(source) {
+      if (!source.enabled) return 'bg-zinc-300 dark:bg-zinc-700';
+      if (this.lastError(source)) return 'bg-rose-500';
+      return 'bg-emerald-500';
+    },
+
+    dotTitle(source) {
+      if (!source.enabled) return 'Disabled';
+      return this.lastError(source) || 'Answered in the last refresh';
+    },
+
+    subtitle() {
+      var e = this.engine;
+      if (this.loading) return 'Loading…';
+      if (!e.rules_total) return 'No rules yet.';
+      var parts = [e.rules_enabled + ' of ' + e.rules_total + ' rules enabled'];
+      if (e.snapshot) parts.push(formatCount(e.snapshot.torrents) + ' torrents in the last snapshot');
+      return parts.join(' · ');
+    },
+
+    cards() {
+      var s = this.engine.snapshot;
+      return [
+        {label: 'Torrents', value: s ? formatCount(s.torrents) : '—',
+         hint: s ? formatCount(s.matched_torrents) + ' matched to a library item'
+                 : 'no snapshot yet'},
+        {label: 'Library items', value: s ? formatCount(s.media_items) : '—',
+         hint: 'across every configured media source'},
+        {label: 'Storage paths', value: s ? formatCount(s.storage_paths) : '—',
+         hint: 'being measured'},
+        {label: 'Snapshot build', value: s ? s.duration_ms + ' ms' : '—',
+         hint: s && s.source_errors.length
+                 ? s.source_errors.length + ' source error(s)' : 'all sources healthy'}
+      ];
+    },
+
+    async refresh() {
+      this.busy = 'refresh';
+      try {
+        var r = await api('POST', '/api/engine/refresh', {});
+        toast('Refreshed: ' + formatCount(r.torrents) + ' torrents, ' +
+              formatCount(r.media_items) + ' library items', true);
+        r.source_errors.forEach(function (e) { toast(e, false); });
+        await this.load();
+      } catch (e) { toast(e.message, false); } finally { this.busy = null; }
+    },
+
+    async run(dry) {
+      this.busy = dry ? 'dry' : 'live';
+      try {
+        var r = await api('POST', '/api/engine/run', {dry_run: dry, force_refresh: true});
+        if (!r.started) { toast(r.reason, false); return; }
+        toast('Matched ' + formatCount(r.torrents_matched) + ' · ' +
+              (dry ? 'would apply ' + formatCount(r.actions_would_apply)
+                   : 'applied ' + formatCount(r.actions_applied)) +
+              ' · skipped ' + formatCount(r.actions_skipped), r.errors === 0);
+        await this.load();
+      } catch (e) { toast(e.message, false); } finally { this.busy = null; }
+    },
+
+    async togglePause() {
+      this.busy = 'pause';
+      try {
+        var r = await api('POST', '/api/engine/enabled', {enabled: !this.engine.enabled});
+        this.engine.enabled = r.enabled;
+        toast(r.enabled ? 'Engine resumed' : 'Engine paused', true);
+      } catch (e) { toast(e.message, false); } finally { this.busy = null; }
+    },
+
+    async test(source) {
+      this.health[source.id] = {cls: 'badge-muted', text: 'testing…', error: null};
+      try {
+        var r = await api('POST', '/api/sources/' + source.id + '/test', {});
+        this.health[source.id] = r.ok
+          ? {cls: 'badge-ok', text: 'ok · ' + r.latency_ms + ' ms', error: null}
+          : {cls: 'badge-error', text: 'failed', error: r.error};
+        if (!r.ok) toast(source.name + ': ' + r.error, false);
+      } catch (e) {
+        this.health[source.id] = {cls: 'badge-error', text: 'failed', error: e.message};
+      }
+    }
+  };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check src tests scripts
+
+      # Runs before the suite so a stale reference fails fast and obviously,
+      # rather than as one assertion buried in a hundred others.
+      - name: Reference documentation is current
+        run: |
+          uv run python scripts/gen_docs.py
+          git diff --exit-code -- docs/ \
+            || (echo "::error::docs/ is stale; run: uv run python scripts/gen_docs.py" && exit 1)
+
+      - name: Test
+        run: uv run pytest -q
+
+  migrations:
+    # A migration that does not apply to an empty database is a broken upgrade
+    # for every existing install, and the test suite would not catch it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - run: uv sync --frozen
+
+      - name: Upgrade a fresh database to head
+        run: uv run alembic upgrade head
+
+      - name: The models and the migrations agree
+        run: |
+          uv run alembic check \
+            || (echo "::error::models have drifted from the migrations; run: uv run alembic revision --autogenerate" && exit 1)
+
+  css:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      # app.css is built into the image rather than committed, so there is
+      # nothing to diff against. What can actually break is the content glob:
+      # add a template outside it and Tailwind silently purges every class only
+      # that page uses, producing an unstyled page and no error anywhere.
+      - name: The stylesheet covers every template
+        run: |
+          npm run build:css
+          test -s src/qbitflow/web/static/app.css \
+            || (echo "::error::the stylesheet built empty" && exit 1)
+          for class in $(grep -rhoE 'class="[^"]+"' src/qbitflow/web/templates \
+                         | tr -d '"' | sed 's/^class=//' | tr ' ' '\n' \
+                         | grep -E '^(bg|text|border)-(zinc|teal|emerald|amber|rose|violet)-[0-9]+$' \
+                         | sort -u); do
+            grep -qF ".$class" src/qbitflow/web/static/app.css \
+              || (echo "::error::class '$class' is used in a template but was purged from app.css; check the content globs in tailwind.config.js" && exit 1)
+          done

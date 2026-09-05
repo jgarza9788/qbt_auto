@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% from "partials/field_picker.html" import field_picker %}
+{% block title %}{{ rule_name or "New rule" }} · Rules · qbitflow{% endblock %}
+
+{#
+  One rule, one page, one URL.
+
+  Nested condition groups are emitted by a recursive macro rather than a single
+  flat level: Alpine cannot recurse inside x-for, so the markup for each depth is
+  written out at render time. That is what makes AND/OR nesting usable in the
+  builder and not only in the stored model.
+#}
+
+{% macro group_block(level, expr) %}
+<div class="{% if level > 0 %}ml-3 sm:ml-6{% endif %} raised p-3">
+  <div class="mb-2.5 flex flex-wrap items-center gap-2 text-sm">
+    <span class="text-zinc-500 dark:text-zinc-400">Match</span>
+    <select x-model="{{ expr }}.logic" @change="onChange()" class="select w-auto py-1"
+            aria-label="Combine these conditions with">
+      <option value="and">all of</option>
+      <option value="or">any of</option>
+    </select>
+    <label class="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+      <input type="checkbox" class="checkbox" x-model="{{ expr }}.negate" @change="onChange()">
+      invert (NOT)
+    </label>
+    {% if level > 0 %}
+      <button type="button" @click="removeGroup(childParent, childIndex)"
+              class="btn btn-icon btn-icon-danger ml-auto" aria-label="Remove this group">
+        {{ icon('trash') }}
+      </button>
+    {% endif %}
+  </div>
+
+  <div class="space-y-2">
+    <template x-for="(cond, ci) in {{ expr }}.conditions" :key="ci">
+      <div class="flex flex-wrap items-start gap-2">
+        {{ field_picker("cond") }}
+
+        <template x-if="fieldFor(cond.field) && fieldFor(cond.field).takes_qualifier">
+          <input x-model="cond.qualifier" @input="onChange()" class="input w-40"
+                 :placeholder="fieldFor(cond.field).qualifier_label"
+                 :aria-label="fieldFor(cond.field).qualifier_label">
+        </template>
+
+        {#
+          x-init re-applies the value after the tick. A select whose options come
+          from x-for has none of them yet when x-model first runs, so the browser
+          falls back to the first option and the bound value is silently lost --
+          which is how a rule stored as "greater than" rendered as "is".
+        #}
+        <select x-model="cond.operator" @change="onChange()" class="select w-44"
+                x-init="$nextTick(() => $el.value = cond.operator)" aria-label="Operator">
+          <template x-for="op in operatorsFor(cond.field)" :key="op">
+            <option :value="op" x-text="operatorLabel(op)"></option>
+          </template>
+        </select>
+
+        <template x-if="!isValueless(cond.operator)">
+          <input x-model="cond.value" @input="onChange()" class="input w-44"
+                 :placeholder="placeholderFor(cond)" aria-label="Value">
+        </template>
+
+        <button type="button" @click="{{ expr }}.conditions.splice(ci, 1); onChange()"
+                class="btn btn-icon btn-icon-danger" aria-label="Remove this condition">
+          {{ icon('x') }}
+        </button>
+      </div>
+    </template>
+
+    <p x-show="{{ expr }}.conditions.length === 0 && {{ expr }}.groups.length === 0"
+       class="py-1 text-xs text-zinc-500 dark:text-zinc-400">
+      No conditions yet — an empty group matches every torrent.
+    </p>
+
+    {% if level < 3 %}
+      <template x-for="(child, gi) in {{ expr }}.groups" :key="gi">
+        <div x-data="{ childParent: {{ expr }}, childIndex: gi }">
+          {{ group_block(level + 1, "child") }}
+        </div>
+      </template>
+    {% endif %}
+  </div>
+
+  <div class="mt-2.5 flex gap-2">
+    <button type="button" class="btn btn-sm"
+            @click="{{ expr }}.conditions.push(newCondition()); onChange()">
+      {{ icon('plus', 'h-3 w-3') }} Condition
+    </button>
+    {% if level < 3 %}
+      <button type="button" class="btn btn-sm"
+              @click="{{ expr }}.groups.push(newGroup()); onChange()">
+        {{ icon('plus', 'h-3 w-3') }} Nested group
+      </button>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div x-data="ruleEditor({{ rule_id if rule_id is not none else 'null' }})" x-init="load()">
+
+  {# Sticky action bar --------------------------------------------------- #}
+  <div class="sticky top-[57px] z-30 -mx-4 mb-5 border-b border-zinc-200 bg-zinc-50/90 px-4 py-3 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-950/90">
+    <div class="flex flex-wrap items-center gap-3">
+      <a href="/rules" class="btn btn-icon" aria-label="Back to rules">{{ icon('arrow-left') }}</a>
+
+      <div class="min-w-0 flex-1">
+        <input x-model="rule.name" @input="dirty = true"
+               placeholder="Name this rule" aria-label="Rule name"
+               class="w-full max-w-md border-0 bg-transparent p-0 text-lg font-semibold tracking-tight outline-none placeholder:text-zinc-400 focus-visible:ring-0 dark:placeholder:text-zinc-600">
+        <p class="text-xs text-zinc-500 dark:text-zinc-400">
+          <span x-show="dirty" class="font-medium text-amber-600 dark:text-amber-400">Unsaved changes ·</span>
+          <span x-show="!dirty && rule.id">Saved</span>
+          <span x-show="!rule.id && !dirty">Not saved yet</span>
+          <span class="ml-1">Press <span class="kbd">Ctrl</span>+<span class="kbd">S</span> to save.</span>
+        </p>
+      </div>
+
+      <label class="flex items-center gap-2 text-sm">
+        <input type="checkbox" class="checkbox" x-model="rule.enabled" @change="dirty = true">
+        Enabled
+      </label>
+      <button @click="openPanel()" class="btn">{{ icon('search') }} Fields</button>
+      <button @click="runTest()" :disabled="testing" class="btn">
+        <template x-if="testing"><span class="spinner"></span></template>
+        {{ icon('eye') }} Test
+      </button>
+      <button @click="save()" :disabled="saving" class="btn btn-primary">
+        <template x-if="saving"><span class="spinner"></span></template>
+        Save
+      </button>
+    </div>
+  </div>
+
+  <div x-show="loading" class="space-y-4">
+    <div class="card h-32 animate-pulse"></div>
+    <div class="card h-64 animate-pulse"></div>
+  </div>
+
+  <div x-show="!loading" x-cloak class="space-y-5">
+
+    {# Basics ------------------------------------------------------------ #}
+    <section class="card">
+      <div class="card-header"><h2 class="section-title">Description &amp; schedule</h2></div>
+      <div class="card-body grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="label" for="rule-description">What is this rule for?</label>
+          <input id="rule-description" x-model="rule.description" @input="dirty = true"
+                 class="input" placeholder="Optional, but future-you will thank you">
+        </div>
+
+        <div>
+          <label class="label" for="rule-cron">Schedule</label>
+          <div class="flex gap-2">
+            <select @change="rule.cron = $event.target.value; describeSchedule()"
+                    class="select w-auto" aria-label="Schedule preset">
+              <option value="">Preset…</option>
+              <template x-for="p in meta.presets" :key="p">
+                <option :value="p" x-text="p"></option>
+              </template>
+            </select>
+            <input id="rule-cron" x-model="rule.cron" @change="describeSchedule()"
+                   placeholder="*/15 * * * *  or  daily at 3am"
+                   class="input input-mono">
+          </div>
+          <p class="hint" x-text="schedule.description"></p>
+          <p class="hint" x-show="schedule.next_runs && schedule.next_runs.length">
+            Next:
+            <span x-text="(schedule.next_runs || []).map(formatTime).join(' · ')"></span>
+          </p>
+          <p class="mt-1 text-xs text-amber-600 dark:text-amber-400"
+             x-show="schedule.warning" x-text="schedule.warning"></p>
+        </div>
+      </div>
+    </section>
+
+    {# Condition --------------------------------------------------------- #}
+    <section class="card">
+      <div class="card-header">
+        <h2 class="section-title">Condition</h2>
+        <div class="flex gap-0.5 rounded-lg border border-zinc-300 p-0.5 dark:border-zinc-700"
+             role="group" aria-label="Condition mode">
+          <button @click="rule.condition_mode = 'builder'; onChange()"
+                  :aria-pressed="rule.condition_mode === 'builder'"
+                  class="rounded-md px-2.5 py-1 text-xs font-medium"
+                  :class="rule.condition_mode === 'builder'
+                            ? 'bg-teal-600 text-white'
+                            : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'">Builder</button>
+          <button @click="rule.condition_mode = 'raw_sql'; onChange()"
+                  :aria-pressed="rule.condition_mode === 'raw_sql'"
+                  class="rounded-md px-2.5 py-1 text-xs font-medium"
+                  :class="rule.condition_mode === 'raw_sql'
+                            ? 'bg-teal-600 text-white'
+                            : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800'">SQL</button>
+        </div>
+      </div>
+
+      <div class="card-body space-y-3">
+        <div x-show="rule.condition_mode === 'builder'">
+          {{ group_block(0, "rule.condition_tree") }}
+        </div>
+
+        <div x-show="rule.condition_mode === 'raw_sql'" x-cloak>
+          <textarea x-model="rule.raw_sql" @input="onChange()" rows="5" class="textarea"
+                    aria-label="Raw SQL condition"
+                    placeholder="t.ratio > 2 AND t.category_lower = 'movies'"></textarea>
+          <p class="hint">
+            A WHERE clause over the snapshot schema, or a full SELECT returning
+            <code class="mono">source_id, hash</code>. Read-only, time-limited and
+            restricted to the documented tables. Open <button type="button" class="link"
+            @click="openPanel()">the field reference</button> for the schema and helpers.
+          </p>
+        </div>
+
+        {# Generated query, read-only #}
+        <div>
+          <p class="eyebrow mb-1">Generated query</p>
+          <pre class="overflow-x-auto rounded-lg border px-3 py-2 font-mono text-xs"
+               :class="compiled.valid === false
+                 ? 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200'
+                 : 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300'"
+               x-text="compiled.error || compiled.preview || compiled.sql || 'Add a condition to see the query.'"></pre>
+        </div>
+
+        {# Test results #}
+        <div x-show="testResult" x-cloak>
+          <div class="mb-1.5 flex items-baseline gap-2">
+            <p class="eyebrow">Matches right now</p>
+            <p class="text-xs text-zinc-500">
+              <strong class="text-zinc-800 dark:text-zinc-100"
+                      x-text="formatCount(testResult && testResult.matched_count)"></strong>
+              of <span x-text="formatCount(testResult && testResult.evaluated)"></span> torrents
+              (<span x-text="testResult && testResult.duration_ms"></span> ms)
+            </p>
+          </div>
+          <div class="max-h-72 overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <table class="table text-xs">
+              <tbody>
+                <template x-for="row in (testResult ? testResult.rows : [])"
+                          :key="row.source_id + row.hash">
+                  <tr :class="row.matched ? 'bg-emerald-50/70 dark:bg-emerald-950/30' : 'opacity-60'">
+                    <td class="w-7 px-2 py-1">
+                      <span x-show="row.matched" class="text-emerald-600 dark:text-emerald-400"
+                            aria-label="matches">{{ icon('check', 'h-3.5 w-3.5') }}</span>
+                    </td>
+                    <td class="max-w-md truncate px-2 py-1" x-text="row.name"></td>
+                    <td class="px-2 py-1 text-zinc-500" x-text="row.category"></td>
+                    <td class="num px-2 py-1 text-zinc-500" x-text="row.size_gb + ' GB'"></td>
+                    <td class="num px-2 py-1 text-zinc-500" x-text="row.ratio"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {# Actions ----------------------------------------------------------- #}
+    <section class="card">
+      <div class="card-header">
+        <h2 class="section-title">
+          Actions <span class="badge badge-muted ml-1" x-text="rule.actions.length"></span>
+        </h2>
+        <button @click="addAction()" class="btn btn-sm">{{ icon('plus', 'h-3 w-3') }} Add action</button>
+      </div>
+
+      <div class="card-body space-y-3">
+        <p x-show="rule.actions.length === 0" class="text-sm text-zinc-500 dark:text-zinc-400">
+          No actions yet. A rule with no actions matches torrents and does nothing —
+          useful for testing a condition, useless in production.
+        </p>
+
+        <template x-for="(action, ai) in rule.actions" :key="ai">
+          <div class="raised p-3">
+            <div class="mb-2 flex flex-wrap items-center gap-2">
+              <select x-model="action.type" @change="onActionTypeChange(action)"
+                      x-init="$nextTick(() => $el.value = action.type)"
+                      class="select w-auto" aria-label="Action type">
+                <template x-for="a in meta.actions" :key="a.type">
+                  <option :value="a.type" x-text="a.display_name"></option>
+                </template>
+              </select>
+              <span x-show="actionFor(action.type) && actionFor(action.type).bidirectional"
+                    class="badge badge-info"
+                    title="Also undoes itself on torrents the rule stops matching">two-way</span>
+              <button @click="removeAction(ai)" class="btn btn-icon btn-icon-danger ml-auto"
+                      aria-label="Remove this action">{{ icon('x') }}</button>
+            </div>
+
+            <p class="mb-2 text-xs text-zinc-500 dark:text-zinc-400"
+               x-text="actionFor(action.type) ? actionFor(action.type).description : ''"></p>
+
+            <div x-show="actionFor(action.type) && actionFor(action.type).requires_opt_in"
+                 x-cloak class="notice notice-warn mb-3 px-3 py-2 text-xs">
+              {{ icon('alert', 'h-4 w-4 shrink-0') }}
+              <span>
+                Needs <code class="mono" x-text="actionFor(action.type) && actionFor(action.type).requires_opt_in"></code>
+                set on the container, or this action is skipped at run time.
+              </span>
+            </div>
+
+            {# Typed inputs, generated from the handler's own parameter schema #}
+            <div class="grid gap-3 sm:grid-cols-2">
+              <template x-for="param in paramsFor(action.type)" :key="param.name">
+                <div>
+                  <template x-if="param.type === 'boolean'">
+                    <label class="flex items-start gap-2 text-sm">
+                      <input type="checkbox" class="checkbox mt-0.5"
+                             :checked="action.params[param.name]"
+                             @change="action.params[param.name] = $event.target.checked; dirty = true">
+                      <span>
+                        <span x-text="param.title"></span>
+                        <span class="block text-xs text-zinc-500 dark:text-zinc-400"
+                              x-text="param.description"></span>
+                      </span>
+                    </label>
+                  </template>
+                  <template x-if="param.type !== 'boolean'">
+                    <div>
+                      <label class="label text-xs" x-text="param.title"
+                             :for="'p-' + ai + '-' + param.name"></label>
+                      <input :id="'p-' + ai + '-' + param.name"
+                             :type="param.type === 'integer' ? 'number' : 'text'"
+                             :value="action.params[param.name] ?? ''"
+                             @input="action.params[param.name] = param.type === 'integer'
+                                      ? ($event.target.value === '' ? null : Number($event.target.value))
+                                      : $event.target.value; dirty = true"
+                             class="input">
+                      <p class="hint" x-text="param.description"></p>
+                    </div>
+                  </template>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <p class="hint">
+          Text values may use placeholders like <code class="mono">{category}</code> or
+          <code class="mono">{name}</code>, filled in per torrent.
+        </p>
+      </div>
+    </section>
+
+    {# Advanced ---------------------------------------------------------- #}
+    <section class="card">
+      <details>
+        <summary class="card-header cursor-pointer list-none">
+          <h2 class="section-title">Targets &amp; advanced</h2>
+          <span class="text-xs text-zinc-500">instances · cooldown · per-rule dry run</span>
+        </summary>
+        <div class="card-body grid gap-5 sm:grid-cols-2">
+          <div>
+            <p class="label">qBittorrent instances</p>
+            <p x-show="qbtSources.length === 0" class="text-xs text-zinc-500">
+              No qBittorrent instances configured yet.
+            </p>
+            <template x-for="s in qbtSources" :key="s.id">
+              <label class="flex items-center gap-2 py-0.5 text-sm">
+                <input type="checkbox" class="checkbox"
+                       :checked="rule.target_source_ids.includes(s.id)"
+                       @change="toggleTarget(s.id, $event.target.checked)">
+                <span x-text="s.name"></span>
+              </label>
+            </template>
+            <p class="hint">Selecting none means every enabled instance.</p>
+          </div>
+
+          <div class="space-y-3">
+            <label class="flex items-start gap-2 text-sm">
+              <input type="checkbox" class="checkbox mt-0.5"
+                     :checked="rule.stop_on_match === true"
+                     @change="rule.stop_on_match = $event.target.checked ? true : null; dirty = true">
+              <span>Stop processing later rules for a torrent this one matches</span>
+            </label>
+            <label class="flex items-start gap-2 text-sm">
+              <input type="checkbox" class="checkbox mt-0.5"
+                     :checked="rule.dry_run === true"
+                     @change="rule.dry_run = $event.target.checked ? true : null; dirty = true">
+              <span>Always dry-run this rule, even when the engine is live</span>
+            </label>
+            <div>
+              <label class="label" for="cooldown">Cooldown (seconds)</label>
+              <input id="cooldown" type="number" min="0" class="input w-40"
+                     :value="rule.cooldown_seconds ?? ''"
+                     @input="rule.cooldown_seconds = $event.target.value === ''
+                              ? null : Number($event.target.value); dirty = true">
+              <p class="hint">
+                Minimum gap before this rule fires again for the same torrent.
+                Blank means none.
+              </p>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <div class="flex justify-between pb-8">
+      <button x-show="rule.id" @click="remove()" class="btn btn-icon-danger text-rose-600 dark:text-rose-400">
+        {{ icon('trash') }} Delete this rule
+      </button>
+      <button @click="save()" :disabled="saving" class="btn btn-primary ml-auto">Save rule</button>
+    </div>
+  </div>
+
+  {% include "partials/field_panel.html" %}
+</div>
+
+<script>
+function ruleEditor(ruleId) {
+  return fieldPanelMixin({
+    rule: {
+      id: null, name: '', description: '', enabled: true, condition_mode: 'builder',
+      condition_tree: {logic: 'and', negate: false, conditions: [], groups: []},
+      raw_sql: '', target_source_ids: [], cron: '*/15 * * * *', timezone: null,
+      dry_run: null, stop_on_match: null, cooldown_seconds: null, actions: []
+    },
+    sources: [], meta: {fieldGroups: [], fields: {}, actions: [], presets: [], helpers: {}, tables: []},
+    compiled: {}, schedule: {}, testResult: null,
+    loading: true, saving: false, testing: false, dirty: false,
+    panelOpen: false, panelFilter: '', panelSource: '', compileTimer: null,
+
+    get qbtSources() {
+      return this.sources.filter(function (s) { return s.kind === 'qbittorrent'; });
+    },
+
+    async load() {
+      try {
+        var fields = await api('GET', '/api/fields');
+        this.meta.fieldGroups = fields.groups;
+        this.meta.helpers = fields.helpers;
+        this.meta.tables = fields.tables;
+        this.meta.valueless = fields.valueless_operators;
+        var byKey = {};
+        fields.groups.forEach(function (g) {
+          g.fields.forEach(function (f) { byKey[f.key] = f; });
+        });
+        this.meta.fields = byKey;
+        this.meta.flatFields = Object.keys(byKey).map(function (k) { return byKey[k]; });
+
+        this.meta.actions = await api('GET', '/api/actions');
+        this.sources = await api('GET', '/api/sources');
+
+        if (ruleId !== null) {
+          this.rule = this.hydrate(await api('GET', '/api/rules/' + ruleId));
+        } else {
+          this.rule.name = 'New rule';
+        }
+        await this.describeSchedule();
+        await this.compile();
+      } catch (e) { toast(e.message, false); } finally { this.loading = false; }
+
+      var self = this;
+      window.addEventListener('beforeunload', function (event) {
+        if (self.dirty) { event.preventDefault(); event.returnValue = ''; }
+      });
+      window.addEventListener('keydown', function (event) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          self.save();
+        }
+      });
+    },
+
+    hydrate(rule) {
+      if (!rule.condition_tree) rule.condition_tree = this.newGroup();
+      if (!rule.condition_tree.conditions) rule.condition_tree.conditions = [];
+      if (!rule.condition_tree.groups) rule.condition_tree.groups = [];
+      rule.target_source_ids = rule.target_source_ids || [];
+      rule.actions = rule.actions || [];
+      rule.raw_sql = rule.raw_sql || '';
+      return rule;
+    },
+
+    newGroup() { return {logic: 'and', negate: false, conditions: [], groups: []}; },
+    newCondition() { return {field: '', operator: 'eq', value: '', qualifier: null}; },
+    removeGroup(parent, index) {
+      if (parent && parent.groups) { parent.groups.splice(index, 1); this.onChange(); }
+    },
+
+    // -- fields ---------------------------------------------------------
+
+    fieldFor(key) { return this.meta.fields[key]; },
+
+    /* Ranked so an exact key match beats a description mention, which is what
+       makes typing "ratio" or "watched" land on the obvious field first. */
+    searchFields(query) {
+      var all = this.meta.flatFields || [];
+      var q = (query || '').trim().toLowerCase();
+      if (!q) return all;
+      var scored = [];
+      all.forEach(function (f) {
+        var key = f.key.toLowerCase(), label = f.label.toLowerCase();
+        var desc = (f.description || '').toLowerCase();
+        var score = -1;
+        if (key === q) score = 0;
+        else if (key.indexOf(q) === 0 || label.indexOf(q) === 0) score = 1;
+        else if (key.indexOf(q) !== -1 || label.indexOf(q) !== -1) score = 2;
+        else if (desc.indexOf(q) !== -1) score = 3;
+        else if (f.type.indexOf(q) === 0) score = 4;
+        if (score >= 0) scored.push({score: score, field: f});
+      });
+      scored.sort(function (a, b) { return a.score - b.score; });
+      return scored.map(function (s) { return s.field; });
+    },
+
+    operatorsFor(key) {
+      var f = this.fieldFor(key);
+      return f ? f.operators : ['eq'];
+    },
+
+    operatorLabel(op) {
+      var LABELS = {
+        eq: 'is', neq: 'is not', gt: 'greater than', gte: 'at least',
+        lt: 'less than', lte: 'at most', contains: 'contains',
+        not_contains: 'does not contain', starts_with: 'starts with',
+        ends_with: 'ends with', matches: 'matches regex',
+        not_matches: 'does not match regex', in_list: 'is one of',
+        not_in_list: 'is none of', is_true: 'is true', is_false: 'is false',
+        is_null: 'is empty', is_not_null: 'is not empty',
+        older_than_days: 'older than (days)', newer_than_days: 'newer than (days)'
+      };
+      return LABELS[op] || op;
+    },
+
+    isValueless(op) { return (this.meta.valueless || []).includes(op); },
+
+    placeholderFor(cond) {
+      var f = this.fieldFor(cond.field);
+      if (!f) return '';
+      if (cond.operator === 'in_list' || cond.operator === 'not_in_list') {
+        return 'comma, separated, values';
+      }
+      return f.sample ? 'e.g. ' + f.sample : '';
+    },
+
+    /* A method, not an inline expression: Alpine compiles an attribute into a
+       returned expression, so a `var` declaration inside one is a parse error --
+       which is exactly what the console caught. */
+    chooseField(cond, query, index) {
+      var field = this.searchFields(query)[index];
+      if (!field) return false;
+      cond.field = field.key;
+      this.onFieldChange(cond);
+      return true;
+    },
+
+    onFieldChange(cond) {
+      var ops = this.operatorsFor(cond.field);
+      if (!ops.includes(cond.operator)) cond.operator = ops[0];
+      this.onChange();
+    },
+
+    toggleTarget(id, on) {
+      var list = this.rule.target_source_ids;
+      var at = list.indexOf(id);
+      if (on && at === -1) list.push(id);
+      if (!on && at !== -1) list.splice(at, 1);
+      this.onChange();
+    },
+
+    // -- actions --------------------------------------------------------
+
+    actionFor(type) {
+      return this.meta.actions.find(function (a) { return a.type === type; });
+    },
+
+    onActionTypeChange(action) {
+      // Reset to the new handler's defaults rather than carrying over params
+      // that mean nothing to it.
+      action.params = {};
+      var schema = this.actionFor(action.type);
+      if (schema) {
+        var props = schema.params.properties || {};
+        Object.keys(props).forEach(function (name) {
+          if (props[name].default !== undefined) action.params[name] = props[name].default;
+        });
+      }
+      this.dirty = true;
+    },
+
+    addAction() {
+      var first = this.meta.actions[0];
+      var action = {type: first ? first.type : 'tag.add', params: {}};
+      this.rule.actions.push(action);
+      this.onActionTypeChange(action);
+    },
+
+    async removeAction(index) {
+      var ok = await confirmAction({
+        title: 'Remove this action?',
+        body: 'It is removed from the rule when you save.',
+        confirmLabel: 'Remove'
+      });
+      if (!ok) return;
+      this.rule.actions.splice(index, 1);
+      this.dirty = true;
+    },
+
+    paramsFor(type) {
+      var schema = this.actionFor(type);
+      if (!schema) return [];
+      var props = schema.params.properties || {};
+      return Object.keys(props).map(function (name) {
+        var p = props[name];
+        return {
+          name: name, title: p.title || name,
+          description: p.description || '', type: p.type || 'string'
+        };
+      });
+    },
+
+    // -- compile, schedule, test ----------------------------------------
+
+    onChange() {
+      this.dirty = true;
+      clearTimeout(this.compileTimer);          // debounced: not one round trip per keystroke
+      var self = this;
+      this.compileTimer = setTimeout(function () { self.compile(); }, 250);
+    },
+
+    async compile() {
+      try {
+        this.compiled = await api('POST', '/api/rules/compile', {
+          condition_mode: this.rule.condition_mode,
+          condition_tree: this.rule.condition_tree,
+          raw_sql: this.rule.raw_sql,
+          target_source_ids: this.rule.target_source_ids
+        });
+      } catch (e) { this.compiled = {valid: false, error: e.message}; }
+    },
+
+    async describeSchedule() {
+      if (!this.rule.cron) return;
+      try {
+        var url = '/api/schedule/describe?expression=' + encodeURIComponent(this.rule.cron);
+        if (this.rule.timezone) url += '&timezone=' + encodeURIComponent(this.rule.timezone);
+        this.schedule = await api('GET', url);
+        this.meta.presets = this.schedule.presets;
+        if (this.schedule.cron !== this.rule.cron) {
+          this.rule.cron = this.schedule.cron;
+          this.dirty = true;
+        }
+      } catch (e) { this.schedule = {description: e.message, warning: null}; }
+    },
+
+    async runTest() {
+      this.testing = true;
+      try {
+        this.testResult = await api('POST', '/api/rules/test', {
+          condition_mode: this.rule.condition_mode,
+          condition_tree: this.rule.condition_tree,
+          raw_sql: this.rule.raw_sql,
+          target_source_ids: this.rule.target_source_ids
+        });
+      } catch (e) { toast(e.message, false); } finally { this.testing = false; }
+    },
+
+    // -- persistence ----------------------------------------------------
+
+    payload() {
+      return {
+        id: this.rule.id, name: this.rule.name || 'Untitled rule',
+        description: this.rule.description, enabled: this.rule.enabled,
+        condition_mode: this.rule.condition_mode,
+        condition_tree: this.rule.condition_tree,
+        raw_sql: this.rule.raw_sql || null,
+        target_source_ids: this.rule.target_source_ids,
+        cron: this.rule.cron, timezone: this.rule.timezone || null,
+        dry_run: this.rule.dry_run, stop_on_match: this.rule.stop_on_match,
+        cooldown_seconds: this.rule.cooldown_seconds, actions: this.rule.actions
+      };
+    },
+
+    async save() {
+      if (this.saving) return;
+      this.saving = true;
+      try {
+        var result = this.rule.id
+          ? await api('PUT', '/api/rules/' + this.rule.id, this.payload())
+          : await api('POST', '/api/rules/new', this.payload());
+        (result.warnings || []).forEach(function (w) { toast(w, false); });
+        this.dirty = false;
+
+        if (!this.rule.id) {
+          // A new rule now has a URL of its own; go there so a reload works.
+          window.location = '/rules/' + result.rule.id;
+          return;
+        }
+        this.rule = this.hydrate(result.rule);
+        toast('Saved', true);
+      } catch (e) { toast(e.message, false); } finally { this.saving = false; }
+    },
+
+    async remove() {
+      var ok = await confirmAction({
+        title: 'Delete this rule?',
+        body: '“' + (this.rule.name || 'unnamed rule') + '” will be removed. ' +
+              'Runs it has already recorded are kept.',
+        confirmLabel: 'Delete rule'
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/rules/' + this.rule.id);
+        this.dirty = false;
+        window.location = '/rules';
+      } catch (e) { toast(e.message, false); }
+    },
+
+    openPanel() { this.panelOpen = true; }
+  });
+}
+</script>
+{% endblock %}

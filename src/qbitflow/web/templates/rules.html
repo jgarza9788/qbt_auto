@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% block title %}Rules · qbitflow{% endblock %}
+
+{#
+  The list only. Editing moved to its own page at /rules/{id} so opening a rule
+  no longer pushes the list off the screen, and so a rule you are working on has
+  a URL you can bookmark, share, and come back to with the back button.
+#}
+
+{% block content %}
+<div x-data="rulesPage()" x-init="load()" class="space-y-5">
+
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 class="page-title">Rules</h1>
+      <p class="page-subtitle">
+        Evaluated top to bottom. Drag to reorder, or focus a row and press
+        <span class="kbd">Alt</span> + <span class="kbd">↑</span>/<span class="kbd">↓</span>.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <button @click="openPanel()" class="btn">
+        {{ icon('search') }} Field reference
+      </button>
+      <a href="/rules/new" class="btn btn-primary">
+        {{ icon('plus') }} New rule
+      </a>
+    </div>
+  </div>
+
+  {# Loading -------------------------------------------------------------- #}
+  <div x-show="loading" class="card divide-rows">
+    <template x-for="i in 4" :key="i">
+      <div class="flex items-center gap-3 px-4 py-3.5">
+        <div class="skeleton h-4 w-4"></div>
+        <div class="skeleton h-4 w-48"></div>
+        <div class="skeleton ml-auto h-4 w-24"></div>
+      </div>
+    </template>
+  </div>
+
+  {# Empty ---------------------------------------------------------------- #}
+  <div x-show="!loading && rules.length === 0" x-cloak class="card">
+    <div class="empty">
+      <span class="grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-400">
+        {{ icon('list', 'h-5 w-5') }}
+      </span>
+      <p class="empty-title">No rules yet</p>
+      <p class="empty-hint">
+        Start from the ten worked examples — unwatched-media tagging, cold-storage
+        moves, disk-pressure flags — or write one from scratch. Examples arrive
+        disabled, so nothing runs until you say so.
+      </p>
+      <div class="mt-2 flex flex-wrap justify-center gap-2">
+        <button @click="loadExamples()" :disabled="importing" class="btn btn-primary">
+          <template x-if="importing"><span class="spinner"></span></template>
+          {{ icon('sparkles') }} Load the examples
+        </button>
+        <a href="/rules/new" class="btn">Write one from scratch</a>
+      </div>
+    </div>
+  </div>
+
+  {# The list ------------------------------------------------------------- #}
+  <section x-show="!loading && rules.length > 0" x-cloak class="card overflow-hidden">
+    <ul class="divide-rows" role="list">
+      <template x-for="(rule, index) in rules" :key="rule.id">
+        <li class="group flex items-center gap-3 px-3 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+            draggable="true"
+            tabindex="0"
+            :aria-label="'Rule ' + (index + 1) + ': ' + rule.name"
+            @dragstart="dragIndex = index"
+            @dragend="dragIndex = null; dragOver = null"
+            @dragover.prevent="dragOver = index"
+            @dragleave="dragOver === index && (dragOver = null)"
+            @drop.prevent="moveRule(dragIndex, index)"
+            @keydown.alt.up.prevent="moveRule(index, index - 1); $nextTick(() => focusRow(index - 1))"
+            @keydown.alt.down.prevent="moveRule(index, index + 1); $nextTick(() => focusRow(index + 1))"
+            :class="[
+              dragOver === index && dragIndex !== index ? 'ring-2 ring-inset ring-teal-500' : '',
+              dragIndex === index ? 'opacity-40' : '',
+              rule.enabled ? '' : 'opacity-55'
+            ]">
+
+          <span class="cursor-grab text-zinc-300 transition-colors group-hover:text-zinc-400 dark:text-zinc-700"
+                aria-hidden="true" title="Drag to reorder">{{ icon('grip') }}</span>
+
+          <input type="checkbox" class="checkbox" :checked="rule.enabled"
+                 @change="setEnabled(rule, $event.target.checked)"
+                 :aria-label="'Enable ' + rule.name">
+
+          <a :href="'/rules/' + rule.id" class="min-w-0 flex-1">
+            <span class="flex flex-wrap items-center gap-2">
+              <span class="truncate text-sm font-medium" x-text="rule.name || '(unnamed rule)'"></span>
+              <span x-show="rule.compile_valid === false" class="badge badge-error"
+                    :title="rule.compile_error">
+                {{ icon('alert', 'h-3 w-3') }} won't compile
+              </span>
+              <span x-show="rule.dry_run === true" class="badge badge-dry"
+                    title="This rule is always dry-run, even when the engine is live">dry run</span>
+            </span>
+            <span class="mt-0.5 block truncate text-xs text-zinc-500 dark:text-zinc-400"
+                  x-text="rule.description || describeActions(rule)"></span>
+          </a>
+
+          <span class="hidden shrink-0 items-center gap-1.5 text-xs text-zinc-500 md:flex"
+                :title="'Cron: ' + rule.cron">
+            {{ icon('clock', 'h-3.5 w-3.5') }}<span x-text="humanCron(rule.cron)"></span>
+          </span>
+
+          <span class="hidden w-24 shrink-0 text-right text-xs text-zinc-500 sm:block"
+                x-text="matchLabel(rule)"></span>
+
+          <button @click="runOne(rule)" :disabled="running === rule.id"
+                  class="btn btn-icon" :aria-label="'Run ' + rule.name" title="Run this rule now">
+            <template x-if="running === rule.id"><span class="spinner"></span></template>
+            <template x-if="running !== rule.id"><span>{{ icon('play') }}</span></template>
+          </button>
+
+          <button @click="remove(rule, index)" class="btn btn-icon btn-icon-danger"
+                  :aria-label="'Delete ' + rule.name" title="Delete this rule">
+            {{ icon('trash') }}
+          </button>
+        </li>
+      </template>
+    </ul>
+
+    <div x-show="reordering" x-cloak
+         class="border-t border-zinc-200 px-4 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+      Saving order…
+    </div>
+  </section>
+
+  <p x-show="!loading && rules.length > 0" x-cloak class="text-xs text-zinc-500">
+    Changes to the enabled switch and the order save immediately. Everything else
+    is edited on the rule's own page.
+  </p>
+
+  {% include "partials/field_panel.html" %}
+</div>
+
+<script>
+function rulesPage() {
+  return fieldPanelMixin({
+    rules: [], loading: true, importing: false, reordering: false,
+    running: null, dragIndex: null, dragOver: null,
+    meta: {fieldGroups: [], fields: {}, helpers: {}, tables: []},
+    panelOpen: false, panelFilter: '', panelSource: '',
+
+    async load() {
+      this.loading = true;
+      try {
+        this.rules = await api('GET', '/api/rules');
+        var fields = await api('GET', '/api/fields');
+        this.meta.fieldGroups = fields.groups;
+        this.meta.helpers = fields.helpers;
+        this.meta.tables = fields.tables;
+        var byKey = {};
+        fields.groups.forEach(function (g) {
+          g.fields.forEach(function (f) { byKey[f.key] = f; });
+        });
+        this.meta.fields = byKey;
+      } catch (e) { toast(e.message, false); } finally { this.loading = false; }
+    },
+
+    // The list response already carries every field the API needs back.
+    toPayload(rule) {
+      return {
+        id: rule.id, name: rule.name, description: rule.description,
+        enabled: rule.enabled, condition_mode: rule.condition_mode,
+        condition_tree: rule.condition_tree, raw_sql: rule.raw_sql,
+        target_source_ids: rule.target_source_ids, cron: rule.cron,
+        timezone: rule.timezone, dry_run: rule.dry_run,
+        stop_on_match: rule.stop_on_match, cooldown_seconds: rule.cooldown_seconds,
+        actions: rule.actions
+      };
+    },
+
+    async setEnabled(rule, on) {
+      var was = rule.enabled;
+      rule.enabled = on;
+      try {
+        var payload = this.toPayload(rule);
+        payload.enabled = on;
+        await api('PUT', '/api/rules/' + rule.id, payload);
+        toast(rule.name + (on ? ' enabled' : ' disabled'), true);
+      } catch (e) {
+        rule.enabled = was;  // put the switch back where it was
+        toast(e.message, false);
+      }
+    },
+
+    async remove(rule, index) {
+      var ok = await confirmAction({
+        title: 'Delete this rule?',
+        body: '“' + (rule.name || 'unnamed rule') + '” will be removed. ' +
+              'Runs it has already recorded are kept.',
+        confirmLabel: 'Delete rule'
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/rules/' + rule.id);
+        this.rules.splice(index, 1);
+        toast('Rule deleted', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    async moveRule(from, to) {
+      if (from === null || to === null || from === to) return;
+      if (to < 0 || to >= this.rules.length) return;
+      var moved = this.rules.splice(from, 1)[0];
+      this.rules.splice(to, 0, moved);
+      this.dragIndex = null;
+      this.dragOver = null;
+
+      this.reordering = true;
+      try {
+        await api('POST', '/api/rules/reorder',
+                  {rule_ids: this.rules.map(function (r) { return r.id; })});
+      } catch (e) {
+        toast(e.message, false);
+        await this.load();
+      } finally { this.reordering = false; }
+    },
+
+    focusRow(index) {
+      var rows = this.$el.querySelectorAll('li[draggable]');
+      if (rows[index]) rows[index].focus();
+    },
+
+    async runOne(rule) {
+      this.running = rule.id;
+      try {
+        var r = await api('POST', '/api/engine/run', {rule_id: rule.id, force_refresh: true});
+        if (!r.started) { toast(r.reason, false); return; }
+        toast('Matched ' + formatCount(r.torrents_matched) + ' · ' +
+              (r.dry_run ? 'would apply ' + formatCount(r.actions_would_apply)
+                         : 'applied ' + formatCount(r.actions_applied)) +
+              ' · skipped ' + formatCount(r.actions_skipped), r.errors === 0);
+        await this.load();
+      } catch (e) { toast(e.message, false); } finally { this.running = null; }
+    },
+
+    async loadExamples() {
+      this.importing = true;
+      try {
+        var response = await fetch('/api/config/examples');
+        if (!response.ok) throw new Error('could not fetch the example rules');
+        var yaml = await response.text();
+        var result = await api('POST', '/api/config/import', {content: yaml, apply: true});
+        (result.warnings || []).forEach(function (w) { toast(w, false); });
+        await this.load();
+        toast('Imported ' + result.rules.length + ' example rules — all disabled', true);
+      } catch (e) { toast(e.message, false); } finally { this.importing = false; }
+    },
+
+    /* Cron is exact but unreadable in a list. The common shapes get plain
+       English; anything unusual falls back to the expression itself, which is
+       better than a wrong paraphrase. The tooltip always has the raw cron. */
+    humanCron(cron) {
+      var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      var parts = (cron || '').trim().split(/\s+/);
+      if (parts.length !== 5) return cron;
+      var m = parts[0], h = parts[1], dom = parts[2], mon = parts[3], dow = parts[4];
+
+      function at(hh, mm) {
+        return String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+      }
+      if (/^\*\/\d+$/.test(m) && h === '*' && dom === '*' && mon === '*' && dow === '*') {
+        return 'every ' + m.slice(2) + ' min';
+      }
+      if (m === '0' && /^\*\/\d+$/.test(h) && dom === '*' && mon === '*' && dow === '*') {
+        return 'every ' + h.slice(2) + ' h';
+      }
+      if (/^\d+$/.test(m) && h === '*' && dom === '*' && mon === '*' && dow === '*') {
+        return 'hourly at :' + String(m).padStart(2, '0');
+      }
+      if (/^\d+$/.test(m) && /^\d+$/.test(h) && dom === '*' && mon === '*') {
+        if (dow === '*') return 'daily ' + at(h, m);
+        if (/^\d$/.test(dow)) return DAYS[Number(dow) % 7] + ' ' + at(h, m);
+      }
+      return cron;
+    },
+
+    describeActions(rule) {
+      if (!rule.actions || !rule.actions.length) return 'No actions yet';
+      return rule.actions.map(function (a) { return a.type; }).join(', ');
+    },
+
+    matchLabel(rule) {
+      if (rule.last_matched_count === null || rule.last_matched_count === undefined) {
+        return 'never run';
+      }
+      return formatCount(rule.last_matched_count) + ' matched';
+    },
+
+    openPanel() { this.panelOpen = true; }
+  });
+}
+</script>
+{% endblock %}

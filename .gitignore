@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+node_modules/
+data/
+exports/
+scripts/
+config/
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/
+.ruff_cache/
+.env
+src/qbitflow/web/static/app.css

@@ -1,0 +1,88 @@
+{#
+  The field picker.
+
+  This replaces a native <select> carrying all 80 fields across optgroups, which
+  meant scrolling a full-height dropdown to find "days since anyone watched it" --
+  while a searchable panel showing exactly that already existed one button away.
+
+  Type to filter across the label, the key and the description; arrows to move;
+  Enter to choose. Each row shows the field's type and, where the user's own
+  instances have been polled, a real value from their data rather than a made-up
+  example.
+
+  Relies on the page component providing: meta.fieldGroups, fieldFor(key),
+  searchFields(query) and onFieldChange(cond).
+#}
+
+{% macro field_picker(cond) -%}
+<div x-data="{ open: false, q: '', hi: 0 }"
+     @keydown.escape.stop="open = false"
+     @click.outside="open = false"
+     class="relative min-w-0 flex-1">
+
+  <button type="button"
+          @click="open = !open; q = ''; hi = 0; if (open) $nextTick(() => $refs.q.focus())"
+          :aria-expanded="open" aria-haspopup="listbox"
+          class="input flex items-center justify-between gap-2 text-left">
+    <span class="min-w-0 flex-1 truncate"
+          :class="{{ cond }}.field ? '' : 'text-zinc-400 dark:text-zinc-600'">
+      <template x-if="fieldFor({{ cond }}.field)">
+        <span>
+          <span x-text="fieldFor({{ cond }}.field).label"></span>
+          <span class="ml-1 font-mono text-xs text-zinc-400" x-text="{{ cond }}.field"></span>
+        </span>
+      </template>
+      <template x-if="!fieldFor({{ cond }}.field)">
+        <span x-text="{{ cond }}.field || 'Choose a field…'"></span>
+      </template>
+    </span>
+    <svg class="h-4 w-4 shrink-0 text-zinc-400" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.75" stroke-linecap="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6"/>
+    </svg>
+  </button>
+
+  <div x-show="open" x-cloak
+       class="absolute left-0 z-30 mt-1 w-[26rem] max-w-[80vw] overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+
+    <div class="border-b border-zinc-200 p-2 dark:border-zinc-800">
+      <input x-ref="q" x-model="q" @input="hi = 0"
+             @keydown.arrow-down.prevent="hi = Math.min(hi + 1, searchFields(q).length - 1);
+                                          $refs.list.children[hi] && $refs.list.children[hi].scrollIntoView({block:'nearest'})"
+             @keydown.arrow-up.prevent="hi = Math.max(hi - 1, 0);
+                                        $refs.list.children[hi] && $refs.list.children[hi].scrollIntoView({block:'nearest'})"
+             @keydown.enter.prevent="open = !chooseField({{ cond }}, q, hi)"
+             placeholder="Search fields…" aria-label="Search fields"
+             class="input py-1 text-sm">
+    </div>
+
+    <ul x-ref="list" role="listbox" class="max-h-72 overflow-y-auto p-1">
+      <template x-for="(f, i) in searchFields(q)" :key="f.key">
+        <li role="option" :aria-selected="i === hi"
+            @mouseenter="hi = i"
+            @click="chooseField({{ cond }}, q, i); open = false"
+            class="cursor-pointer rounded-lg px-2.5 py-1.5"
+            :class="i === hi ? 'bg-teal-50 dark:bg-teal-950/60' : ''">
+          <div class="flex items-baseline gap-2">
+            <span class="text-sm font-medium" x-text="f.label"></span>
+            <code class="font-mono text-xs text-zinc-400" x-text="f.key"></code>
+            <span class="badge badge-muted ml-auto shrink-0" x-text="f.type"></span>
+          </div>
+          <p class="truncate text-xs text-zinc-500 dark:text-zinc-400" x-text="f.description"></p>
+          <p class="truncate text-xs text-zinc-400 dark:text-zinc-500">
+            <template x-if="f.live_samples && f.live_samples.length">
+              <span>Your data: <span class="font-mono" x-text="f.live_samples.slice(0, 3).join(', ')"></span></span>
+            </template>
+            <template x-if="(!f.live_samples || !f.live_samples.length) && f.sample">
+              <span>e.g. <span class="font-mono" x-text="f.sample"></span></span>
+            </template>
+          </p>
+        </li>
+      </template>
+      <li x-show="searchFields(q).length === 0" class="px-2.5 py-6 text-center text-sm text-zinc-500">
+        Nothing matches “<span x-text="q"></span>”.
+      </li>
+    </ul>
+  </div>
+</div>
+{%- endmacro %}

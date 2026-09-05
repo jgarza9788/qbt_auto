@@ -1,0 +1,271 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  The design system.
+
+  Every repeated control lives here rather than as a class string retyped in nine
+  templates. That is not only tidiness: the strings had already drifted -- buttons
+  were px-2 in some places and px-3 in others -- and a component layer is the only
+  thing that keeps a UI of this size internally consistent as it grows.
+
+  Neutrals are zinc rather than slate, and the accent is teal rather than sky,
+  because slate + sky is the default palette of every Tailwind admin panel and
+  this should not look like one.
+*/
+
+@layer base {
+  /*
+    Alpine sets x-cloak on anything that must not be seen before it initialises,
+    and removes it once it has. Without this rule the attribute does nothing, so
+    the rule editor, the field panel and the test results were all VISIBLE on
+    every page load until Alpine booted. This one line is the flash fix.
+  */
+  [x-cloak] { display: none !important; }
+
+  /*
+    Same failure, different attribute: the HTML `hidden` attribute is only
+    `display: none` at the very bottom of the cascade, so any Tailwind display
+    utility on the same element -- `grid` on the confirm dialog, say -- silently
+    beats it and leaves a full-screen overlay swallowing every click on the page.
+  */
+  [hidden] { display: none !important; }
+
+  :root {
+    color-scheme: light;
+    /* Numbers in tables must not jitter as they update. */
+    font-variant-numeric: tabular-nums;
+  }
+  .dark:root, :root.dark { color-scheme: dark; }
+
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /*
+    One focus ring for the whole application. Keyboard users had nothing at all
+    before this -- there was not a single focus-visible style in any template.
+  */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply outline-none ring-2 ring-teal-500/70 ring-offset-2 ring-offset-white;
+  }
+  .dark :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    @apply ring-offset-zinc-950;
+  }
+
+  ::selection { @apply bg-teal-200 text-teal-950; }
+  .dark ::selection { @apply bg-teal-800 text-teal-50; }
+
+  /* Unobtrusive scrollbars inside panels and log views. */
+  * { scrollbar-width: thin; scrollbar-color: theme(colors.zinc.300) transparent; }
+  .dark * { scrollbar-color: theme(colors.zinc.700) transparent; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply rounded-full bg-zinc-300; }
+  .dark ::-webkit-scrollbar-thumb { @apply bg-zinc-700; }
+}
+
+@layer components {
+
+  /* -- surfaces ---------------------------------------------------------- */
+
+  .card {
+    @apply rounded-xl border border-zinc-200 bg-white shadow-sm
+           dark:border-zinc-800 dark:bg-zinc-900;
+  }
+  .card-header {
+    @apply flex items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3
+           dark:border-zinc-800;
+  }
+  .card-body { @apply p-4; }
+  /* One step in from a card: nested groups, action rows, log blocks. */
+  .raised {
+    @apply rounded-lg border border-zinc-200 bg-zinc-50/70
+           dark:border-zinc-800 dark:bg-zinc-800/40;
+  }
+
+  /* -- typography -------------------------------------------------------- */
+
+  .page-title { @apply text-2xl font-semibold tracking-tight; }
+  .page-subtitle { @apply mt-0.5 text-sm text-zinc-500 dark:text-zinc-400; }
+  .section-title { @apply text-sm font-semibold; }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400;
+  }
+  .label { @apply mb-1 block text-sm font-medium; }
+  .hint { @apply mt-1 text-xs text-zinc-500 dark:text-zinc-400; }
+  .muted { @apply text-zinc-500 dark:text-zinc-400; }
+  .mono {
+    @apply rounded bg-zinc-100 px-1 py-0.5 font-mono text-[0.8em]
+           text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300;
+  }
+
+  /* -- buttons ----------------------------------------------------------- */
+
+  .btn {
+    @apply inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border
+           border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700
+           transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed
+           disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900
+           dark:text-zinc-200 dark:hover:bg-zinc-800;
+  }
+  /*
+    Each variant repeats `dark:border-transparent`. Without it `.btn`'s own
+    `dark:border-zinc-700` -- specificity (0,2,0) against the variant's (0,1,0) --
+    wins in dark mode, and every icon button grows an outline nobody asked for.
+  */
+  .btn-primary {
+    @apply border-transparent bg-teal-600 text-white hover:bg-teal-700
+           dark:border-transparent dark:bg-teal-600 dark:text-white dark:hover:bg-teal-500;
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-zinc-600 hover:bg-zinc-100
+           dark:border-transparent dark:bg-transparent dark:text-zinc-400
+           dark:hover:bg-zinc-800;
+  }
+  .btn-danger {
+    @apply border-transparent bg-rose-600 text-white hover:bg-rose-700
+           dark:border-transparent dark:bg-rose-600 dark:text-white dark:hover:bg-rose-500;
+  }
+  .btn-sm { @apply gap-1 rounded-md px-2 py-1 text-xs; }
+  /* Icon-only. Every one of these needs an aria-label. */
+  .btn-icon {
+    @apply grid h-8 w-8 shrink-0 place-items-center rounded-lg border-transparent
+           bg-transparent p-0 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900
+           dark:border-transparent dark:bg-transparent dark:text-zinc-400
+           dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
+  }
+  .btn-icon-danger { @apply hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/60; }
+
+  /* -- form controls ----------------------------------------------------- */
+
+  .input, .select, .textarea {
+    @apply w-full rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm
+           text-zinc-900 placeholder:text-zinc-400 disabled:opacity-60
+           dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100
+           dark:placeholder:text-zinc-600;
+  }
+  .textarea { @apply py-2 font-mono text-xs; }
+  .select { @apply pr-8; }
+  .input-mono { @apply font-mono; }
+  .checkbox {
+    /* accent-color, not just text-*: a native checkbox takes its tick colour
+       from the accent property and ignores the text colour entirely. */
+    @apply h-4 w-4 shrink-0 rounded border-zinc-300 accent-teal-600 text-teal-600
+           focus:ring-teal-500 dark:border-zinc-600 dark:bg-zinc-800;
+  }
+  .field-error { @apply border-rose-400 dark:border-rose-700; }
+
+  /* -- badges ------------------------------------------------------------ */
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium
+           whitespace-nowrap;
+  }
+  .badge-ok { @apply bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300; }
+  .badge-warn { @apply bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300; }
+  .badge-error { @apply bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300; }
+  .badge-info { @apply bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300; }
+  .badge-dry { @apply bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300; }
+  .badge-muted { @apply bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300; }
+
+  /* -- inline notices ---------------------------------------------------- */
+
+  /*
+    For things that must stay on screen. A toast that expires after four seconds
+    is the wrong home for "your Plex instance is unreachable".
+  */
+  .notice { @apply flex gap-2.5 rounded-xl border px-4 py-3 text-sm; }
+  .notice-info {
+    @apply border-teal-200 bg-teal-50 text-teal-900
+           dark:border-teal-900 dark:bg-teal-950/50 dark:text-teal-200;
+  }
+  .notice-warn {
+    @apply border-amber-200 bg-amber-50 text-amber-900
+           dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200;
+  }
+  .notice-error {
+    @apply border-rose-200 bg-rose-50 text-rose-900
+           dark:border-rose-900 dark:bg-rose-950/50 dark:text-rose-200;
+  }
+  .notice-dry {
+    @apply border-violet-200 bg-violet-50 text-violet-900
+           dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200;
+  }
+
+  /* -- tables ------------------------------------------------------------ */
+
+  .table { @apply w-full text-sm; }
+  .table thead tr { @apply border-b border-zinc-200 dark:border-zinc-800; }
+  .table th {
+    @apply px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide
+           text-zinc-500 dark:text-zinc-400;
+  }
+  .table td { @apply px-4 py-2 align-middle; }
+  .table tbody tr { @apply border-b border-zinc-100 last:border-0 dark:border-zinc-800/70; }
+  .table tbody tr:hover { @apply bg-zinc-50 dark:bg-zinc-800/40; }
+  .num { @apply text-right tabular-nums; }
+
+  /* -- loading ----------------------------------------------------------- */
+
+  .skeleton {
+    @apply animate-pulse rounded bg-zinc-200/80 dark:bg-zinc-800;
+  }
+  .spinner {
+    @apply inline-block h-4 w-4 animate-spin rounded-full border-2 border-current
+           border-r-transparent align-[-0.125em];
+  }
+
+  /* -- empty states ------------------------------------------------------ */
+
+  .empty { @apply flex flex-col items-center gap-2 px-6 py-14 text-center; }
+  .empty-title { @apply text-sm font-medium; }
+  .empty-hint { @apply max-w-sm text-sm text-zinc-500 dark:text-zinc-400; }
+
+  /* -- navigation -------------------------------------------------------- */
+
+  .nav-link {
+    @apply rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors
+           hover:bg-zinc-100 hover:text-zinc-900
+           dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100;
+  }
+  .nav-link-active {
+    @apply bg-zinc-900 text-white hover:bg-zinc-900 hover:text-white
+           dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-100
+           dark:hover:text-zinc-900;
+  }
+
+  /* -- dry-run rail ------------------------------------------------------ */
+
+  /*
+    The single most important fact about this application is whether it will
+    actually touch your files. It is a two-pixel band across the top of every
+    page rather than a chip you have to go looking for.
+  */
+  .rail { @apply h-1 w-full transition-colors; }
+  .rail-dry { @apply bg-violet-500; }
+  .rail-live { @apply bg-teal-500; }
+  .rail-off { @apply bg-zinc-300 dark:bg-zinc-700; }
+
+  /* -- misc -------------------------------------------------------------- */
+
+  .divide-rows > * + * { @apply border-t border-zinc-100 dark:border-zinc-800/70; }
+  .link { @apply font-medium text-teal-700 underline-offset-2 hover:underline dark:text-teal-400; }
+  .kbd {
+    @apply rounded border border-zinc-300 bg-zinc-100 px-1.5 py-0.5 font-mono text-[11px]
+           font-medium text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400;
+  }
+  /* Only visible once focused: the first tab stop on every page. */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50
+           focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm
+           focus:font-medium focus:shadow-lg dark:focus:bg-zinc-900;
+  }
+}

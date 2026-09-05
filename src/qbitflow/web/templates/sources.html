@@ -1,0 +1,519 @@
+{% extends "base.html" %}
+{% from "partials/icons.html" import icon %}
+{% block title %}Instances · qbitflow{% endblock %}
+
+{#
+  The forms use <template x-if>, not x-show. x-show renders the subtree and only
+  hides it, so every binding inside still evaluates -- and with a null draft each
+  one threw "Cannot read properties of null", filling the console on a page that
+  looked fine.
+#}
+
+{% block content %}
+<div x-data="sourcesPage()" x-init="load()" class="space-y-6">
+
+  <div>
+    <h1 class="page-title">Instances &amp; storage</h1>
+    <p class="page-subtitle">
+      Every source is optional. qbitflow runs perfectly well with only a
+      qBittorrent instance configured.
+    </p>
+  </div>
+
+  {# -- Connections ------------------------------------------------------- #}
+  <section class="card">
+    <div class="card-header">
+      <h2 class="section-title">Connections</h2>
+      <button @click="newSource()" class="btn btn-sm">
+        {{ icon('plus', 'h-3 w-3') }} Add connection
+      </button>
+    </div>
+
+    <div x-show="loading" class="space-y-2 p-4">
+      <div class="skeleton h-5 w-2/3"></div>
+      <div class="skeleton h-5 w-1/2"></div>
+    </div>
+
+    <template x-if="!loading && sources.length === 0 && !sourceDraft">
+      <div class="empty">
+        <span class="grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-400">
+          {{ icon('database', 'h-5 w-5') }}
+        </span>
+        <p class="empty-title">No connections yet</p>
+        <p class="empty-hint">
+          Add a qBittorrent instance to begin. Media servers are optional — they
+          only add library and watch data for rules to reason about.
+        </p>
+        <button @click="newSource()" class="btn btn-primary mt-2">Add a connection</button>
+      </div>
+    </template>
+
+    <ul class="divide-rows">
+      <template x-for="s in sources" :key="s.id">
+        <li class="px-4 py-3">
+          <div class="flex flex-wrap items-center gap-2.5 text-sm">
+            <span class="h-2 w-2 shrink-0 rounded-full"
+                  :class="s.enabled ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-700'"
+                  :title="s.enabled ? 'Enabled' : 'Disabled'"></span>
+            <span class="font-medium" x-text="s.name"></span>
+            <span class="badge badge-muted" x-text="s.kind"></span>
+            <span class="truncate text-xs text-zinc-500" x-text="s.base_url"></span>
+            <span x-show="!s.has_secret" class="badge badge-warn">no credential</span>
+
+            <div class="ml-auto flex items-center gap-1.5">
+              <template x-if="health[s.id]">
+                <span class="badge" :class="health[s.id].cls" x-text="health[s.id].text"></span>
+              </template>
+              <button @click="test(s)" class="btn btn-sm" :disabled="testing === s.id">Test</button>
+              <button @click="sample(s)" class="btn btn-sm">Sample</button>
+              <button @click="editSource(s)" class="btn btn-icon" :aria-label="'Edit ' + s.name">
+                {{ icon('sliders', 'h-3.5 w-3.5') }}
+              </button>
+              <button @click="removeSource(s)" class="btn btn-icon btn-icon-danger"
+                      :aria-label="'Delete ' + s.name">{{ icon('trash', 'h-3.5 w-3.5') }}</button>
+            </div>
+          </div>
+
+          {# The failure stays put. A four-second toast is the wrong home for
+             "your Plex token is wrong". #}
+          <template x-if="health[s.id] && health[s.id].error">
+            <div class="notice notice-error mt-2 px-3 py-2 text-xs">
+              {{ icon('alert', 'h-4 w-4 shrink-0') }}
+              <span x-text="health[s.id].error"></span>
+            </div>
+          </template>
+
+          <pre x-show="samples[s.id]" x-cloak
+               class="mt-2 max-h-48 overflow-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2 font-mono text-xs dark:border-zinc-800 dark:bg-zinc-950"
+               x-text="samples[s.id]"></pre>
+        </li>
+      </template>
+    </ul>
+
+    <template x-if="sourceDraft">
+      <div class="border-t border-zinc-200 p-4 dark:border-zinc-800">
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label class="label" for="src-name">Name</label>
+            <input id="src-name" x-model="sourceDraft.name" placeholder="main-qbt" class="input">
+            <p class="hint">Used in rules and in the environment-variable override name.</p>
+          </div>
+          <div>
+            <label class="label" for="src-kind">Type</label>
+            <select id="src-kind" x-model="sourceDraft.kind" class="select"
+                    x-init="$nextTick(() => $el.value = sourceDraft.kind)">
+              <template x-for="k in kinds" :key="k">
+                <option :value="k" x-text="k"></option>
+              </template>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="src-url">Base URL</label>
+            <input id="src-url" x-model="sourceDraft.base_url"
+                   placeholder="http://qbittorrent:8080" class="input">
+          </div>
+          <div>
+            <label class="label" for="src-user">Username</label>
+            <input id="src-user" x-model="sourceDraft.username" :placeholder="usernameHint()"
+                   class="input">
+          </div>
+          <div>
+            <label class="label" for="src-secret" x-text="secretLabel()"></label>
+            <input id="src-secret" x-model="sourceDraft.secret" type="password" class="input"
+                   :placeholder="sourceDraft.id ? 'leave blank to keep the stored value' : ''">
+            <p class="hint">Encrypted at rest. Never returned by the API or shown again.</p>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="label" for="src-timeout">Timeout (s)</label>
+              <input id="src-timeout" type="number" min="1"
+                     x-model.number="sourceDraft.timeout_seconds" class="input">
+            </div>
+            <div class="flex flex-col justify-end gap-2 pb-1">
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" class="checkbox" x-model="sourceDraft.enabled"> Enabled
+              </label>
+              <label class="flex items-center gap-2 text-sm">
+                <input type="checkbox" class="checkbox" x-model="sourceDraft.verify_ssl"> Verify TLS
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <details class="raised mt-3 p-3 text-sm">
+          <summary class="cursor-pointer font-medium">Advanced options (JSON)</summary>
+          <textarea x-model="optionsText" rows="4" class="textarea mt-2"
+                    aria-label="Adapter options as JSON"></textarea>
+          <p class="hint" x-html="optionsHint()"></p>
+        </details>
+
+        <div class="mt-3 flex gap-2">
+          <button @click="saveSource()" class="btn btn-primary">Save connection</button>
+          <button @click="sourceDraft = null" class="btn">Cancel</button>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  {# -- Storage paths ----------------------------------------------------- #}
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="section-title">Storage paths</h2>
+        <p class="text-xs text-zinc-500 dark:text-zinc-400">
+          Named volumes, drives or folders. Rules read them as
+          <code class="mono">storage.used_percent</code> with the name as its argument.
+        </p>
+      </div>
+      <button @click="newStorage()" class="btn btn-sm">
+        {{ icon('plus', 'h-3 w-3') }} Add path
+      </button>
+    </div>
+
+    <template x-if="!loading && storage.length === 0 && !storageDraft">
+      <div class="empty">
+        <span class="grid h-11 w-11 place-items-center rounded-xl bg-teal-50 text-teal-600 dark:bg-teal-950 dark:text-teal-400">
+          {{ icon('drive', 'h-5 w-5') }}
+        </span>
+        <p class="empty-title">No storage paths</p>
+        <p class="empty-hint">
+          Name the disks you want rules to reason about — “move things off the fast
+          drive when it passes 85%” needs to know which drive you mean.
+        </p>
+        <button @click="newStorage()" class="btn btn-primary mt-2">Add a path</button>
+      </div>
+    </template>
+
+    <ul class="divide-rows">
+      <template x-for="s in storage" :key="s.id">
+        <li class="flex flex-wrap items-center gap-3 px-4 py-2.5 text-sm">
+          <span class="font-medium" x-text="s.name"></span>
+          <code class="text-xs text-zinc-500" x-text="s.path"></code>
+
+          <template x-if="s.live && s.live.available">
+            <span class="flex items-center gap-2 text-xs text-zinc-500">
+              <span class="h-1.5 w-24 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
+                <span class="block h-full rounded-full"
+                      :class="s.live.used_percent > 90 ? 'bg-rose-500'
+                              : (s.live.used_percent > 75 ? 'bg-amber-500' : 'bg-emerald-500')"
+                      :style="'width:' + Math.min(100, s.live.used_percent) + '%'"></span>
+              </span>
+              <span x-text="s.live.used_percent.toFixed(1) + '% used · ' +
+                            s.live.free_gb.toFixed(0) + ' GB free'"></span>
+            </span>
+          </template>
+          <template x-if="s.live && !s.live.available">
+            <span class="badge badge-error" x-text="s.live.error || 'unavailable'"></span>
+          </template>
+
+          <div class="ml-auto flex gap-1.5">
+            <button @click="editStorage(s)" class="btn btn-icon" :aria-label="'Edit ' + s.name">
+              {{ icon('sliders', 'h-3.5 w-3.5') }}
+            </button>
+            <button @click="removeStorage(s)" class="btn btn-icon btn-icon-danger"
+                    :aria-label="'Delete ' + s.name">{{ icon('trash', 'h-3.5 w-3.5') }}</button>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <template x-if="storageDraft">
+      <div class="border-t border-zinc-200 p-4 dark:border-zinc-800">
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="label" for="st-name">Name</label>
+            <input id="st-name" x-model="storageDraft.name" placeholder="downloads" class="input">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="label" for="st-path">Path</label>
+            <input id="st-path" x-model="storageDraft.path" placeholder="/mnt/downloads" class="input">
+            <p class="hint">
+              As this container sees it. A missing path reports as unavailable rather
+              than failing the run.
+            </p>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-4">
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="checkbox" x-model="storageDraft.enabled"> Enabled
+          </label>
+          <label class="flex items-center gap-2 text-sm">
+            <input type="checkbox" class="checkbox" x-model="storageDraft.measure_folder_size">
+            Measure folder size (walks the tree)
+          </label>
+          <label class="flex items-center gap-2 text-sm" x-show="storageDraft.measure_folder_size">
+            every
+            <input type="number" min="5" class="input w-20"
+                   x-model.number="storageDraft.folder_scan_interval_minutes"
+                   aria-label="Folder scan interval in minutes">
+            minutes
+          </label>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button @click="saveStorage()" class="btn btn-primary">Save path</button>
+          <button @click="storageDraft = null" class="btn">Cancel</button>
+        </div>
+      </div>
+    </template>
+  </section>
+
+  {# -- Path mappings ----------------------------------------------------- #}
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="section-title">Path mappings</h2>
+        <p class="text-xs text-zinc-500 dark:text-zinc-400">
+          Rewrites a path prefix so services that mount the same files at different
+          paths still match.
+        </p>
+      </div>
+      <button @click="newMapping()" class="btn btn-sm">
+        {{ icon('plus', 'h-3 w-3') }} Add mapping
+      </button>
+    </div>
+
+    <template x-if="!loading && mappings.length === 0 && !mappingDraft">
+      <div class="empty">
+        <p class="empty-title">No mappings</p>
+        <p class="empty-hint">
+          Add one if Plex reports <code class="mono">/data/movies</code> where
+          qBittorrent reports <code class="mono">/downloads/movies</code>. Without a
+          mapping, matching only works when every container uses identical mounts.
+        </p>
+      </div>
+    </template>
+
+    <ul class="divide-rows">
+      <template x-for="m in mappings" :key="m.id">
+        <li class="flex flex-wrap items-center gap-3 px-4 py-2.5 font-mono text-sm">
+          <span x-text="m.from_prefix"></span>
+          <span class="text-zinc-400" aria-hidden="true">→</span>
+          <span x-text="m.to_prefix"></span>
+          <span class="font-sans text-xs text-zinc-500"
+                x-text="m.source_id ? sourceName(m.source_id) : 'all sources'"></span>
+          <div class="ml-auto flex gap-1.5">
+            <button @click="editMapping(m)" class="btn btn-icon" aria-label="Edit mapping">
+              {{ icon('sliders', 'h-3.5 w-3.5') }}
+            </button>
+            <button @click="removeMapping(m)" class="btn btn-icon btn-icon-danger"
+                    aria-label="Delete mapping">{{ icon('trash', 'h-3.5 w-3.5') }}</button>
+          </div>
+        </li>
+      </template>
+    </ul>
+
+    <template x-if="mappingDraft">
+      <div class="border-t border-zinc-200 p-4 dark:border-zinc-800">
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label class="label" for="pm-from">From prefix</label>
+            <input id="pm-from" x-model="mappingDraft.from_prefix" placeholder="/data/movies"
+                   class="input input-mono">
+          </div>
+          <div>
+            <label class="label" for="pm-to">To prefix</label>
+            <input id="pm-to" x-model="mappingDraft.to_prefix" placeholder="/downloads/movies"
+                   class="input input-mono">
+          </div>
+          <div>
+            <label class="label" for="pm-src">Applies to</label>
+            <select id="pm-src" x-model.number="mappingDraft.source_id" class="select"
+                    x-init="$nextTick(() => $el.value = mappingDraft.source_id ?? '')">
+              <option :value="null">All sources</option>
+              <template x-for="s in sources" :key="s.id">
+                <option :value="s.id" x-text="s.name"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button @click="saveMapping()" class="btn btn-primary">Save mapping</button>
+          <button @click="mappingDraft = null" class="btn">Cancel</button>
+        </div>
+      </div>
+    </template>
+  </section>
+</div>
+
+<script>
+function sourcesPage() {
+  return {
+    sources: [], storage: [], mappings: [], health: {}, samples: {},
+    sourceDraft: null, storageDraft: null, mappingDraft: null, optionsText: '{}',
+    loading: true, testing: null,
+    kinds: ['qbittorrent', 'plex', 'jellyfin', 'tautulli', 'jellystat', 'jellyglance'],
+
+    async load() {
+      try {
+        this.sources = await api('GET', '/api/sources');
+        this.storage = await api('GET', '/api/storage');
+        this.mappings = await api('GET', '/api/path-mappings');
+      } catch (e) { toast(e.message, false); } finally { this.loading = false; }
+    },
+
+    sourceName(id) {
+      var s = this.sources.find(function (x) { return x.id === id; });
+      return s ? s.name : ('#' + id);
+    },
+
+    usernameHint() {
+      return this.sourceDraft && this.sourceDraft.kind === 'qbittorrent'
+        ? 'admin' : 'not needed for this type';
+    },
+
+    secretLabel() {
+      var k = this.sourceDraft ? this.sourceDraft.kind : '';
+      if (k === 'qbittorrent') return 'Password';
+      if (k === 'plex') return 'Plex token';
+      return 'API key';
+    },
+
+    optionsHint() {
+      var k = this.sourceDraft ? this.sourceDraft.kind : '';
+      if (k === 'qbittorrent') {
+        return 'e.g. <code>{"fetch_files": true}</code> to fetch per-torrent file lists. ' +
+               'That is one request per torrent, so it is off by default; turn it on when ' +
+               'you need season packs matched file by file.';
+      }
+      if (k === 'jellyfin') {
+        return 'e.g. <code>{"user_scope": "all"}</code> or a comma-separated list of usernames.';
+      }
+      if (k === 'tautulli') return 'e.g. <code>{"max_history_records": 20000}</code>.';
+      if (k === 'jellystat' || k === 'jellyglance') {
+        return 'Endpoints for this source are configurable because its API could not be ' +
+               'verified when this was written: <code>health_path</code>, <code>history_path</code>, ' +
+               '<code>history_method</code>, <code>rows_key</code>, <code>field_map</code>. ' +
+               'If the connection test fails, correct them here.';
+      }
+      return 'Adapter-specific options.';
+    },
+
+    newSource() {
+      this.sourceDraft = {
+        id: null, name: '', kind: 'qbittorrent', base_url: '', username: '',
+        secret: '', enabled: true, timeout_seconds: 30, verify_ssl: true, options: {}
+      };
+      this.optionsText = '{}';
+    },
+
+    editSource(s) {
+      this.sourceDraft = Object.assign({}, s, {secret: ''});
+      this.optionsText = JSON.stringify(s.options || {}, null, 2);
+    },
+
+    async saveSource() {
+      var options;
+      try { options = JSON.parse(this.optionsText || '{}'); }
+      catch (e) { toast('Advanced options are not valid JSON', false); return; }
+      try {
+        var body = Object.assign({}, this.sourceDraft, {options: options});
+        if (!body.secret) delete body.secret;
+        await api('POST', '/api/sources', body);
+        this.sourceDraft = null;
+        await this.load();
+        toast('Connection saved', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    async removeSource(s) {
+      var ok = await confirmAction({
+        title: 'Delete this connection?',
+        body: '“' + s.name + '” and its stored credential will be removed. Rules ' +
+              'that target it will fall back to every enabled instance.',
+        confirmLabel: 'Delete connection'
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/sources/' + s.id);
+        await this.load();
+        toast('Connection deleted', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    async test(s) {
+      this.testing = s.id;
+      this.health[s.id] = {cls: 'badge-muted', text: 'testing…', error: null};
+      try {
+        var r = await api('POST', '/api/sources/' + s.id + '/test', {});
+        this.health[s.id] = r.ok
+          ? {cls: 'badge-ok', text: 'ok · ' + r.latency_ms + ' ms', error: null}
+          : {cls: 'badge-error', text: 'failed', error: r.error};
+      } catch (e) {
+        this.health[s.id] = {cls: 'badge-error', text: 'failed', error: e.message};
+      } finally { this.testing = null; }
+    },
+
+    async sample(s) {
+      if (this.samples[s.id]) { delete this.samples[s.id]; return; }
+      this.samples[s.id] = 'loading…';
+      try {
+        var r = await api('GET', '/api/sources/' + s.id + '/sample');
+        this.samples[s.id] = JSON.stringify(r, null, 2);
+      } catch (e) { this.samples[s.id] = 'error: ' + e.message; }
+    },
+
+    newStorage() {
+      this.storageDraft = {
+        id: null, name: '', path: '', enabled: true,
+        measure_folder_size: false, folder_scan_interval_minutes: 360
+      };
+    },
+    editStorage(s) { this.storageDraft = Object.assign({}, s); },
+
+    async saveStorage() {
+      try {
+        var body = Object.assign({}, this.storageDraft);
+        delete body.live;
+        await api('POST', '/api/storage', body);
+        this.storageDraft = null;
+        await this.load();
+        toast('Storage path saved', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    async removeStorage(s) {
+      var ok = await confirmAction({
+        title: 'Delete this storage path?',
+        body: '“' + s.name + '” will no longer be measured. Rules referring to it ' +
+              'by name will stop matching.',
+        confirmLabel: 'Delete path'
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/storage/' + s.id);
+        await this.load();
+        toast('Storage path deleted', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    newMapping() {
+      this.mappingDraft = {id: null, source_id: null, from_prefix: '', to_prefix: '', order: 0};
+    },
+    editMapping(m) { this.mappingDraft = Object.assign({}, m); },
+
+    async saveMapping() {
+      try {
+        await api('POST', '/api/path-mappings', this.mappingDraft);
+        this.mappingDraft = null;
+        await this.load();
+        toast('Mapping saved', true);
+      } catch (e) { toast(e.message, false); }
+    },
+
+    async removeMapping(m) {
+      var ok = await confirmAction({
+        title: 'Delete this mapping?',
+        body: m.from_prefix + ' → ' + m.to_prefix,
+        confirmLabel: 'Delete mapping'
+      });
+      if (!ok) return;
+      try {
+        await api('DELETE', '/api/path-mappings/' + m.id);
+        await this.load();
+        toast('Mapping deleted', true);
+      } catch (e) { toast(e.message, false); }
+    }
+  };
+}
+</script>
+{% endblock %}

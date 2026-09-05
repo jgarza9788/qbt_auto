@@ -1,0 +1,12 @@
+{
+  "name": "qbitflow-css",
+  "private": true,
+  "description": "Build-time only. No JavaScript from here ships in the image.",
+  "scripts": {
+    "build:css": "tailwindcss -i src/qbitflow/web/static/app.src.css -o src/qbitflow/web/static/app.css --minify",
+    "watch:css": "tailwindcss -i src/qbitflow/web/static/app.src.css -o src/qbitflow/web/static/app.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}
