@@ -239,7 +239,7 @@ function actionBuilder(initialJson) {
 // navigator.clipboard only exists in a secure context (HTTPS or http://localhost); opened
 // over plain HTTP on a LAN address it's undefined, so fall back to the legacy
 // execCommand('copy') path, which still works from inside a user-gesture handler.
-function copyToClipboard(text) {
+function copyToClipboard(text, host) {
     if (navigator.clipboard) {
         return navigator.clipboard.writeText(text)
             .then(() => {
@@ -248,28 +248,46 @@ function copyToClipboard(text) {
             })
             .catch(err => {
                 console.warn('navigator.clipboard failed, trying execCommand fallback: ', err);
-                return execCommandCopy(text);
+                return execCommandCopy(text, host);
             });
     }
-    return Promise.resolve(execCommandCopy(text));
+    return Promise.resolve(execCommandCopy(text, host));
 }
 
 // Legacy clipboard write for non-secure contexts (plain HTTP over a LAN address).
 // Deprecated but still supported; must run synchronously inside the click handler.
-function execCommandCopy(text) {
+// `host` is where the temp <textarea> is mounted -- it must be inside any Bootstrap
+// modal/offcanvas focus trap, otherwise the trap steals focus before execCommand runs
+// and the copy silently no-ops while still returning true.
+function execCommandCopy(text, host) {
+    const mount = host || document.body;
+    const selection = document.getSelection();
+    const savedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
     try {
         const ta = document.createElement('textarea');
         ta.value = text;
         ta.setAttribute('readonly', '');
         ta.style.position = 'fixed';
-        ta.style.top = '-9999px';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.focus();
+        ta.style.top = '0';
+        ta.style.left = '0';
+        ta.style.width = '1px';
+        ta.style.height = '1px';
+        ta.style.padding = '0';
+        ta.style.border = 'none';
+        ta.style.outline = 'none';
+        ta.style.boxShadow = 'none';
+        ta.style.background = 'transparent';
+        ta.style.opacity = '0';
+        mount.appendChild(ta);
+        ta.focus({ preventScroll: true });
         ta.select();
         ta.setSelectionRange(0, text.length);
         const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
+        mount.removeChild(ta);
+        if (savedRange && selection) {
+            selection.removeAllRanges();
+            selection.addRange(savedRange);
+        }
         if (ok) {
             console.log('Text copied successfully (execCommand fallback)!');
         } else {
@@ -294,7 +312,10 @@ document.addEventListener('click', function (e) {
     if (!text) return;
 
     const btn = e.target.closest('button[data-copy]');
-    copyToClipboard(text).then(function (ok) {
+    // Mount the fallback textarea inside the panel so a Bootstrap focus trap can't grab
+    // focus back before execCommand runs.
+    const host = trigger.closest('.offcanvas, .modal') || document.body;
+    copyToClipboard(text, host).then(function (ok) {
         if (!btn || btn.dataset.copyBusy) return;
         const original = btn.textContent;
         btn.dataset.copyBusy = '1';
