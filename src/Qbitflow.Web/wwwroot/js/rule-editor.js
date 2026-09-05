@@ -235,6 +235,35 @@ function actionBuilder(initialJson) {
     };
 }
 
+// Copy `text` to the clipboard, returning true on success. navigator.clipboard only
+// exists in a secure context (HTTPS or localhost); when the app is opened over plain
+// HTTP on a LAN address it's undefined, so fall back to a hidden <textarea> + execCommand.
+function copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+        return true;
+    }
+    return execCommandCopy(text);
+}
+
+function execCommandCopy(text) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+    } catch (e) {
+        return false;
+    }
+}
+
 function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
     const rows = [];
     for (const [relation, fields] of Object.entries(fieldsByRelation)) {
@@ -266,8 +295,7 @@ function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
         // `tag` is what the copied-state highlight keys off ('' clears it); defaults to the text.
         copy(text, tag) {
             const marker = tag || text;
-            if (navigator.clipboard) navigator.clipboard.writeText(text);
-            this.copied = marker;
+            this.copied = copyToClipboard(text) ? marker : '';
             setTimeout(() => { if (this.copied === marker) this.copied = ''; }, 1200);
         },
         // Copy every field key currently shown (respects the search / source filter), one per line.
