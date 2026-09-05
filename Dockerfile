@@ -19,18 +19,22 @@ RUN dotnet publish src/Qbitflow.Web/Qbitflow.Web.csproj -c Release -o /app --no-
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
-# curl is needed for the container HEALTHCHECK below; the aspnet runtime image
-# doesn't include it by default.
+# curl is needed for the container HEALTHCHECK below; gosu lets the entrypoint
+# drop from root to the non-root "app" user after fixing volume ownership.
+# Neither is in the aspnet runtime image by default.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # /data holds the SQLite DB and the data-protection key ring; chown it now so the
-# non-root "app" user (built into the aspnet image since .NET 8) can write to it
-# once a volume is mounted there.
+# non-root "app" user (built into the aspnet image since .NET 8) can write to it.
+# A bind mount will re-set this to the host dir's owner, which is why the
+# entrypoint re-applies the chown at runtime.
 RUN mkdir -p /data && chown app:app /data
 
 COPY --from=build /app .
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENV ASPNETCORE_URLS=http://+:8080 \
     ASPNETCORE_ENVIRONMENT=Production \
@@ -40,9 +44,11 @@ ENV ASPNETCORE_URLS=http://+:8080 \
 EXPOSE 8080
 VOLUME ["/data"]
 
-USER app
+# Deliberately NOT `USER app` here: the entrypoint starts as root so it can chown
+# a freshly bind-mounted /data, then exec's the app as "app" via gosu.
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8080/healthz || exit 1
 
-ENTRYPOINT ["dotnet", "Qbitflow.Web.dll"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
+CMD ["dotnet", "Qbitflow.Web.dll"]

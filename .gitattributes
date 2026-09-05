@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.cs text eol=lf
+*.cshtml text eol=lf
+*.csproj text eol=lf
+*.sln text eol=crlf
