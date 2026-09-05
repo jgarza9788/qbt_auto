@@ -235,34 +235,48 @@ function actionBuilder(initialJson) {
     };
 }
 
-// Copy `text` to the clipboard, returning true on success. navigator.clipboard only
-// exists in a secure context (HTTPS or localhost); when the app is opened over plain
-// HTTP on a LAN address it's undefined, so fall back to a hidden <textarea> + execCommand.
+// Copy `text` to the clipboard. Resolves true on success, false otherwise.
+// navigator.clipboard only exists in a secure context (HTTPS or localhost) -- opened over
+// plain HTTP on a LAN address it's undefined, which is logged so the cause is obvious.
 function copyToClipboard(text) {
-    if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
-        return true;
+    if (!navigator.clipboard) {
+        console.error('Failed to copy text: navigator.clipboard is unavailable. The page must be a secure context (HTTPS, or http://localhost).');
+        return Promise.resolve(false);
     }
-    return execCommandCopy(text);
+    return navigator.clipboard.writeText(text)
+        .then(() => {
+            console.log('Text copied successfully!');
+            return true;
+        })
+        .catch(err => {
+            console.error('Failed to copy text: ', err);
+            return false;
+        });
 }
 
-function execCommandCopy(text) {
-    try {
-        const ta = document.createElement('textarea');
-        ta.value = text;
-        ta.setAttribute('readonly', '');
-        ta.style.position = 'fixed';
-        ta.style.top = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        ta.setSelectionRange(0, text.length);
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        return ok;
-    } catch (e) {
-        return false;
-    }
-}
+// Delegated copy handler: any element carrying a non-empty `data-copy` attribute copies
+// its value when clicked. Kept as a plain document listener (not an Alpine @click) so it
+// keeps working regardless of how/whether the panel's Alpine component initialised, and
+// so a click on the row or on the explicit button both copy. A <button data-copy> also
+// gets brief "Copied!" text feedback.
+document.addEventListener('click', function (e) {
+    const trigger = e.target.closest('[data-copy]');
+    if (!trigger) return;
+    const text = trigger.getAttribute('data-copy');
+    if (!text) return;
+
+    const btn = e.target.closest('button[data-copy]');
+    copyToClipboard(text).then(function (ok) {
+        if (!btn || btn.dataset.copyBusy) return;
+        const original = btn.textContent;
+        btn.dataset.copyBusy = '1';
+        btn.textContent = ok ? 'Copied!' : 'Copy failed';
+        setTimeout(function () {
+            btn.textContent = original;
+            delete btn.dataset.copyBusy;
+        }, 1200);
+    });
+});
 
 function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
     const rows = [];
@@ -283,7 +297,6 @@ function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
         relationFilter: '',
         allRows: rows,
         udfHelpers,
-        copied: '',
         get filteredRows() {
             const q = this.search.trim().toLowerCase();
             return this.allRows.filter(r => {
@@ -292,15 +305,8 @@ function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
                 return r.key.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q);
             });
         },
-        // `tag` is what the copied-state highlight keys off ('' clears it); defaults to the text.
-        copy(text, tag) {
-            const marker = tag || text;
-            this.copied = copyToClipboard(text) ? marker : '';
-            setTimeout(() => { if (this.copied === marker) this.copied = ''; }, 1200);
-        },
-        // Copy every field key currently shown (respects the search / source filter), one per line.
-        copyVisible() {
-            this.copy(this.filteredRows.map(r => r.key).join('\n'), '__all__');
+        get visibleKeys() {
+            return this.filteredRows.map(r => r.key).join('\n');
         }
     };
 }

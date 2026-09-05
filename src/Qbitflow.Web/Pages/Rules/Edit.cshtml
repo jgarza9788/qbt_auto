@@ -298,6 +298,9 @@
             </div>
 
             <div id="advancedSqlBuilder" style="display:@(Model.Input.UseAdvancedSql ? "block" : "none")">
+                <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#fieldRefPanel">
+                    Field reference
+                </button>
                 <label asp-for="Input.AdvancedSqlWhere" class="form-label"></label>
                 <textarea asp-for="Input.AdvancedSqlWhere" class="form-control qf-muted-mono" rows="4"
                           placeholder="category = 'linux' AND size_gb(size_bytes) > 5"></textarea>
@@ -381,8 +384,7 @@
         <div class="p-3 border-bottom">
             <div class="d-flex gap-2 mb-2">
                 <input type="search" class="form-control form-control-sm" placeholder="Search fields…" x-model="search" />
-                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" @@click="copyVisible()"
-                        x-text="copied === '__all__' ? 'Copied!' : 'Copy all'">Copy all</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" :data-copy="visibleKeys">Copy all</button>
             </div>
             <select class="form-select form-select-sm" x-model="relationFilter">
                 <option value="">All sources</option>
@@ -395,14 +397,13 @@
         </div>
         <div style="overflow-y: auto; flex: 1;">
             <template x-for="row in filteredRows" :key="row.relation + '.' + row.key">
-                <div class="qf-field-row d-flex align-items-start gap-2" @@click="copy(row.key, row.key)" title="Click to copy">
+                <div class="qf-field-row d-flex align-items-start gap-2" :data-copy="row.key" title="Click to copy">
                     <div class="flex-grow-1">
                         <div class="qf-field-key" x-text="row.key"></div>
                         <div class="qf-field-type" x-text="row.valueType + ' · ' + row.relation"></div>
                         <div class="small text-secondary" x-text="row.description"></div>
                     </div>
-                    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" @@click.stop="copy(row.key, row.key)"
-                            x-text="copied === row.key ? 'Copied!' : 'Copy'">Copy</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" :data-copy="row.key">Copy</button>
                 </div>
             </template>
         </div>
