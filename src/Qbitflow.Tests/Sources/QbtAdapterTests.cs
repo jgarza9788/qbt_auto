@@ -162,6 +162,47 @@ public class QbtAdapterTests
     }
 
     [Fact]
+    public async Task LoginAsync_Succeeds_WithQbit52Contract_204AndPortSuffixedCookie()
+    {
+        // qBittorrent 5.2+: successful login is HTTP 204 with an empty body and a cookie
+        // named "QBT_SID_<port>" instead of the classic 200 / "Ok." / "SID=".
+        var loginHit = false;
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            if (req.RequestUri!.AbsolutePath == "/api/v2/auth/login")
+            {
+                loginHit = true;
+                var r = new HttpResponseMessage(HttpStatusCode.NoContent);
+                r.Headers.Add("Set-Cookie", "QBT_SID_8090=6PxMW8iSpH5RgMP3o5d8/bwJheedLe+f; HttpOnly; path=/");
+                return r;
+            }
+
+            Assert.True(loginHit, "info endpoint called before login");
+            Assert.True(req.Headers.TryGetValues("Cookie", out var cookies)
+                        && cookies.Contains("QBT_SID_8090=6PxMW8iSpH5RgMP3o5d8/bwJheedLe+f"));
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]", Encoding.UTF8, "application/json") };
+        });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        var connection = new SourceConnectionInfo
+        {
+            InstanceId = 1,
+            InstanceName = "Main",
+            SourceType = SourceType.Qbittorrent,
+            BaseUrl = "http://localhost:8080",
+            Username = "admin",
+            Password = "pw",
+            TimeoutSeconds = 5,
+            VerifySsl = true
+        };
+
+        var result = await adapter.FetchAsync(connection);
+
+        Assert.True(loginHit);
+        Assert.Empty(result.Torrents);
+    }
+
+    [Fact]
     public async Task TestConnectionAsync_ReturnsFailure_WhenServerUnreachable()
     {
         var handler = new FakeHttpMessageHandler(_ => throw new HttpRequestException("Connection refused"));

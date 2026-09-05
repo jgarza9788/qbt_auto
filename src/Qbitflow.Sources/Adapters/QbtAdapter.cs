@@ -186,7 +186,13 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         response.EnsureSuccessStatusCode();
     }
 
-    /// <summary>Returns the "SID=..." cookie header value to attach to later requests, or null if no credentials are configured (some setups whitelist local/LAN access).</summary>
+    /// <summary>
+    /// Logs in and returns the session cookie ("&lt;name&gt;=&lt;value&gt;") to attach to later requests,
+    /// or null when no credentials are configured (some setups whitelist local/LAN access).
+    /// Handles both the classic contract (HTTP 200, body "Ok.", cookie "SID=") and qBittorrent
+    /// 5.2+ (HTTP 204, empty body, cookie "QBT_SID_&lt;port&gt;="). A wrong password is HTTP 401
+    /// (5.2+) or HTTP 200 with body "Fails." (classic).
+    /// </summary>
     private async Task<string?> LoginAsync(HttpClient client, SourceConnectionInfo connection, CancellationToken ct)
     {
         if (string.IsNullOrEmpty(connection.Username))
@@ -204,35 +210,44 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         };
 
         using var response = await client.SendAsync(request, ct);
+        var body = (await ReadSnippetAsync(response, ct));
 
         if (!response.IsSuccessStatusCode)
         {
-            var errBody = await ReadSnippetAsync(response, ct);
             _log.LogWarning(
                 "qBittorrent auth returned HTTP {Status} {Reason} for {Instance} ({Url}). Body: {Body}",
-                (int)response.StatusCode, response.StatusCode, connection.InstanceName, connection.BaseUrl, errBody);
+                (int)response.StatusCode, response.StatusCode, connection.InstanceName, connection.BaseUrl, body);
+            var hint = response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
+                ? " Check the username/password; qBittorrent also temporarily bans an IP after repeated failures -- see its Tools -> Log."
+                : string.Empty;
             throw new InvalidOperationException(
                 $"qBittorrent auth returned HTTP {(int)response.StatusCode} {response.StatusCode}."
-                + (string.IsNullOrEmpty(errBody) ? string.Empty : $" {errBody}"));
+                + (string.IsNullOrEmpty(body) ? string.Empty : $" {body}") + hint);
         }
 
-        var body = (await response.Content.ReadAsStringAsync(ct)).Trim();
-        if (!string.Equals(body, "Ok.", StringComparison.OrdinalIgnoreCase))
+        // Some builds answer a bad login with HTTP 200 + "Fails." rather than a 4xx.
+        if (string.Equals(body, "Fails.", StringComparison.OrdinalIgnoreCase))
         {
             _log.LogWarning(
                 "qBittorrent rejected the login for {Instance} ({Url}); response body: {Body}",
                 connection.InstanceName, connection.BaseUrl, body);
             throw new InvalidOperationException(
-                $"qBittorrent rejected the login (response: \"{body}\"). Verify the username/password; "
+                "qBittorrent rejected the login (response: \"Fails.\"). Verify the username/password; "
                 + "qBittorrent also temporarily bans an IP after repeated failures -- check its Tools -> Log.");
         }
 
+        // Success: HTTP 2xx with an empty body (5.2+) or "Ok." (classic). Grab the session
+        // cookie -- its name is "SID" on older builds, "QBT_SID_<port>" on 5.2+.
         if (response.Headers.TryGetValues("Set-Cookie", out var cookies))
         {
-            var sidCookie = cookies.FirstOrDefault(c => c.StartsWith("SID=", StringComparison.OrdinalIgnoreCase));
-            if (sidCookie is not null)
+            foreach (var cookie in cookies)
             {
-                return sidCookie.Split(';')[0];
+                var pair = cookie.Split(';', 2)[0].Trim();
+                var name = pair.Split('=', 2)[0];
+                if (name.Contains("SID", StringComparison.OrdinalIgnoreCase))
+                {
+                    return pair;
+                }
             }
         }
 
