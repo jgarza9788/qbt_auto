@@ -19,10 +19,9 @@ public class JellyfinAdapter(IInstanceHttpClientFactory httpClientFactory) : ISo
         {
             using var client = httpClientFactory.CreateClient(connection);
             using var cts = HttpTimeouts.Create(ct, connection.TimeoutSeconds);
-            var apiKey = Uri.EscapeDataString(connection.ApiKey ?? string.Empty);
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{connection.BaseUrl.TrimEnd('/')}/System/Info?api_key={apiKey}");
+            using var request = BuildRequest(connection, "/System/Info");
             using var response = await client.SendAsync(request, cts.Token);
-            response.EnsureSuccessStatusCode();
+            await AdapterHttp.EnsureSuccessAsync(response, "Jellyfin", cts.Token);
 
             return new ConnectionTestResult { Success = true, Message = "Connected to Jellyfin.", Duration = sw.Elapsed };
         }
@@ -37,12 +36,9 @@ public class JellyfinAdapter(IInstanceHttpClientFactory httpClientFactory) : ISo
         using var client = httpClientFactory.CreateClient(connection);
         using var cts = HttpTimeouts.Create(ct, connection.TimeoutSeconds);
 
-        var apiKey = Uri.EscapeDataString(connection.ApiKey ?? string.Empty);
-        var path = $"/Items?Recursive=true&IncludeItemTypes=Movie,Episode&Fields=Path,DateCreated&api_key={apiKey}";
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, $"{connection.BaseUrl.TrimEnd('/')}{path}");
+        using var request = BuildRequest(connection, "/Items?Recursive=true&IncludeItemTypes=Movie,Episode&Fields=Path,DateCreated");
         using var response = await client.SendAsync(request, cts.Token);
-        response.EnsureSuccessStatusCode();
+        await AdapterHttp.EnsureSuccessAsync(response, "Jellyfin", cts.Token);
         var payload = await response.Content.ReadFromJsonAsync<JellyfinItemsResponse>(cancellationToken: cts.Token);
 
         var items = (payload?.Items ?? []).Select(i => new MediaItemRecord
@@ -58,6 +54,23 @@ public class JellyfinAdapter(IInstanceHttpClientFactory httpClientFactory) : ISo
         }).ToList();
 
         return new SourceFetchResult { MediaItems = items };
+    }
+
+    /// <summary>
+    /// Auth via the <c>Authorization: MediaBrowser Token="&lt;key&gt;"</c> scheme -- the original
+    /// Emby/Jellyfin mechanism, accepted by every version from 10.x through 12.x. The legacy
+    /// <c>?api_key=</c> query param and the <c>X-Emby-Token</c> header are both rejected
+    /// (HTTP 401) by Jellyfin 12, so they are not used.
+    /// </summary>
+    private static HttpRequestMessage BuildRequest(SourceConnectionInfo connection, string pathAndQuery)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{connection.BaseUrl.TrimEnd('/')}{pathAndQuery}");
+        request.Headers.Add("Accept", "application/json");
+        if (!string.IsNullOrEmpty(connection.ApiKey))
+        {
+            request.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{connection.ApiKey}\"");
+        }
+        return request;
     }
 
     private sealed class JellyfinItemsResponse

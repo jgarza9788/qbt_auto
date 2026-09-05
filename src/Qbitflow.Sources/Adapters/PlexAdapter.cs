@@ -19,9 +19,10 @@ public class PlexAdapter(IInstanceHttpClientFactory httpClientFactory) : ISource
         {
             using var client = httpClientFactory.CreateClient(connection);
             using var cts = HttpTimeouts.Create(ct, connection.TimeoutSeconds);
-            using var request = BuildRequest(connection, "/identity");
+            // /library/sections (not /identity) so a missing/invalid X-Plex-Token actually fails the test.
+            using var request = BuildRequest(connection, "/library/sections");
             using var response = await client.SendAsync(request, cts.Token);
-            response.EnsureSuccessStatusCode();
+            await AdapterHttp.EnsureSuccessAsync(response, "Plex", cts.Token);
 
             return new ConnectionTestResult { Success = true, Message = "Connected to Plex Media Server.", Duration = sw.Elapsed };
         }
@@ -89,7 +90,7 @@ public class PlexAdapter(IInstanceHttpClientFactory httpClientFactory) : ISource
     {
         using var request = BuildRequest(connection, path);
         using var response = await client.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await AdapterHttp.EnsureSuccessAsync(response, "Plex", ct);
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 

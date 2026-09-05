@@ -62,7 +62,7 @@ public abstract class RestHistoryAdapterBase(IInstanceHttpClientFactory httpClie
         ApplyAuth(request, connection);
 
         using var response = await client.SendAsync(request, cts.Token);
-        response.EnsureSuccessStatusCode();
+        await AdapterHttp.EnsureSuccessAsync(response, SourceType.ToString(), cts.Token);
 
         using var stream = await response.Content.ReadAsStreamAsync(cts.Token);
         using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cts.Token);
