@@ -33,9 +33,12 @@ internal static class AdapterHttp
             ? " Check the API key / token configured for this instance."
             : string.Empty;
 
+        // Skip the body snippet when it's just the status text repeated (e.g. "Unauthorized").
+        var detail = string.IsNullOrEmpty(snippet) || string.Equals(snippet, response.StatusCode.ToString(), StringComparison.OrdinalIgnoreCase)
+            ? string.Empty
+            : $" {snippet}";
+
         throw new InvalidOperationException(
-            $"{service} returned HTTP {(int)response.StatusCode} {response.StatusCode}."
-            + (string.IsNullOrEmpty(snippet) ? string.Empty : $" {snippet}")
-            + hint);
+            $"{service} returned HTTP {(int)response.StatusCode} {response.StatusCode}." + detail + hint);
     }
 }

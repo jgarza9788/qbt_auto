@@ -1,15 +1,18 @@
 using System.ComponentModel.DataAnnotations;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.EntityFrameworkCore;
 using Qbitflow.Core.Domain;
+using Qbitflow.Core.Domain.SourceData;
 using Qbitflow.Infrastructure.Persistence;
 using Qbitflow.Infrastructure.Security;
+using Qbitflow.Sources.Adapters;
 
 namespace Qbitflow.Web.Pages.Instances;
 
-public class EditModel(AppDbContext db, ISecretProtector secretProtector) : PageModel
+public class EditModel(AppDbContext db, ISecretProtector secretProtector, ISourceAdapterResolver adapterResolver) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -112,6 +115,62 @@ public class EditModel(AppDbContext db, ISecretProtector secretProtector) : Page
         }
 
         return RedirectToPage("/Instances/Index");
+    }
+
+    /// <summary>
+    /// HTMX handler for the "Test connection" button on the form. Tests the values currently
+    /// typed in (not what's saved). A blank password / API key on an existing instance falls
+    /// back to the stored, encrypted secret so you don't have to re-type it just to test.
+    /// </summary>
+    public async Task<IActionResult> OnPostTestConnectionAsync(CancellationToken ct)
+    {
+        var password = Input.Password;
+        var apiKey = Input.ApiKey;
+
+        if (Input.Id is { } id && (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(apiKey)))
+        {
+            var stored = await db.Instances.AsNoTracking().SingleOrDefaultAsync(i => i.Id == id, ct);
+            if (stored is not null)
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(password) && stored.PasswordProtected is not null)
+                    {
+                        password = secretProtector.Unprotect(stored.PasswordProtected);
+                    }
+                    if (string.IsNullOrEmpty(apiKey) && stored.ApiKeyProtected is not null)
+                    {
+                        apiKey = secretProtector.Unprotect(stored.ApiKeyProtected);
+                    }
+                }
+                catch (CryptographicException)
+                {
+                    return Partial("_ConnectionTestResult", new ConnectionTestResult
+                    {
+                        Success = false,
+                        Message = "Stored credentials could not be decrypted (the data-protection key ring may be missing). "
+                                  + "Re-enter the password / API key and test again."
+                    });
+                }
+            }
+        }
+
+        var connection = new SourceConnectionInfo
+        {
+            InstanceId = Input.Id ?? 0,
+            InstanceName = string.IsNullOrWhiteSpace(Input.Name) ? "(unsaved)" : Input.Name,
+            SourceType = Input.SourceType,
+            BaseUrl = Input.BaseUrl ?? string.Empty,
+            ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey,
+            Username = string.IsNullOrWhiteSpace(Input.Username) ? null : Input.Username,
+            Password = string.IsNullOrEmpty(password) ? null : password,
+            TimeoutSeconds = Input.TimeoutSeconds,
+            VerifySsl = Input.VerifySsl,
+            ExtraConfigJson = string.IsNullOrWhiteSpace(Input.ExtraConfigJson) ? null : Input.ExtraConfigJson
+        };
+
+        var result = await adapterResolver.Resolve(Input.SourceType).TestConnectionAsync(connection, ct);
+        return Partial("_ConnectionTestResult", result);
     }
 
     public class InputModel

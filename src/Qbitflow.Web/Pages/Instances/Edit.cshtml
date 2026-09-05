@@ -69,10 +69,19 @@
                 </div>
             </div>
 
-            <div class="mt-4 d-flex gap-2">
+            <div class="mt-4 d-flex gap-2 align-items-center">
                 <button type="submit" class="btn btn-primary">Save</button>
                 <a asp-page="/Instances/Index" class="btn btn-outline-secondary">Cancel</a>
+                <button type="button" class="btn btn-outline-secondary ms-auto"
+                        hx-post="?handler=TestConnection" hx-include="closest form"
+                        hx-target="#edit-conn-test-result" hx-swap="innerHTML"
+                        hx-indicator="#edit-conn-test-spinner">
+                    Test connection
+                </button>
+                <span id="edit-conn-test-spinner" class="htmx-indicator small text-secondary">testing…</span>
             </div>
+            <div id="edit-conn-test-result" class="mt-2"></div>
+            <div class="form-text">Tests the values entered above (leave the password / API key blank to reuse the saved one).</div>
         </form>
     </div>
 </div>

@@ -220,9 +220,12 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
             var hint = response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden
                 ? " Check the username/password; qBittorrent also temporarily bans an IP after repeated failures -- see its Tools -> Log."
                 : string.Empty;
+            // Skip the body snippet when it's just the status text repeated (e.g. "Unauthorized").
+            var detail = string.IsNullOrEmpty(body) || string.Equals(body, response.StatusCode.ToString(), StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $" {body}";
             throw new InvalidOperationException(
-                $"qBittorrent auth returned HTTP {(int)response.StatusCode} {response.StatusCode}."
-                + (string.IsNullOrEmpty(body) ? string.Empty : $" {body}") + hint);
+                $"qBittorrent auth returned HTTP {(int)response.StatusCode} {response.StatusCode}." + detail + hint);
         }
 
         // Some builds answer a bad login with HTTP 200 + "Fails." rather than a 4xx.
