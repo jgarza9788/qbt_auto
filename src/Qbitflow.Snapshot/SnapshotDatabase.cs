@@ -28,8 +28,32 @@ public class SnapshotDatabase : IDisposable
     /// <summary>The live (read-write) connection standard-mode compiled queries execute against.</summary>
     public SqliteConnection Connection => _connection;
 
-    /// <summary>The shared-cache data source name -- open a second connection with Mode=ReadOnly against this same string to get a hardened connection to the same in-memory database (used by advanced/raw-SQL mode).</summary>
+    /// <summary>The shared-cache data source name of the underlying in-memory database. Prefer <see cref="OpenReadOnlyConnection"/> over opening a raw connection to this yourself.</summary>
     public string DataSourceName { get; }
+
+    /// <summary>
+    /// Opens a second, hardened connection to the same in-memory database for advanced/raw-SQL
+    /// mode: <c>PRAGMA query_only</c> makes SQLite itself reject any write, and the snapshot's
+    /// user-defined functions (days_since, size_gb, path_matches) are registered here too --
+    /// they're per-connection, so an advanced query must have them available on this exact
+    /// connection, not just the read-write one. Caller owns disposal.
+    /// </summary>
+    public SqliteConnection OpenReadOnlyConnection()
+    {
+        // Mode=Memory (not Mode=ReadOnly) is required -- a shared-cache in-memory database is
+        // only reachable via mode=memory, which SQLite's URI parser can't combine with
+        // mode=ro. query_only below is what actually makes this read-only.
+        var connection = new SqliteConnection($"Data Source={DataSourceName};Mode=Memory;Cache=Shared");
+        connection.Open();
+
+        SnapshotSchema.RegisterFunctions(connection);
+
+        using var pragma = connection.CreateCommand();
+        pragma.CommandText = "PRAGMA query_only = ON;";
+        pragma.ExecuteNonQuery();
+
+        return connection;
+    }
 
     public void Rebuild(SnapshotInput input)
     {

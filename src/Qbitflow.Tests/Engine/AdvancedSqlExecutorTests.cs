@@ -54,6 +54,63 @@ public class AdvancedSqlExecutorTests : IDisposable
     }
 
     [Fact]
+    public void Validate_AcceptsSnapshotUdf_OnReadOnlyConnection()
+    {
+        // days_since / size_gb / path_matches are per-connection functions; advanced SQL must
+        // see them on the hardened connection, not only the read-write one.
+        var result = _executor.Validate(_db, "size_gb(size_bytes) > 5", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+    }
+
+    [Fact]
+    public void Validate_ExpandsStorageField_IntoScalarSubquery()
+    {
+        var result = _executor.Validate(_db, "storage.downloads.used_percent > 85", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+        Assert.Contains("(SELECT used_percent FROM storage_paths WHERE name = 'downloads') > 85", result.CompiledSql);
+    }
+
+    [Fact]
+    public void Validate_ExpandsComputedStorageField_UsingSizeGbUdf()
+    {
+        var result = _executor.Validate(_db, "storage.downloads.free_gb < 100", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+        Assert.Contains("(SELECT size_gb(free_bytes) FROM storage_paths WHERE name = 'downloads') < 100", result.CompiledSql);
+    }
+
+    [Fact]
+    public void Validate_RejectsUnknownStorageAttribute()
+    {
+        var result = _executor.Validate(_db, "storage.downloads.bogus > 1", AdvancedSqlMode.WhereClause);
+        Assert.False(result.IsValid);
+        Assert.Contains("Unknown storage attribute 'bogus'", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_StorageField_MatchesEveryTorrentWhenThresholdCrossed()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            Torrents =
+            [
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "h1", Name = "A", SizeBytes = 1, Progress = 1 },
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "h2", Name = "B", SizeBytes = 1, Progress = 1 }
+            ],
+            StoragePaths =
+            [
+                new StorageUsageRecord { StoragePathId = 1, Name = "downloads", Path = "/downloads", Available = true, UsedPercent = 92.0, TotalBytes = 100, UsedBytes = 92, FreeBytes = 8 }
+            ]
+        });
+
+        var validation = _executor.Validate(_db, "storage.downloads.used_percent > 85", AdvancedSqlMode.WhereClause);
+        Assert.True(validation.IsValid, validation.ErrorMessage);
+
+        var matches = await _executor.ExecuteAsync(_db, validation.CompiledSql!);
+
+        Assert.Equal(2, matches.Count);
+    }
+
+    [Fact]
     public void Validate_FullQueryMode_RejectsQueryMissingRequiredColumns()
     {
         var result = _executor.Validate(_db, "SELECT hash FROM torrents", AdvancedSqlMode.FullQuery);

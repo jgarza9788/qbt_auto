@@ -41,7 +41,20 @@ public class AdvancedSqlExecutor
             return AdvancedSqlValidationResult.Failure(shapeError);
         }
 
-        var trimmed = rawSql.Trim().TrimEnd(';');
+        string expandedSql;
+        try
+        {
+            // storage.<name>.<attr> is a visual-builder field key with no raw-SQL equivalent;
+            // rewrite it to the scalar subquery the structured compiler uses so the same key
+            // works in both editors.
+            expandedSql = StorageFieldExpander.Expand(rawSql);
+        }
+        catch (ConditionCompileException ex)
+        {
+            return AdvancedSqlValidationResult.Failure(ex.Message);
+        }
+
+        var trimmed = expandedSql.Trim().TrimEnd(';');
         var compiledSql = mode == AdvancedSqlMode.WhereClause
             ? $"SELECT DISTINCT t.instance_id AS instance_id, t.hash AS torrent_hash FROM torrents t WHERE {trimmed}"
             : trimmed;
@@ -121,18 +134,5 @@ public class AdvancedSqlExecutor
     }
 
     /// <summary>Internal (not private) so tests can verify the SQLite-level read-only guarantee directly, independent of the regex-based shape check.</summary>
-    internal static SqliteConnection OpenReadOnly(SnapshotDatabase snapshot)
-    {
-        // Mode=Memory (not Mode=ReadOnly) is required here -- a shared-cache in-memory
-        // database is only reachable via mode=memory, which SQLite's URI parser can't
-        // combine with mode=ro. query_only below is what actually makes this read-only.
-        var connection = new SqliteConnection($"Data Source={snapshot.DataSourceName};Mode=Memory;Cache=Shared");
-        connection.Open();
-
-        using var pragma = connection.CreateCommand();
-        pragma.CommandText = "PRAGMA query_only = ON;";
-        pragma.ExecuteNonQuery();
-
-        return connection;
-    }
+    internal static SqliteConnection OpenReadOnly(SnapshotDatabase snapshot) => snapshot.OpenReadOnlyConnection();
 }
