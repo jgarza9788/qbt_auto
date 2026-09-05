@@ -254,6 +254,7 @@ function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
         relationFilter: '',
         allRows: rows,
         udfHelpers,
+        copied: '',
         get filteredRows() {
             const q = this.search.trim().toLowerCase();
             return this.allRows.filter(r => {
@@ -262,8 +263,16 @@ function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
                 return r.key.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q);
             });
         },
-        copy(text) {
+        // `tag` is what the copied-state highlight keys off ('' clears it); defaults to the text.
+        copy(text, tag) {
+            const marker = tag || text;
             if (navigator.clipboard) navigator.clipboard.writeText(text);
+            this.copied = marker;
+            setTimeout(() => { if (this.copied === marker) this.copied = ''; }, 1200);
+        },
+        // Copy every field key currently shown (respects the search / source filter), one per line.
+        copyVisible() {
+            this.copy(this.filteredRows.map(r => r.key).join('\n'), '__all__');
         }
     };
 }

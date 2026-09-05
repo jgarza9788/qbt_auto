@@ -44,10 +44,15 @@ public class AdvancedSqlExecutor
         string expandedSql;
         try
         {
-            // storage.<name>.<attr> is a visual-builder field key with no raw-SQL equivalent;
-            // rewrite it to the scalar subquery the structured compiler uses so the same key
-            // works in both editors.
-            expandedSql = StorageFieldExpander.Expand(rawSql);
+            // Both expanders rewrite visual-builder field keys into their raw-SQL equivalent so
+            // the Field reference panel's keys work verbatim here too. FieldKeyExpander handles
+            // the computed torrent keys (active_days, size_gb, ...) and only applies to a bare
+            // WHERE predicate (it assumes the "FROM torrents t" alias); it must run first so the
+            // "name" column that StorageFieldExpander then injects into its subquery isn't itself
+            // mistaken for a field key. StorageFieldExpander rewrites storage.<name>.<attr> into
+            // the scalar subquery the structured compiler uses.
+            var keyExpanded = mode == AdvancedSqlMode.WhereClause ? FieldKeyExpander.Expand(rawSql) : rawSql;
+            expandedSql = StorageFieldExpander.Expand(keyExpanded);
         }
         catch (ConditionCompileException ex)
         {

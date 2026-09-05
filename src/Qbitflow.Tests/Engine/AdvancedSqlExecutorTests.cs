@@ -79,6 +79,56 @@ public class AdvancedSqlExecutorTests : IDisposable
     }
 
     [Fact]
+    public void Validate_ExpandsComputedFieldKey_FromTheFieldReference()
+    {
+        var result = _executor.Validate(_db, "active_days >= 14", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+        Assert.Contains("(t.active_time_seconds / 86400.0) >= 14", result.CompiledSql);
+    }
+
+    [Fact]
+    public void Validate_ExpandsComputedFieldKey_AlongsideAStorageField()
+    {
+        // The exact shape from the bug report: a storage field and a computed torrent key in
+        // one predicate. active_days used to fall through to SQLite as "no such column".
+        var result = _executor.Validate(_db, "storage.downloads.used_percent < 90 and active_days >= 14", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+        Assert.Contains("(SELECT used_percent FROM storage_paths WHERE name = 'downloads') < 90", result.CompiledSql);
+        Assert.Contains("(t.active_time_seconds / 86400.0) >= 14", result.CompiledSql);
+    }
+
+    [Fact]
+    public void Validate_FullQueryMode_DoesNotExpandFieldKeys()
+    {
+        // FullQuery authors write real SQL against real columns and may not alias the table
+        // "t", so the key expander (which assumes the WHERE wrapper's alias) stays out of it.
+        var result = _executor.Validate(_db, "SELECT instance_id, hash AS torrent_hash FROM torrents WHERE active_days >= 14", AdvancedSqlMode.FullQuery);
+        Assert.False(result.IsValid);
+        Assert.Contains("Invalid SQL", result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ComputedFieldKey_MatchesExpectedTorrents()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            Torrents =
+            [
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "old", Name = "A", SizeBytes = 1, Progress = 1, ActiveTimeSeconds = 30 * 86400 },
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "new", Name = "B", SizeBytes = 1, Progress = 1, ActiveTimeSeconds = 3 * 86400 }
+            ]
+        });
+
+        var validation = _executor.Validate(_db, "active_days >= 14", AdvancedSqlMode.WhereClause);
+        Assert.True(validation.IsValid, validation.ErrorMessage);
+
+        var matches = await _executor.ExecuteAsync(_db, validation.CompiledSql!);
+
+        var match = Assert.Single(matches);
+        Assert.Equal("old", match.TorrentHash);
+    }
+
+    [Fact]
     public void Validate_RejectsUnknownStorageAttribute()
     {
         var result = _executor.Validate(_db, "storage.downloads.bogus > 1", AdvancedSqlMode.WhereClause);

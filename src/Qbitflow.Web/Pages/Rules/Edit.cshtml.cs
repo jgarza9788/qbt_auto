@@ -37,7 +37,16 @@ public class EditModel(
 
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken ct)
     {
-        if (id is not null)
+        if (id is null)
+        {
+            // New rule: seed the schedule timezone from the global setting rather than the
+            // hard-coded "UTC" on InputModel, so it matches what Settings shows by default.
+            Input.TimeZoneId = await db.AppSettings.AsNoTracking()
+                .Where(s => s.Id == 1)
+                .Select(s => s.TimeZoneId)
+                .SingleAsync(ct);
+        }
+        else
         {
             var rule = await db.Rules.AsNoTracking().SingleOrDefaultAsync(r => r.Id == id, ct);
             if (rule is null)
