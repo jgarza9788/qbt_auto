@@ -105,7 +105,7 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
             return {
                 kind: 'exists',
                 Relation: node.Relation || 'watch_history',
-                Negate: !!node.Negate,
+                Negate: node.Negate === true || node.Negate === 'true',
                 Condition: hydrateComparison(node.Condition || {}, fieldsByRelation[node.Relation || 'watch_history'] || [])
             };
         }
@@ -165,7 +165,14 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
                 return { kind: 'group', Operator: row.Operator, Children: row.Children.map(c => this.serializeRow(c)) };
             }
             if (row.kind === 'exists') {
-                return { kind: 'exists', Relation: row.Relation, Negate: row.Negate, Condition: this.serializeRow(row.Condition) };
+                // Negate may arrive from the <select> as the string "true"/"false"; the server
+                // wants a real JSON boolean.
+                return {
+                    kind: 'exists',
+                    Relation: row.Relation,
+                    Negate: row.Negate === true || row.Negate === 'true',
+                    Condition: this.serializeRow(row.Condition)
+                };
             }
             // comparison
             let value = null;

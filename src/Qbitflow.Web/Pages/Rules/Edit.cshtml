@@ -155,12 +155,12 @@
                             <div>
                                 <template x-if="row.kind === 'comparison'">
                                     <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
-                                        <select class="form-select form-select-sm w-auto" x-model="row.Field" @@change="onFieldChange(row, fieldsFor('torrents'))">
+                                        <select class="form-select form-select-sm w-auto" x-model="row.Field" x-init="$nextTick(() => $el.value = row.Field)" @@change="onFieldChange(row, fieldsFor('torrents'))">
                                             <template x-for="f in fieldsFor('torrents')" :key="f.key">
                                                 <option :value="f.key" x-text="f.key"></option>
                                             </template>
                                         </select>
-                                        <select class="form-select form-select-sm w-auto" x-model="row.Operator">
+                                        <select class="form-select form-select-sm w-auto" x-model="row.Operator" x-init="$nextTick(() => $el.value = row.Operator)">
                                             <template x-for="op in operatorsFor(row._valueType)" :key="op">
                                                 <option :value="op" x-text="operatorLabel(op)"></option>
                                             </template>
@@ -191,12 +191,12 @@
                                             <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(root.Children, row)">&times;</button>
                                         </div>
                                         <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
-                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Field" @@change="onFieldChange(row.Condition, fieldsFor(row.Relation))">
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Field" x-init="$nextTick(() => $el.value = row.Condition.Field)" @@change="onFieldChange(row.Condition, fieldsFor(row.Relation))">
                                                 <template x-for="f in fieldsFor(row.Relation)" :key="f.key">
                                                     <option :value="f.key" x-text="f.key"></option>
                                                 </template>
                                             </select>
-                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Operator">
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Operator" x-init="$nextTick(() => $el.value = row.Condition.Operator)">
                                                 <template x-for="op in operatorsFor(row.Condition._valueType)" :key="op">
                                                     <option :value="op" x-text="operatorLabel(op)"></option>
                                                 </template>
@@ -222,12 +222,12 @@
                                             <div>
                                                 <template x-if="subRow.kind === 'comparison'">
                                                     <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
-                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Field" @@change="onFieldChange(subRow, fieldsFor('torrents'))">
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Field" x-init="$nextTick(() => $el.value = subRow.Field)" @@change="onFieldChange(subRow, fieldsFor('torrents'))">
                                                             <template x-for="f in fieldsFor('torrents')" :key="f.key">
                                                                 <option :value="f.key" x-text="f.key"></option>
                                                             </template>
                                                         </select>
-                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Operator">
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Operator" x-init="$nextTick(() => $el.value = subRow.Operator)">
                                                             <template x-for="op in operatorsFor(subRow._valueType)" :key="op">
                                                                 <option :value="op" x-text="operatorLabel(op)"></option>
                                                             </template>
@@ -257,12 +257,12 @@
                                                             <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(row.Children, subRow)">&times;</button>
                                                         </div>
                                                         <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
-                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Field" @@change="onFieldChange(subRow.Condition, fieldsFor(subRow.Relation))">
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Field" x-init="$nextTick(() => $el.value = subRow.Condition.Field)" @@change="onFieldChange(subRow.Condition, fieldsFor(subRow.Relation))">
                                                                 <template x-for="f in fieldsFor(subRow.Relation)" :key="f.key">
                                                                     <option :value="f.key" x-text="f.key"></option>
                                                                 </template>
                                                             </select>
-                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Operator">
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Operator" x-init="$nextTick(() => $el.value = subRow.Condition.Operator)">
                                                                 <template x-for="op in operatorsFor(subRow.Condition._valueType)" :key="op">
                                                                     <option :value="op" x-text="operatorLabel(op)"></option>
                                                                 </template>
