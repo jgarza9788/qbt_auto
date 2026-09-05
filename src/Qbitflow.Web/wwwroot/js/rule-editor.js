@@ -236,22 +236,50 @@ function actionBuilder(initialJson) {
 }
 
 // Copy `text` to the clipboard. Resolves true on success, false otherwise.
-// navigator.clipboard only exists in a secure context (HTTPS or localhost) -- opened over
-// plain HTTP on a LAN address it's undefined, which is logged so the cause is obvious.
+// navigator.clipboard only exists in a secure context (HTTPS or http://localhost); opened
+// over plain HTTP on a LAN address it's undefined, so fall back to the legacy
+// execCommand('copy') path, which still works from inside a user-gesture handler.
 function copyToClipboard(text) {
-    if (!navigator.clipboard) {
-        console.error('Failed to copy text: navigator.clipboard is unavailable. The page must be a secure context (HTTPS, or http://localhost).');
-        return Promise.resolve(false);
+    if (navigator.clipboard) {
+        return navigator.clipboard.writeText(text)
+            .then(() => {
+                console.log('Text copied successfully!');
+                return true;
+            })
+            .catch(err => {
+                console.warn('navigator.clipboard failed, trying execCommand fallback: ', err);
+                return execCommandCopy(text);
+            });
     }
-    return navigator.clipboard.writeText(text)
-        .then(() => {
-            console.log('Text copied successfully!');
-            return true;
-        })
-        .catch(err => {
-            console.error('Failed to copy text: ', err);
-            return false;
-        });
+    return Promise.resolve(execCommandCopy(text));
+}
+
+// Legacy clipboard write for non-secure contexts (plain HTTP over a LAN address).
+// Deprecated but still supported; must run synchronously inside the click handler.
+function execCommandCopy(text) {
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) {
+            console.log('Text copied successfully (execCommand fallback)!');
+        } else {
+            console.error('Failed to copy text: execCommand("copy") returned false.');
+        }
+        return ok;
+    } catch (err) {
+        console.error('Failed to copy text: ', err);
+        return false;
+    }
 }
 
 // Delegated copy handler: any element carrying a non-empty `data-copy` attribute copies
