@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Qbitflow.Core.Domain;
 using Qbitflow.Core.Domain.Actions;
 using Qbitflow.Core.Domain.Conditions;
+using Qbitflow.Engine;
 using Qbitflow.Engine.Conditions;
 using Qbitflow.Engine.Conditions.AdvancedSql;
 using Qbitflow.Engine.Scheduling;
@@ -15,7 +16,11 @@ using Qbitflow.Snapshot;
 
 namespace Qbitflow.Web.Pages.Rules;
 
-public class EditModel(AppDbContext db, ConditionSqlCompiler conditionCompiler, AdvancedSqlExecutor advancedSqlExecutor) : PageModel
+public class EditModel(
+    AppDbContext db,
+    ConditionSqlCompiler conditionCompiler,
+    AdvancedSqlExecutor advancedSqlExecutor,
+    IRuleRunner ruleRunner) : PageModel
 {
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -185,6 +190,24 @@ public class EditModel(AppDbContext db, ConditionSqlCompiler conditionCompiler, 
             Response.StatusCode = 400;
             return Content($"Invalid condition: {ex.Message}", "text/plain");
         }
+    }
+
+    /// <summary>
+    /// HTMX handler for the "Dry run" button. Evaluates the rule <em>as currently typed</em>
+    /// (unsaved edits included) against a fresh snapshot and reports what it would match and
+    /// do -- nothing is applied and no RunRecord is written.
+    /// </summary>
+    public async Task<IActionResult> OnPostDryRunAsync(CancellationToken ct)
+    {
+        var draft = new RuleDraft(
+            ConditionTreeJson: Input.ConditionTreeJson,
+            UseAdvancedSql: Input.UseAdvancedSql,
+            AdvancedSqlWhere: Input.AdvancedSqlWhere,
+            ActionsJson: Input.ActionsJson,
+            TargetInstanceIds: Input.TargetInstanceIds);
+
+        var preview = await ruleRunner.DryRunAsync(draft, ct);
+        return Partial("_DryRunResult", preview);
     }
 
     public IActionResult OnPostValidateAdvancedSql()

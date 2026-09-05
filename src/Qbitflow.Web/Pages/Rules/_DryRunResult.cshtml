@@ -1,0 +1,60 @@
+@model Qbitflow.Engine.RulePreview
+
+@if (!Model.Ok)
+{
+    <div class="alert alert-danger py-2 px-3 mb-0">
+        <strong>Dry run failed.</strong>
+        <div class="small mt-1" style="white-space: pre-wrap; word-break: break-word;">@Model.Error</div>
+    </div>
+}
+else
+{
+    <div class="qf-card">
+        <div class="qf-card-body">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <span class="qf-badge @(Model.MatchedCount > 0 ? "qf-badge-success" : "qf-badge-secondary")">
+                    <span class="qf-badge-dot"></span>@Model.MatchedCount matched
+                </span>
+                <span class="small text-secondary">of @Model.TorrentsInSnapshot torrent(s) in the current snapshot</span>
+            </div>
+
+            @if (Model.Actions.Count == 0)
+            {
+                <div class="small text-secondary">No actions configured — this rule wouldn't change anything.</div>
+            }
+            else if (Model.MatchedCount == 0)
+            {
+                <div class="small text-secondary">Nothing matched, so no actions would run.</div>
+            }
+            else
+            {
+                <ul class="list-unstyled mb-0 small">
+                    @foreach (var line in Model.Actions)
+                    {
+                        <li class="mb-1">
+                            <span class="fw-medium">@line.Description</span>
+                            &mdash;
+                            <span class="text-success">@line.WouldChange would change</span>@if (line.AlreadyMatching > 0)
+                            {
+                                <span class="text-secondary">, @line.AlreadyMatching already match</span>
+                            }@if (line.Failed > 0)
+                            {
+                                <span class="text-danger">, @line.Failed could not be read</span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            <div class="form-text mt-2">Preview only — nothing was changed.</div>
+
+            @if (Model.SampleMatchedHashes.Count > 0)
+            {
+                <details class="mt-2">
+                    <summary class="small text-secondary">Matched torrent hashes (first @Model.SampleMatchedHashes.Count)</summary>
+                    <pre class="qf-sql-preview mt-1 mb-0">@string.Join("\n", Model.SampleMatchedHashes)</pre>
+                </details>
+            }
+        </div>
+    </div>
+}

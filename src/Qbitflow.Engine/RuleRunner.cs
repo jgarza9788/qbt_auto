@@ -80,6 +80,79 @@ public class RuleRunner(
 
     private async Task RunCoreAsync(Rule rule, AppSettings settings, RunRecord run, CancellationToken ct)
     {
+        var (instances, snapshot, _) = await BuildSnapshotAsync(ct);
+        using (snapshot)
+        {
+            var targetInstanceIds = JsonSerializer.Deserialize<List<int>>(rule.TargetInstanceIdsJson) ?? [];
+            var matches = await EvaluateAsync(
+                snapshot, rule.ConditionTreeJson, rule.UseAdvancedSql, rule.AdvancedSqlWhere, targetInstanceIds, ct);
+
+            run.MatchedCount = matches.Count;
+
+            var actionDefinitions = JsonSerializer.Deserialize<List<ActionDefinition>>(rule.ActionsJson) ?? [];
+            var instancesById = instances.ToDictionary(i => i.Id, ToConnectionInfo);
+            var effectiveDryRun = settings.GlobalDryRun || rule.DryRun;
+
+            var summary = await actionExecutor.ExecuteAsync(actionDefinitions, instancesById, matches, effectiveDryRun, ct);
+
+            run.ActionsExecutedCount = summary.AppliedCount;
+            run.ActionsSkippedCount = summary.SkippedCount + summary.DryRunCount;
+            run.ActionsFailedCount = summary.FailedCount;
+            run.Outcome = summary.FailedCount > 0 ? RunOutcome.PartialFailure : RunOutcome.Success;
+            run.DetailsJson = JsonSerializer.Serialize(summary.Results);
+        }
+    }
+
+    public async Task<RulePreview> DryRunAsync(RuleDraft draft, CancellationToken ct = default)
+    {
+        try
+        {
+            var (instances, snapshot, torrentCount) = await BuildSnapshotAsync(ct);
+            using (snapshot)
+            {
+                var matches = await EvaluateAsync(
+                    snapshot, draft.ConditionTreeJson, draft.UseAdvancedSql, draft.AdvancedSqlWhere, draft.TargetInstanceIds, ct);
+
+                var actionDefinitions = JsonSerializer.Deserialize<List<ActionDefinition>>(draft.ActionsJson) ?? [];
+                var instancesById = instances.ToDictionary(i => i.Id, ToConnectionInfo);
+
+                // dryRun: true -> no writes; ActionExecutor still reads current state so the
+                // "already matches" vs "would change" split is accurate.
+                var summary = await actionExecutor.ExecuteAsync(actionDefinitions, instancesById, matches, dryRun: true, ct);
+
+                var lines = actionDefinitions
+                    .Select(a => a.GetType().Name)
+                    .Distinct()
+                    .Select(typeName =>
+                    {
+                        var forType = summary.Results.Where(r => r.ActionType == typeName).ToList();
+                        var def = actionDefinitions.First(a => a.GetType().Name == typeName);
+                        return new PreviewActionLine(
+                            DescribeAction(def),
+                            forType.Count(r => r.Outcome == ActionOutcome.DryRun),
+                            forType.Count(r => r.Outcome == ActionOutcome.SkippedAlreadyMatching),
+                            forType.Count(r => r.Outcome == ActionOutcome.Failed));
+                    })
+                    .ToList();
+
+                return new RulePreview(
+                    Ok: true,
+                    MatchedCount: matches.Count,
+                    TorrentsInSnapshot: torrentCount,
+                    Actions: lines,
+                    SampleMatchedHashes: matches.Select(m => m.TorrentHash).Take(15).ToList(),
+                    Error: null);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Rule dry-run failed");
+            return RulePreview.Failure(ex.Message);
+        }
+    }
+
+    private async Task<(List<Instance> Instances, SnapshotDatabase Snapshot, int TorrentCount)> BuildSnapshotAsync(CancellationToken ct)
+    {
         var instances = await db.Instances.Where(i => i.Enabled).ToListAsync(ct);
         var connections = instances.Select(ToConnectionInfo).ToList();
 
@@ -88,7 +161,7 @@ public class RuleRunner(
         var pathMappingRules = await db.PathMappingRules.AsNoTracking().Where(r => r.Enabled).ToListAsync(ct);
         var storagePaths = await db.StoragePaths.AsNoTracking().Where(s => s.Enabled).ToListAsync(ct);
 
-        using var snapshot = new SnapshotDatabase();
+        var snapshot = new SnapshotDatabase();
         var input = new SnapshotInput
         {
             PathMappingRules = pathMappingRules,
@@ -106,46 +179,47 @@ public class RuleRunner(
         }
 
         snapshot.Rebuild(input);
+        return (instances, snapshot, input.Torrents.Count);
+    }
 
-        var targetInstanceIds = JsonSerializer.Deserialize<List<int>>(rule.TargetInstanceIdsJson) ?? [];
-
-        List<MatchedTorrent> matches;
-        if (rule.UseAdvancedSql && !string.IsNullOrWhiteSpace(rule.AdvancedSqlWhere))
+    private async Task<List<MatchedTorrent>> EvaluateAsync(
+        SnapshotDatabase snapshot,
+        string conditionTreeJson,
+        bool useAdvancedSql,
+        string? advancedSqlWhere,
+        IReadOnlyList<int> targetInstanceIds,
+        CancellationToken ct)
+    {
+        if (useAdvancedSql && !string.IsNullOrWhiteSpace(advancedSqlWhere))
         {
-            var validation = advancedSqlExecutor.Validate(snapshot, rule.AdvancedSqlWhere, AdvancedSqlMode.WhereClause);
+            var validation = advancedSqlExecutor.Validate(snapshot, advancedSqlWhere, AdvancedSqlMode.WhereClause);
             if (!validation.IsValid)
             {
                 throw new InvalidOperationException($"Advanced SQL is invalid: {validation.ErrorMessage}");
             }
 
-            matches = await advancedSqlExecutor.ExecuteAsync(snapshot, validation.CompiledSql!, ct: ct);
-            if (targetInstanceIds.Count > 0)
-            {
-                matches = matches.Where(m => targetInstanceIds.Contains(m.InstanceId)).ToList();
-            }
-        }
-        else
-        {
-            var tree = JsonSerializer.Deserialize<ConditionNode>(rule.ConditionTreeJson)
-                ?? throw new InvalidOperationException("Rule has no condition tree.");
-            var compiled = conditionCompiler.Compile(tree, targetInstanceIds.Count > 0 ? targetInstanceIds : null);
-            matches = await conditionCompiler.ExecuteAsync(snapshot, compiled, ct);
+            var matches = await advancedSqlExecutor.ExecuteAsync(snapshot, validation.CompiledSql!, ct: ct);
+            return targetInstanceIds.Count > 0
+                ? matches.Where(m => targetInstanceIds.Contains(m.InstanceId)).ToList()
+                : matches;
         }
 
-        run.MatchedCount = matches.Count;
-
-        var actionDefinitions = JsonSerializer.Deserialize<List<ActionDefinition>>(rule.ActionsJson) ?? [];
-        var instancesById = instances.ToDictionary(i => i.Id, ToConnectionInfo);
-        var effectiveDryRun = settings.GlobalDryRun || rule.DryRun;
-
-        var summary = await actionExecutor.ExecuteAsync(actionDefinitions, instancesById, matches, effectiveDryRun, ct);
-
-        run.ActionsExecutedCount = summary.AppliedCount;
-        run.ActionsSkippedCount = summary.SkippedCount + summary.DryRunCount;
-        run.ActionsFailedCount = summary.FailedCount;
-        run.Outcome = summary.FailedCount > 0 ? RunOutcome.PartialFailure : RunOutcome.Success;
-        run.DetailsJson = JsonSerializer.Serialize(summary.Results);
+        var tree = JsonSerializer.Deserialize<ConditionNode>(conditionTreeJson)
+            ?? throw new InvalidOperationException("Rule has no condition tree.");
+        var compiled = conditionCompiler.Compile(tree, targetInstanceIds.Count > 0 ? targetInstanceIds : null);
+        return await conditionCompiler.ExecuteAsync(snapshot, compiled, ct);
     }
+
+    private static string DescribeAction(ActionDefinition action) => action switch
+    {
+        AddTagsAction a => $"Add tag(s): {string.Join(", ", a.Tags)}",
+        RemoveTagsAction a => $"Remove tag(s): {string.Join(", ", a.Tags)}",
+        SetCategoryAction a => $"Set category: {a.Category}",
+        MoveAction a => $"Move to: {a.DestinationPath}",
+        SetUploadLimitAction a => $"Set upload limit: {a.LimitBytesPerSec} B/s",
+        SetDownloadLimitAction a => $"Set download limit: {a.LimitBytesPerSec} B/s",
+        _ => action.GetType().Name
+    };
 
     private SourceConnectionInfo ToConnectionInfo(Instance i) => new()
     {

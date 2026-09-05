@@ -355,10 +355,19 @@
         </div>
     </div>
 
-    <div class="d-flex gap-2 mb-5">
+    <div class="d-flex gap-2 mb-2 align-items-center">
         <button type="submit" formaction="?handler=Save" class="btn btn-primary">Save rule</button>
         <a asp-page="/Rules/Index" class="btn btn-outline-secondary">Cancel</a>
+        <button type="button" class="btn btn-outline-primary ms-auto"
+                hx-post="?handler=DryRun" hx-include="closest form"
+                hx-target="#dry-run-result" hx-swap="innerHTML"
+                hx-indicator="#dry-run-spinner" hx-disabled-elt="this">
+            Dry run
+        </button>
+        <span id="dry-run-spinner" class="htmx-indicator small text-secondary">evaluating…</span>
     </div>
+    <div class="form-text mb-2">Evaluates the rule as currently entered (including unsaved changes) and shows what it would match and do — nothing is applied.</div>
+    <div id="dry-run-result" class="mb-5"></div>
 </form>
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="fieldRefPanel" style="width: 440px;"
