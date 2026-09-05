@@ -12,5 +12,5 @@ config/
 *.db-shm
 .pytest_cache/
 .ruff_cache/
-.env
+#.env
 src/qbitflow/web/static/app.css
