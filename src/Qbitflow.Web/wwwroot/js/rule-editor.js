@@ -327,6 +327,34 @@ document.addEventListener('click', function (e) {
     });
 });
 
+// Condition mode: one button flips between the visual builder and the advanced-SQL box.
+// The bound value lives in a hidden input (Input.UseAdvancedSql) that this keeps in sync,
+// so the posted form still carries the mode the user is looking at.
+function initConditionModeToggle() {
+    const btn = document.getElementById('conditionModeToggle');
+    const field = document.getElementById('useAdvancedSqlValue');
+    const label = document.getElementById('conditionModeLabel');
+    const visual = document.getElementById('visualBuilder');
+    const advanced = document.getElementById('advancedSqlBuilder');
+    if (!btn || !field || !visual || !advanced) return;
+
+    function apply(useSql) {
+        field.value = useSql ? 'true' : 'false';
+        visual.style.display = useSql ? 'none' : 'block';
+        advanced.style.display = useSql ? 'block' : 'none';
+        btn.textContent = useSql ? 'Switch to basic' : 'Switch to SQL';
+        if (label) label.textContent = useSql ? 'Advanced SQL' : 'Basic builder';
+    }
+
+    btn.addEventListener('click', function () {
+        apply(field.value.toLowerCase() !== 'true');
+    });
+
+    apply(field.value.toLowerCase() === 'true');
+}
+
+document.addEventListener('DOMContentLoaded', initConditionModeToggle);
+
 function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
     const rows = [];
     for (const [relation, fields] of Object.entries(fieldsByRelation)) {

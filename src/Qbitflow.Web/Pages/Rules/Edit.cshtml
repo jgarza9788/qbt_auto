@@ -129,10 +129,12 @@
     <div class="qf-card mb-3">
         <div class="qf-card-header">
             <h2>Condition</h2>
-            <div class="form-check form-switch">
-                <input asp-for="Input.UseAdvancedSql" class="form-check-input" id="useAdvancedSqlToggle"
-                       onchange="document.getElementById('visualBuilder').style.display = this.checked ? 'none' : 'block'; document.getElementById('advancedSqlBuilder').style.display = this.checked ? 'block' : 'none';" />
-                <label asp-for="Input.UseAdvancedSql" class="form-check-label">Advanced SQL mode</label>
+            <div class="d-flex align-items-center gap-2">
+                <span class="qf-field-type" id="conditionModeLabel">@(Model.Input.UseAdvancedSql ? "Advanced SQL" : "Basic builder")</span>
+                <input type="hidden" asp-for="Input.UseAdvancedSql" id="useAdvancedSqlValue" />
+                <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap" id="conditionModeToggle">
+                    @(Model.Input.UseAdvancedSql ? "Switch to basic" : "Switch to SQL")
+                </button>
             </div>
         </div>
         <div class="qf-card-body">
