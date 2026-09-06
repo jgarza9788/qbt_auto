@@ -12,7 +12,7 @@ mkdir -p "$DATA_DIR" "$LOG_DIR"
 
 if [ "$(id -u)" = "0" ]; then
     chown -R app:app "$DATA_DIR" "$LOG_DIR"
-    exec gosu app "$@"
+    exec su-exec app "$@"
 fi
 
 exec "$@"

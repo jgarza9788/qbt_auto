@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
     <ProjectReference Include="..\Qbitflow.Core\Qbitflow.Core.csproj" />
@@ -9,7 +9,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+    <!-- Design-time only: without this condition the package's IncludeAssets
+         override drags the whole Roslyn/MSBuild toolchain (~15 MB) into the
+         Release publish, and so into the runtime image. dotnet ef builds Debug
+         by default, so migrations tooling is unaffected. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0"
+                      Condition="'$(Configuration)' == 'Debug'">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
@@ -20,6 +25,10 @@
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- The UI is English-only. Without this, publish emits 93 translated
+         resource assemblies across 30 locale directories (~7.4 MB) holding
+         nothing but localised framework exception messages. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
 </Project>

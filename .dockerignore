@@ -6,3 +6,12 @@
 .vs/
 .vscode/
 *.md
+
+# Never copied by the Dockerfile (it takes only the sln, the csproj files, src/
+# and the entrypoint) -- listed so they aren't uploaded as build context either.
+docs/
+examples/
+icon/
+tools/
+.github/
+.config/

@@ -39,7 +39,8 @@ services:
 
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/healthz"]
+      # wget, not curl: the Alpine image has busybox wget and no curl.
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
       interval: 30s
       timeout: 5s
       retries: 5

@@ -1,4 +1,4 @@
-@using Microsoft.AspNetCore.Mvc.TagHelpers
+﻿@using Microsoft.AspNetCore.Mvc.TagHelpers
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,9 +16,11 @@
             }
         })();
     </script>
-    @* crossorigin is required even same-origin -- font fetches are always CORS-mode,
-       and omitting it causes the font to be downloaded twice. *@
-    <link rel="preload" as="font" type="font/woff2" href="~/fonts/jetbrainsmono-nerd-v2.woff2" crossorigin />
+    @* Icon glyphs come from the Nerd Fonts symbols webfont rather than a local
+       file, so nothing font-shaped ships in the image. Note this makes the icons
+       depend on outbound internet access: with no route to nerdfonts.com they
+       render as tofu. *@
+    <link rel="stylesheet" href="https://www.nerdfonts.com/assets/css/webfont.css" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Qbitflow.Web.styles.css" asp-append-version="true" />

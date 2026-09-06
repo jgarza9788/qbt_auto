@@ -6,7 +6,12 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+    <!-- Design-time only: without this condition the package's IncludeAssets
+         override drags the whole Roslyn/MSBuild toolchain (~15 MB) into the
+         Release publish, and so into the runtime image. dotnet ef builds Debug
+         by default, so migrations tooling is unaffected. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0"
+                      Condition="'$(Configuration)' == 'Debug'">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>

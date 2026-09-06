@@ -1,26 +1,10 @@
 /* ---- Fonts ---- */
 
-/* Subset of JetBrainsMono Nerd Font Mono -- see tools/fonts/ for the
-   regeneration command. Serves both the icon glyphs and every monospace
-   surface. The -v1 in the filename is the cache-buster: @font-face src in a
-   static stylesheet can't be stamped by asp-append-version. */
-@font-face {
-  font-family: "JetBrainsMono Nerd Font";
-  src: url("../fonts/jetbrainsmono-nerd-v2.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-/* Bootstrap declares --bs-font-monospace on ":root,[data-bs-theme=light]".
-   A bare :root ties on specificity, so name all three selectors to win under
-   every theme value. .qf-sql-preview / .qf-field-key / .qf-muted-mono already
-   read this variable, so they pick the font up with no edits of their own. */
-:root,
-[data-bs-theme="light"],
-[data-bs-theme="dark"] {
-  --bs-font-monospace: "JetBrainsMono Nerd Font", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
+/* No local @font-face and no --bs-font-monospace override: the icon glyphs now
+   come from the Nerd Fonts symbols webfont loaded in _Layout.cshtml, which
+   carries symbols only and no text face. The monospace surfaces
+   (.qf-sql-preview / .qf-field-key / .qf-muted-mono) therefore fall through to
+   Bootstrap's own --bs-font-monospace stack -- Menlo / Consolas and friends. */
 
 /* ---- Icons ---- */
 
@@ -30,7 +14,7 @@
    name -> codepoint map in one file. Always pair with aria-hidden="true" and a
    .visually-hidden label so screen readers never reach the glyph. */
 .qf-icon {
-  font-family: "JetBrainsMono Nerd Font";
+  font-family: "NerdFontsSymbols Nerd Font";
   font-style: normal;
   font-weight: 400;
   font-variant: normal;
