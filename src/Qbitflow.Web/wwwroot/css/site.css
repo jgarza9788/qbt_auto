@@ -390,3 +390,14 @@ body {
     transition: none;
   }
 }
+
+/* ---- Client-side table filter (site.js) ---- */
+
+.qf-table-filter {
+  max-width: 16rem;
+}
+
+.qf-table-filter-empty td {
+  text-align: center;
+  color: var(--bs-secondary-color);
+}

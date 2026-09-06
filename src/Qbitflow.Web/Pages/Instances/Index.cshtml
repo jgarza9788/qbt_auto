@@ -7,7 +7,14 @@
 <div class="qf-card mb-4">
     <div class="qf-card-header">
         <h2>Data source instances</h2>
-        <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add instance</a>
+        <div class="d-flex align-items-center gap-2">
+            @if (Model.Instances.Count > 0)
+            {
+                <input type="search" class="form-control form-control-sm qf-table-filter"
+                       data-table-filter placeholder="Filter&hellip;" aria-label="Filter instances" />
+            }
+            <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add instance</a>
+        </div>
     </div>
     <div class="qf-card-body p-0">
         @if (Model.Instances.Count == 0)
@@ -79,7 +86,14 @@
 <div class="qf-card">
     <div class="qf-card-header">
         <h2>Storage paths</h2>
-        <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add storage path</a>
+        <div class="d-flex align-items-center gap-2">
+            @if (Model.StoragePaths.Count > 0)
+            {
+                <input type="search" class="form-control form-control-sm qf-table-filter"
+                       data-table-filter placeholder="Filter&hellip;" aria-label="Filter storage paths" />
+            }
+            <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add storage path</a>
+        </div>
     </div>
     <div class="qf-card-body p-0">
         @if (Model.StoragePaths.Count == 0)
