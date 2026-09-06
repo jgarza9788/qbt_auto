@@ -72,6 +72,9 @@
                                     <button type="submit" class="btn btn-sm btn-outline-success qf-ico-btn"><span class="qf-icon qf-icon--play" aria-hidden="true"></span>Run now</button>
                                 </form>
                                 <a asp-page="/Rules/Edit" asp-route-id="@rule.Id" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--edit" aria-hidden="true"></span>Edit</a>
+                                <form method="post" asp-page-handler="Duplicate" asp-route-id="@rule.Id" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--copy" aria-hidden="true"></span>Duplicate</button>
+                                </form>
                                 <form method="post" asp-page-handler="Delete" asp-route-id="@rule.Id" class="d-inline"
                                       onsubmit="return confirm('Delete rule &quot;@rule.Name&quot;?');">
                                     <button type="submit" class="btn btn-sm btn-outline-danger qf-ico-btn"><span class="qf-icon qf-icon--delete" aria-hidden="true"></span>Delete</button>
