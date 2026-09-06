@@ -362,6 +362,46 @@ function initConditionModeToggle() {
 
 document.addEventListener('DOMContentLoaded', initConditionModeToggle);
 
+// Syntax highlighting for the advanced-SQL box. CodeMirror is mounted over the plain
+// <textarea> rather than replacing it, so the textarea keeps its name and the server
+// side is untouched -- but fromTextArea only writes the editor's content back on
+// form.submit(), and the Validate and Dry-run buttons are htmx posts that serialise the
+// form's fields directly without ever calling submit(). Saving on every change keeps the
+// textarea authoritative for both paths. (display:none does not exclude a named field
+// from form serialisation.)
+function initAdvancedSqlEditor() {
+    const ta = document.getElementById('Input_AdvancedSqlWhere');
+    if (!ta || typeof CodeMirror === 'undefined') return;
+
+    const editor = CodeMirror.fromTextArea(ta, {
+        mode: 'text/x-sqlite',
+        lineNumbers: true,
+        matchBrackets: true,
+        lineWrapping: true,
+        // Tab has to keep moving focus: this is one field on a form with many.
+        extraKeys: { Tab: false, 'Shift-Tab': false }
+    });
+    editor.getWrapperElement().classList.add('qf-sql-editor');
+    editor.on('change', () => editor.save());
+
+    // Mounted inside the display:none basic-mode pane, CodeMirror measures zero and
+    // renders blank, so re-measure once the toggle has revealed it.
+    const toggle = document.getElementById('conditionModeToggle');
+    if (toggle) toggle.addEventListener('click', () => setTimeout(() => editor.refresh(), 0));
+
+    // Follow the app's theme picker. "Match system" removes the attribute entirely and
+    // this Bootstrap build reads the attribute only, so an untagged page is light.
+    function syncTheme() {
+        editor.setOption('theme',
+            document.documentElement.getAttribute('data-bs-theme') === 'dark'
+                ? 'material-darker' : 'default');
+    }
+    syncTheme();
+    new MutationObserver(syncTheme).observe(document.documentElement, { attributeFilter: ['data-bs-theme'] });
+}
+
+document.addEventListener('DOMContentLoaded', initAdvancedSqlEditor);
+
 function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
     const rows = [];
     for (const [relation, fields] of Object.entries(fieldsByRelation)) {

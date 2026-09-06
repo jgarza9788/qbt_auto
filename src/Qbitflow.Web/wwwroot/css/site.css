@@ -358,3 +358,16 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* ---- Advanced SQL editor (CodeMirror) ---- */
+
+/* Two classes, so this beats upstream's one-class `.CodeMirror { height: 300px }`.
+   Colours come from CodeMirror's own default / material-darker themes. */
+.CodeMirror.qf-sql-editor {
+  height: auto;
+  min-height: 12rem;
+  font-family: var(--bs-font-monospace, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.85rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+}

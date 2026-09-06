@@ -417,5 +417,12 @@
 </div>
 
 @section Scripts {
+    @* CodeMirror highlights the advanced-SQL box. Must come before rule-editor.js,
+       which mounts it on DOMContentLoaded. *@
+    <link rel="stylesheet" href="~/lib/codemirror/lib/codemirror.min.css" />
+    <link rel="stylesheet" href="~/lib/codemirror/theme/material-darker.min.css" />
+    <script src="~/lib/codemirror/lib/codemirror.min.js"></script>
+    <script src="~/lib/codemirror/mode/sql/sql.min.js"></script>
+    <script src="~/lib/codemirror/addon/edit/matchbrackets.min.js"></script>
     <script src="~/js/rule-editor.js" asp-append-version="true"></script>
 }
