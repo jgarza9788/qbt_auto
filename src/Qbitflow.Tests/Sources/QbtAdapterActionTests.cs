@@ -198,4 +198,79 @@ public class QbtAdapterActionTests
 
         Assert.True(loginCalled);
     }
+
+    [Fact]
+    public async Task SetLocationAsync_Conflict_ExplainsThatQbtCouldNotCreateTheDirectory()
+    {
+        // qBittorrent answers setLocation failures with a bare status and an empty body.
+        // 409 specifically means "unable to create save path directory" -- the raw framework
+        // message ("Response status code does not indicate success") is useless for diagnosis.
+        var handler = new FakeHttpMessageHandler(req =>
+            req.RequestUri!.AbsolutePath.EndsWith("setLocation", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.Conflict)
+                : new HttpResponseMessage(HttpStatusCode.OK));
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => adapter.SetLocationAsync(Connection(), ["h1"], "/media/cold-storage"));
+
+        Assert.Contains("409", ex.Message);
+        Assert.Contains("could not create the save directory", ex.Message);
+        Assert.Contains("/media/cold-storage", ex.Message);
+        Assert.Contains("NOT applied to move destinations", ex.Message);
+    }
+
+    [Fact]
+    public async Task SetLocationAsync_Forbidden_ReportsWriteAccess_NotCredentials()
+    {
+        var handler = new FakeHttpMessageHandler(req =>
+            req.RequestUri!.AbsolutePath.EndsWith("setLocation", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.Forbidden)
+                : new HttpResponseMessage(HttpStatusCode.OK));
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => adapter.SetLocationAsync(Connection(), ["h1"], "/media/cold-storage"));
+
+        Assert.Contains("no write access", ex.Message);
+        // The generic 403 credentials hint must not fire here -- it points at the wrong thing.
+        Assert.DoesNotContain("API key", ex.Message);
+    }
+
+    [Fact]
+    public async Task SetCategoryAsync_Conflict_NamesTheMissingCategory()
+    {
+        var handler = new FakeHttpMessageHandler(req =>
+            req.RequestUri!.AbsolutePath.EndsWith("setCategory", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.Conflict)
+                : new HttpResponseMessage(HttpStatusCode.OK));
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => adapter.SetCategoryAsync(Connection(), ["h1"], "archived"));
+
+        Assert.Contains("'archived' does not exist", ex.Message);
+    }
+
+    [Fact]
+    public async Task SetLocationAsync_TrimsDestination_SoAStrayPastedSpaceCannotBreakTheMove()
+    {
+        string? locationBody = null;
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            if (req.RequestUri!.AbsolutePath.EndsWith("setLocation", StringComparison.Ordinal))
+            {
+                locationBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            }
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        await adapter.SetLocationAsync(Connection(), ["h1"], "  /media/cold-storage \r\n");
+
+        Assert.Equal("hashes=h1&location=%2Fmedia%2Fcold-storage", locationBody);
+    }
 }

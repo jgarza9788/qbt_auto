@@ -11,7 +11,12 @@ internal static class AdapterHttp
     /// connection test / run reads "Jellyfin returned HTTP 401 ..." instead of the framework's
     /// opaque "Response status code does not indicate success: 401 (Unauthorized)".
     /// </summary>
-    public static async Task EnsureSuccessAsync(HttpResponseMessage response, string service, CancellationToken ct)
+    /// <param name="hint">
+    /// Optional caller-supplied explanation. When given it replaces the generic credentials
+    /// hint, because some APIs reuse 401/403/409 with an endpoint-specific meaning that has
+    /// nothing to do with credentials (qBittorrent's setLocation is the motivating case).
+    /// </param>
+    public static async Task EnsureSuccessAsync(HttpResponseMessage response, string service, CancellationToken ct, string? hint = null)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -29,9 +34,12 @@ internal static class AdapterHttp
             snippet = string.Empty;
         }
 
-        var hint = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-            ? " Check the API key / token configured for this instance."
-            : string.Empty;
+        if (string.IsNullOrEmpty(hint))
+        {
+            hint = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+                ? " Check the API key / token configured for this instance."
+                : string.Empty;
+        }
 
         // Skip the body snippet when it's just the status text repeated (e.g. "Unauthorized").
         var detail = string.IsNullOrEmpty(snippet) || string.Equals(snippet, response.StatusCode.ToString(), StringComparison.OrdinalIgnoreCase)

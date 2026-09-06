@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -189,10 +190,13 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
             ["enable"] = "false"
         }, ct);
 
+        // Trim before sending: a destination pasted into the rule editor with a stray trailing
+        // space or newline is passed through verbatim by qBittorrent, which then either fails to
+        // create the directory (409) or silently creates a differently-named one.
         await PostFormAsync(connection, "/api/v2/torrents/setLocation", new Dictionary<string, string>
         {
             ["hashes"] = joinedHashes,
-            ["location"] = location
+            ["location"] = location.Trim()
         }, ct);
     }
 
@@ -226,7 +230,40 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         }
 
         using var response = await client.SendAsync(request, cts.Token);
-        response.EnsureSuccessStatusCode();
+        await AdapterHttp.EnsureSuccessAsync(response, $"qBittorrent ({path})", cts.Token, ActionFailureHint(path, response.StatusCode, form));
+    }
+
+    /// <summary>
+    /// qBittorrent's WebUI API reports action failures as a bare status code with an empty
+    /// body, and the meaning is per-endpoint -- a 409 from setLocation has nothing in common
+    /// with a 409 from setCategory. Translate the documented ones so a failed run says what
+    /// to actually fix instead of "Response status code does not indicate success".
+    /// </summary>
+    private static string ActionFailureHint(string path, HttpStatusCode status, IReadOnlyDictionary<string, string> form)
+    {
+        var location = form.GetValueOrDefault("location");
+        var category = form.GetValueOrDefault("category");
+
+        return (path, status) switch
+        {
+            ("/api/v2/torrents/setLocation", HttpStatusCode.BadRequest) =>
+                " The destination path was empty.",
+
+            ("/api/v2/torrents/setLocation", HttpStatusCode.Forbidden) =>
+                $" qBittorrent has no write access to '{location}'.",
+
+            // The single most common real-world move failure, and the least self-explanatory.
+            ("/api/v2/torrents/setLocation", HttpStatusCode.Conflict) =>
+                $" qBittorrent could not create the save directory '{location}'. That path is resolved by " +
+                "qBittorrent itself, not by qbitflow, so it must exist -- or be creatable -- from inside the " +
+                "qBittorrent container/host, with its parent directory writable by the user qBittorrent runs as. " +
+                "Path-mapping rules are only used to correlate the snapshot and are NOT applied to move destinations.",
+
+            ("/api/v2/torrents/setCategory", HttpStatusCode.Conflict) =>
+                $" The category '{category}' does not exist in qBittorrent (categories must be created there first).",
+
+            _ => string.Empty
+        };
     }
 
     /// <summary>

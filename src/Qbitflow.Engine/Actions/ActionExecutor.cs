@@ -170,7 +170,9 @@ public class ActionExecutor(
         throw new TimeoutException("Move did not complete within the expected time.");
     }
 
-    private static string NormalizePath(string? path) => (path ?? string.Empty).Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+    // .Trim() keeps the idempotency check and the post-move poll agreeing with the adapter,
+    // which trims the destination before handing it to qBittorrent.
+    private static string NormalizePath(string? path) => (path ?? string.Empty).Trim().Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
 
     private static ActionResult Failure(MatchedTorrent m, ActionDefinition action, string error) => new()
     {
