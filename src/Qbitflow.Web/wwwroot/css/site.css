@@ -401,3 +401,10 @@ body {
   text-align: center;
   color: var(--bs-secondary-color);
 }
+
+
+/* ---- End of client-side table filter ---- */
+
+.mw150{
+  min-width: 150px;
+}
