@@ -36,8 +36,8 @@
                 <input type="date" name="To" class="form-control form-control-sm" value="@(Model.To?.ToString("yyyy-MM-dd"))" />
             </div>
             <div class="col-md-3">
-                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
-                <a asp-page="/History/Index" class="btn btn-sm btn-outline-secondary">Clear</a>
+                <button type="submit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--filter" aria-hidden="true"></span>Filter</button>
+                <a asp-page="/History/Index" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--close" aria-hidden="true"></span>Clear</a>
             </div>
         </form>
     </div>
@@ -48,7 +48,7 @@
         @if (Model.Runs.Count == 0)
         {
             <div class="qf-empty">
-                <div class="qf-empty-icon">&#128203;</div>
+                <div class="qf-empty-icon qf-icon qf-icon--clock" aria-hidden="true"></div>
                 <p class="mb-0">No runs match these filters.</p>
             </div>
         }
@@ -79,7 +79,7 @@
                             <td>
                                 @if (details.Count > 0 || run.ErrorMessage is not null)
                                 {
-                                    <button class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#@detailId">+</button>
+                                    <button class="btn btn-sm btn-link p-0" data-bs-toggle="collapse" data-bs-target="#@detailId" aria-label="Toggle details"><span class="qf-icon qf-icon--chevron" aria-hidden="true"></span></button>
                                 }
                             </td>
                             <td>@(Model.RuleNamesById.GetValueOrDefault(run.RuleId, "(deleted rule)"))</td>

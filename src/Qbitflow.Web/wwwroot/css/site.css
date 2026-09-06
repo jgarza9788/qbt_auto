@@ -6,7 +6,7 @@
    static stylesheet can't be stamped by asp-append-version. */
 @font-face {
   font-family: "JetBrainsMono Nerd Font";
-  src: url("../fonts/jetbrainsmono-nerd-v1.woff2") format("woff2");
+  src: url("../fonts/jetbrainsmono-nerd-v2.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -45,6 +45,14 @@
   display: inline-block;
 }
 
+/* Pairs an icon with a text label inside a button or link: aligns the glyph to
+   the label's optical centre and spaces it. Omit on icon-only controls. */
+.qf-ico-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+}
+
 .qf-icon--sun::before { content: "\f185"; }
 .qf-icon--moon::before { content: "\f186"; }
 .qf-icon--auto::before { content: "\f042"; }
@@ -59,6 +67,22 @@
 .qf-icon--tag::before { content: "\f02b"; }
 .qf-icon--folder::before { content: "\f07b"; }
 .qf-icon--gear::before { content: "\f013"; }
+.qf-icon--edit::before { content: "\f044"; }
+.qf-icon--delete::before { content: "\f014"; }
+.qf-icon--add::before { content: "\f067"; }
+.qf-icon--save::before { content: "\f0c7"; }
+.qf-icon--filter::before { content: "\f0b0"; }
+.qf-icon--download::before { content: "\f019"; }
+.qf-icon--upload::before { content: "\f093"; }
+.qf-icon--eye::before { content: "\f06e"; }
+.qf-icon--rotate::before { content: "\f2f1"; }
+.qf-icon--dashboard::before { content: "\f0e4"; }
+.qf-icon--rules::before { content: "\f0ae"; }
+.qf-icon--plug::before { content: "\f1e6"; }
+.qf-icon--server::before { content: "\f233"; }
+.qf-icon--key::before { content: "\f084"; }
+.qf-icon--signout::before { content: "\f2f5"; }
+.qf-icon--signin::before { content: "\f2f6"; }
 
 html {
   font-size: 15px;

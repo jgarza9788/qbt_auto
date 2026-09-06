@@ -34,3 +34,23 @@ U+F071        # fa-warning             -> validation error
 U+F02B        # fa-tag                 -> tags
 U+F07B        # fa-folder              -> paths / storage
 U+F013        # fa-gear                -> settings
+
+# ---- Actions ----
+U+F044        # fa-pencil_square_o     -> edit
+U+F014        # fa-trash_o             -> delete
+U+F067        # fa-plus                -> add / create
+U+F0C7        # fa-save                -> save
+U+F0B0        # fa-filter              -> filter
+U+F019        # fa-download            -> export
+U+F093        # fa-upload              -> import
+U+F06E        # fa-eye                 -> preview
+U+F2F1        # fa-rotate              -> test / retry
+
+# ---- Navigation & identity ----
+U+F0E4        # fa-tachometer          -> dashboard
+U+F0AE        # fa-tasks               -> rules
+U+F1E6        # fa-plug                -> instances / connection
+U+F233        # fa-server              -> server / snapshot
+U+F084        # fa-key                 -> password
+U+F2F5        # fa-right_from_bracket  -> log out
+U+F2F6        # fa-right_to_bracket    -> log in

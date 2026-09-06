@@ -52,15 +52,15 @@
         <div class="qf-card mb-3">
             <div class="qf-card-header">
                 <h2>Instances</h2>
-                <a asp-page="/Instances/Index" class="btn btn-sm btn-outline-primary">Manage</a>
+                <a asp-page="/Instances/Index" class="btn btn-sm btn-outline-primary qf-ico-btn"><span class="qf-icon qf-icon--gear" aria-hidden="true"></span>Manage</a>
             </div>
             <div class="qf-card-body p-0">
                 @if (Model.Instances.Count == 0)
                 {
                     <div class="qf-empty">
-                        <div class="qf-empty-icon">&#128268;</div>
+                        <div class="qf-empty-icon qf-icon qf-icon--plug" aria-hidden="true"></div>
                         <p class="mb-2">No data sources configured yet.</p>
-                        <a asp-page="/Instances/Index" class="btn btn-sm btn-primary">Add an instance</a>
+                        <a asp-page="/Instances/Index" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add an instance</a>
                     </div>
                 }
                 else
@@ -95,13 +95,13 @@
         <div class="qf-card">
             <div class="qf-card-header">
                 <h2>Recent runs</h2>
-                <a asp-page="/History/Index" class="btn btn-sm btn-outline-primary">Full history</a>
+                <a asp-page="/History/Index" class="btn btn-sm btn-outline-primary qf-ico-btn"><span class="qf-icon qf-icon--clock" aria-hidden="true"></span>Full history</a>
             </div>
             <div class="qf-card-body p-0">
                 @if (Model.RecentRuns.Count == 0)
                 {
                     <div class="qf-empty">
-                        <div class="qf-empty-icon">&#128203;</div>
+                        <div class="qf-empty-icon qf-icon qf-icon--clock" aria-hidden="true"></div>
                         <p class="mb-0">No rules have run yet. Once a rule's schedule fires, its runs will show up here.</p>
                     </div>
                 }

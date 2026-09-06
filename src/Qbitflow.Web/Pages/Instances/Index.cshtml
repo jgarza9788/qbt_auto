@@ -7,15 +7,15 @@
 <div class="qf-card mb-4">
     <div class="qf-card-header">
         <h2>Data source instances</h2>
-        <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary">Add instance</a>
+        <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add instance</a>
     </div>
     <div class="qf-card-body p-0">
         @if (Model.Instances.Count == 0)
         {
             <div class="qf-empty">
-                <div class="qf-empty-icon">&#128268;</div>
+                <div class="qf-empty-icon qf-icon qf-icon--plug" aria-hidden="true"></div>
                 <p class="mb-2">No instances configured. qbitflow needs at least one qBittorrent instance to do anything.</p>
-                <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary">Add your first instance</a>
+                <a asp-page="/Instances/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add your first instance</a>
             </div>
         }
         else
@@ -56,15 +56,15 @@
                             <td>
                                 <form method="post" asp-page-handler="TestConnection" asp-route-id="@instance.Id"
                                       hx-post="?handler=TestConnection&id=@instance.Id" hx-target="#test-result-@instance.Id" hx-swap="innerHTML">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Test</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--rotate" aria-hidden="true"></span>Test</button>
                                 </form>
                                 <div id="test-result-@instance.Id" class="mt-1"></div>
                             </td>
                             <td class="text-end">
-                                <a asp-page="/Instances/Edit" asp-route-id="@instance.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a asp-page="/Instances/Edit" asp-route-id="@instance.Id" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--edit" aria-hidden="true"></span>Edit</a>
                                 <form method="post" asp-page-handler="DeleteInstance" asp-route-id="@instance.Id" class="d-inline"
                                       onsubmit="return confirm('Delete instance &quot;@instance.Name&quot;? Rules targeting it will stop matching anything on it.');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger qf-ico-btn"><span class="qf-icon qf-icon--delete" aria-hidden="true"></span>Delete</button>
                                 </form>
                             </td>
                         </tr>
@@ -79,15 +79,15 @@
 <div class="qf-card">
     <div class="qf-card-header">
         <h2>Storage paths</h2>
-        <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary">Add storage path</a>
+        <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add storage path</a>
     </div>
     <div class="qf-card-body p-0">
         @if (Model.StoragePaths.Count == 0)
         {
             <div class="qf-empty">
-                <div class="qf-empty-icon">&#128193;</div>
+                <div class="qf-empty-icon qf-icon qf-icon--folder" aria-hidden="true"></div>
                 <p class="mb-2">No storage paths monitored yet. Add one to use <code>storage.&lt;name&gt;.*</code> fields in rules.</p>
-                <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary">Add a storage path</a>
+                <a asp-page="/Instances/EditStoragePath" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add a storage path</a>
             </div>
         }
         else
@@ -125,10 +125,10 @@
                             <td class="qf-muted-mono">@path.Path</td>
                             <td class="text-secondary">every @path.FolderSizeScanIntervalMinutes min</td>
                             <td class="text-end">
-                                <a asp-page="/Instances/EditStoragePath" asp-route-id="@path.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a asp-page="/Instances/EditStoragePath" asp-route-id="@path.Id" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--edit" aria-hidden="true"></span>Edit</a>
                                 <form method="post" asp-page-handler="DeleteStoragePath" asp-route-id="@path.Id" class="d-inline"
                                       onsubmit="return confirm('Delete storage path &quot;@path.Name&quot;?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger qf-ico-btn"><span class="qf-icon qf-icon--delete" aria-hidden="true"></span>Delete</button>
                                 </form>
                             </td>
                         </tr>

@@ -10,7 +10,7 @@ set -euo pipefail
 
 NF_TAG=v3.4.0
 SRC_NAME=JetBrainsMonoNerdFontMono-Regular.ttf
-VERSION=v1                                  # bump on every regeneration (cache-busting)
+VERSION=v2                                  # bump on every regeneration (cache-busting)
 OUT_DIR=src/Qbitflow.Web/wwwroot/fonts
 OUT="${OUT_DIR}/jetbrainsmono-nerd-${VERSION}.woff2"
 

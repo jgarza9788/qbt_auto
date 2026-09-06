@@ -317,11 +317,14 @@ document.addEventListener('click', function (e) {
     const host = trigger.closest('.offcanvas, .modal') || document.body;
     copyToClipboard(text, host).then(function (ok) {
         if (!btn || btn.dataset.copyBusy) return;
-        const original = btn.textContent;
+        // Swap only the label span, never the button's own textContent -- the button
+        // also holds an icon element that assigning textContent would destroy.
+        const label = btn.querySelector('[data-copy-label]') || btn;
+        const original = label.textContent;
         btn.dataset.copyBusy = '1';
-        btn.textContent = ok ? 'Copied!' : 'Copy failed';
+        label.textContent = ok ? 'Copied!' : 'Copy failed';
         setTimeout(function () {
-            btn.textContent = original;
+            label.textContent = original;
             delete btn.dataset.copyBusy;
         }, 1200);
     });
@@ -338,11 +341,15 @@ function initConditionModeToggle() {
     const advanced = document.getElementById('advancedSqlBuilder');
     if (!btn || !field || !visual || !advanced) return;
 
+    // Swap only the label span -- the button also holds an icon element that
+    // assigning to the button's own textContent would destroy.
+    const btnLabel = btn.querySelector('[data-mode-label]') || btn;
+
     function apply(useSql) {
         field.value = useSql ? 'true' : 'false';
         visual.style.display = useSql ? 'none' : 'block';
         advanced.style.display = useSql ? 'block' : 'none';
-        btn.textContent = useSql ? 'Switch to basic' : 'Switch to SQL';
+        btnLabel.textContent = useSql ? 'Switch to basic' : 'Switch to SQL';
         if (label) label.textContent = useSql ? 'Advanced SQL' : 'Basic builder';
     }
 

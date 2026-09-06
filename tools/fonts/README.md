@@ -11,7 +11,7 @@ served over HTTP.
 
 | File | Notes |
 |---|---|
-| `wwwroot/fonts/jetbrainsmono-nerd-v1.woff2` | ~15 KB subset. Committed. |
+| `wwwroot/fonts/jetbrainsmono-nerd-v2.woff2` | ~16 KB subset. Committed. |
 | `wwwroot/fonts/OFL.txt` | SIL OFL 1.1, copied verbatim from the release. |
 | `wwwroot/fonts/LICENSE-nerdfonts.txt` | Provenance + upstream attributions. |
 
@@ -91,22 +91,39 @@ space so the CSS parser doesn't swallow the next character.
 
 ## Currently included
 
-| Codepoint | Glyph | Used for |
-|---|---|---|
-| U+F185 | `fa-sun_o` | theme: light |
-| U+F186 | `fa-moon_o` | theme: dark |
-| U+F042 | `fa-circle_half_stroke` | theme: auto / match system |
-| U+F0C5 | `fa-files_o` | copy |
-| U+F00C | `fa-check` | success / applied |
-| U+F00D | `fa-xmark` | close / remove |
-| U+F078 | `fa-chevron_down` | disclosure |
-| U+F1C0 | `fa-database` | snapshot / SQL |
-| U+F017 | `fa-clock_o` | schedule / cron |
-| U+F04B | `fa-play` | run now |
-| U+F071 | `fa-warning` | validation error |
-| U+F02B | `fa-tag` | tags |
-| U+F07B | `fa-folder` | paths / storage |
-| U+F013 | `fa-gear` | settings |
+| Codepoint | Glyph | CSS class | Used for |
+|---|---|---|---|
+| U+F185 | `fa-sun_o` | `--sun` | theme: light |
+| U+F186 | `fa-moon_o` | `--moon` | theme: dark |
+| U+F042 | `fa-circle_half_stroke` | `--auto` | theme: auto / match system |
+| U+F0C5 | `fa-files_o` | `--copy` | copy |
+| U+F00C | `fa-check` | `--check` | success / validate |
+| U+F00D | `fa-xmark` | `--close` | close / remove / clear |
+| U+F078 | `fa-chevron_down` | `--chevron` | disclosure |
+| U+F1C0 | `fa-database` | `--database` | field reference / SQL |
+| U+F017 | `fa-clock_o` | `--clock` | schedule / history |
+| U+F04B | `fa-play` | `--play` | run now / dry run |
+| U+F071 | `fa-warning` | `--warning` | validation error |
+| U+F02B | `fa-tag` | `--tag` | tags |
+| U+F07B | `fa-folder` | `--folder` | paths / storage |
+| U+F013 | `fa-gear` | `--gear` | settings / manage |
+| U+F044 | `fa-pencil_square_o` | `--edit` | edit |
+| U+F014 | `fa-trash_o` | `--delete` | delete |
+| U+F067 | `fa-plus` | `--add` | add / create |
+| U+F0C7 | `fa-save` | `--save` | save |
+| U+F0B0 | `fa-filter` | `--filter` | filter |
+| U+F019 | `fa-download` | `--download` | export |
+| U+F093 | `fa-upload` | `--upload` | import |
+| U+F06E | `fa-eye` | `--eye` | preview |
+| U+F2F1 | `fa-rotate` | `--rotate` | test / switch mode |
+| U+F0E4 | `fa-tachometer` | `--dashboard` | dashboard |
+| U+F0AE | `fa-tasks` | `--rules` | rules |
+| U+F1E6 | `fa-plug` | `--plug` | instances / connection |
+| U+F233 | `fa-server` | `--server` | server / snapshot |
+| U+F084 | `fa-key` | `--key` | password |
+| U+F2F5 | `fa-right_from_bracket` | `--signout` | log out |
+| U+F2F6 | `fa-right_to_bracket` | `--signin` | log in |
 
-Only the first three have a consumer today (the navbar theme toggle); the rest
-are pre-included so adding an icon later is a CSS-only change.
+Every one is wired to a `.qf-icon--<name>` class in `site.css`. Three
+(`server`, `tag`, `warning`) are defined but not yet used by any view --
+they are pre-included so the next feature is a CSS-only change.

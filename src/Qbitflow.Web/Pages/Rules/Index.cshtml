@@ -7,15 +7,15 @@
 <div class="qf-card">
     <div class="qf-card-header">
         <h2>Rules</h2>
-        <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary">Add rule</a>
+        <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Add rule</a>
     </div>
     <div class="qf-card-body p-0">
         @if (Model.Rules.Count == 0)
         {
             <div class="qf-empty">
-                <div class="qf-empty-icon">&#9881;</div>
+                <div class="qf-empty-icon qf-icon qf-icon--rules" aria-hidden="true"></div>
                 <p class="mb-2">No rules yet. A rule is a schedule, a condition, and one or more actions.</p>
-                <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary">Create your first rule</a>
+                <a asp-page="/Rules/Edit" class="btn btn-sm btn-primary qf-ico-btn"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Create your first rule</a>
             </div>
         }
         else
@@ -69,12 +69,12 @@
                             <td class="text-secondary small">@(rule.LastRunAt is not null ? rule.LastRunAt.Value.LocalDateTime.ToString("g") : "never")</td>
                             <td class="text-end">
                                 <form method="post" asp-page-handler="RunNow" asp-route-id="@rule.Id" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-outline-success">Run now</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-success qf-ico-btn"><span class="qf-icon qf-icon--play" aria-hidden="true"></span>Run now</button>
                                 </form>
-                                <a asp-page="/Rules/Edit" asp-route-id="@rule.Id" class="btn btn-sm btn-outline-secondary">Edit</a>
+                                <a asp-page="/Rules/Edit" asp-route-id="@rule.Id" class="btn btn-sm btn-outline-secondary qf-ico-btn"><span class="qf-icon qf-icon--edit" aria-hidden="true"></span>Edit</a>
                                 <form method="post" asp-page-handler="Delete" asp-route-id="@rule.Id" class="d-inline"
                                       onsubmit="return confirm('Delete rule &quot;@rule.Name&quot;?');">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger qf-ico-btn"><span class="qf-icon qf-icon--delete" aria-hidden="true"></span>Delete</button>
                                 </form>
                             </td>
                         </tr>
