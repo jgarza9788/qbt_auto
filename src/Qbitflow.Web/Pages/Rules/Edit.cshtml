@@ -297,7 +297,7 @@
             </div>
 
             <div id="advancedSqlBuilder" style="display:@(Model.Input.UseAdvancedSql ? "block" : "none")">
-                <button class="btn btn-outline-secondary btn-sm qf-ico-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#fieldRefPanel"><span class="qf-icon qf-icon--database" aria-hidden="true"></span>Field reference</button>
+                
                 <label asp-for="Input.AdvancedSqlWhere" class="form-label"></label>
                 <textarea asp-for="Input.AdvancedSqlWhere" class="form-control qf-muted-mono" rows="4"
                           placeholder="category = 'linux' AND size_gb(size_bytes) > 5"></textarea>
