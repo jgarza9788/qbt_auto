@@ -372,15 +372,37 @@ body {
   border-radius: 0.375rem;
 }
 
-tr{
-  background: var(--bs-table-bg);
+/* ---- Table row hover ---- */
+
+/* Applied to every .table rather than only the ones tagged .table-hover, so a
+   new table picks the behaviour up for free. Bootstrap paints cell state with
+   an inset box-shadow over the cell background, so a plain `tr:hover
+   { background }` is covered up -- set its state variables instead and let its
+   own rule do the painting. Scoped to > tbody > tr so headers and footers stay
+   put, and .collapse detail rows (History) aren't treated as hoverable items. */
+.table > tbody > tr:not(.collapse):hover > * {
+  --bs-table-color-state: var(--bs-table-hover-color);
+  --bs-table-bg-state: var(--bs-table-hover-bg);
 }
 
-tr:hover {
-  background: var(--bs-tertiary-bg);
+/* Nudged up from Bootstrap's 0.075: every table here is .table-sm, and at that
+   row height the stock tint is easy to miss. Still an rgba of the theme's
+   emphasis colour, so it reads under both themes and layers over a striped or
+   active row instead of replacing it. */
+.table {
+  /* Transparent cells let the card (or the tertiary strip behind History's
+     nested detail table) show through; row state is painted by the box-shadow
+     above, so hover still lands. */
+  --bs-table-bg: transparent;
+  --bs-table-hover-bg: rgba(var(--bs-emphasis-color-rgb), 0.09);
 }
 
-td{
-  background: transparent;
-  background-color: transparent;
+.table > tbody > tr > * {
+  transition: box-shadow 0.12s ease, color 0.12s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table > tbody > tr > * {
+    transition: none;
+  }
 }
