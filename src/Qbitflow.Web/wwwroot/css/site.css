@@ -371,3 +371,16 @@ body {
   border: 1px solid var(--bs-border-color);
   border-radius: 0.375rem;
 }
+
+tr{
+  background: var(--bs-table-bg);
+}
+
+tr:hover {
+  background: var(--bs-tertiary-bg);
+}
+
+td{
+  background: transparent;
+  background-color: transparent;
+}
