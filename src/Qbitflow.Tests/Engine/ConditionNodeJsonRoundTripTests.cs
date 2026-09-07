@@ -22,7 +22,7 @@ public class ConditionNodeJsonRoundTripTests
             Operator = LogicalOperator.And,
             Children =
             [
-                new ComparisonNode { Field = "category", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("linux") }
+                new ComparisonNode { Field = "qbittorrent.*.category", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("linux") }
             ]
         };
 
@@ -46,13 +46,13 @@ public class ConditionNodeJsonRoundTripTests
             Operator = LogicalOperator.And,
             Children =
             [
-                new ComparisonNode { Field = "category", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("linux") },
-                new NotNode { Child = new ComparisonNode { Field = "state", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("error") } },
+                new ComparisonNode { Field = "qbittorrent.*.category", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("linux") },
+                new NotNode { Child = new ComparisonNode { Field = "qbittorrent.*.state", Operator = ComparisonOperator.Eq, Value = JsonSerializer.SerializeToElement("error") } },
                 new ExistsNode
                 {
-                    Relation = "watch_history",
+                    Source = "tautulli.*",
                     Negate = true,
-                    Condition = new ComparisonNode { Field = "days_since_watched", Operator = ComparisonOperator.Lte, Value = JsonSerializer.SerializeToElement(90.0) }
+                    Condition = new ComparisonNode { Field = "tautulli.*.days_since_watched", Operator = ComparisonOperator.Lte, Value = JsonSerializer.SerializeToElement(90.0) }
                 }
             ]
         };
@@ -78,8 +78,8 @@ public class ConditionNodeJsonRoundTripTests
         // JSON string, not built via C# serialization, to catch any shape mismatch.
         const string json = """
             {"kind":"group","Operator":"And","Children":[
-                {"kind":"comparison","Field":"category","Operator":"Eq","Value":"linux"},
-                {"kind":"exists","Relation":"watch_history","Negate":true,"Condition":{"kind":"comparison","Field":"days_since_watched","Operator":"Lte","Value":90}}
+                {"kind":"comparison","Field":"qbittorrent.*.category","Operator":"Eq","Value":"linux"},
+                {"kind":"exists","Source":"tautulli.*","Negate":true,"Condition":{"kind":"comparison","Field":"tautulli.*.days_since_watched","Operator":"Lte","Value":90}}
             ]}
             """;
 

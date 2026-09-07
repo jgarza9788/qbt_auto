@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Qbitflow.Core.Domain.Conditions;
+using Qbitflow.Core.Domain;
 using Qbitflow.Core.Domain.SourceData;
 using Qbitflow.Engine.Conditions;
 using Qbitflow.Snapshot;
@@ -37,7 +38,7 @@ public class ConditionEvaluationIntegrationTests : IDisposable
             ]
         });
 
-        var query = _compiler.Compile(Cmp("category", ComparisonOperator.Eq, Json("linux")));
+        var query = _compiler.Compile(Cmp("qbittorrent.*.category", ComparisonOperator.Eq, Json("linux")));
         var matches = await _compiler.ExecuteAsync(_db, query);
 
         var match = Assert.Single(matches);
@@ -56,7 +57,7 @@ public class ConditionEvaluationIntegrationTests : IDisposable
             ]
         });
 
-        var query = _compiler.Compile(Cmp("size_gb", ComparisonOperator.Gt, Json(5.0)));
+        var query = _compiler.Compile(Cmp("qbittorrent.*.size_gb", ComparisonOperator.Gt, Json(5.0)));
         var matches = await _compiler.ExecuteAsync(_db, query);
 
         var match = Assert.Single(matches);
@@ -104,17 +105,17 @@ public class ConditionEvaluationIntegrationTests : IDisposable
             ],
             WatchHistory =
             [
-                new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", FilePath = "/media/recent.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-5) },
-                new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", FilePath = "/media/old.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-200) }
+                new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", SourceType = SourceType.Tautulli, FilePath = "/media/recent.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-5) },
+                new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", SourceType = SourceType.Tautulli, FilePath = "/media/old.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-200) }
             ]
         });
 
         // "no watch history in the last 90 days"
         var tree = new ExistsNode
         {
-            Relation = "watch_history",
+            Source = "tautulli.*",
             Negate = true,
-            Condition = Cmp("days_since_watched", ComparisonOperator.Lte, Json(90.0))
+            Condition = Cmp("tautulli.*.days_since_watched", ComparisonOperator.Lte, Json(90.0))
         };
 
         var query = _compiler.Compile(tree);
@@ -139,7 +140,7 @@ public class ConditionEvaluationIntegrationTests : IDisposable
             ]
         });
 
-        var query = _compiler.Compile(Cmp("category", ComparisonOperator.Eq, Json("linux")), targetInstanceIds: [1]);
+        var query = _compiler.Compile(Cmp("qbittorrent.*.category", ComparisonOperator.Eq, Json("linux")), targetInstanceIds: [1]);
         var matches = await _compiler.ExecuteAsync(_db, query);
 
         var match = Assert.Single(matches);
@@ -168,14 +169,14 @@ public class ConditionEvaluationIntegrationTests : IDisposable
             Operator = LogicalOperator.And,
             Children =
             [
-                Cmp("state", ComparisonOperator.Eq, Json("uploading")),
+                Cmp("qbittorrent.*.state", ComparisonOperator.Eq, Json("uploading")),
                 new GroupNode
                 {
                     Operator = LogicalOperator.Or,
                     Children =
                     [
-                        Cmp("category", ComparisonOperator.Eq, Json("linux")),
-                        Cmp("category", ComparisonOperator.Eq, Json("tv"))
+                        Cmp("qbittorrent.*.category", ComparisonOperator.Eq, Json("linux")),
+                        Cmp("qbittorrent.*.category", ComparisonOperator.Eq, Json("tv"))
                     ]
                 }
             ]
@@ -187,4 +188,103 @@ public class ConditionEvaluationIntegrationTests : IDisposable
         var hashes = matches.Select(m => m.TorrentHash).ToHashSet();
         Assert.Equal(new HashSet<string> { "match-1", "match-2" }, hashes);
     }
+
+    [Fact]
+    public async Task TopLevelRelatedSourceField_CorrelatesWithoutAnExplicitCheck()
+    {
+        SeedWatchHistoryFixture();
+
+        // The same question as the NOT EXISTS above, written as a plain negated comparison --
+        // this is the auto-correlation the compiler does for a related source's row field.
+        var tree = new NotNode { Child = Cmp("tautulli.*.days_since_watched", ComparisonOperator.Lte, Json(90.0)) };
+
+        var matches = await _compiler.ExecuteAsync(_db, _compiler.Compile(tree));
+
+        var hashes = matches.Select(m => m.TorrentHash).ToHashSet();
+        Assert.Equal(new HashSet<string> { "watched-long-ago", "never-watched" }, hashes);
+    }
+
+    [Fact]
+    public async Task NamedInstance_MatchesOnlyThatInstancesRows()
+    {
+        SeedWatchHistoryFixture();
+
+        var matches = await _compiler.ExecuteAsync(_db,
+            _compiler.Compile(Cmp("tautulli.other.days_since_watched", ComparisonOperator.Lte, Json(90.0))));
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public async Task RowsGoToTheTableOfTheSourceTypeThatProducedThem()
+    {
+        SeedWatchHistoryFixture();
+
+        // The fixture's history came from Tautulli, so asking Jellystat finds nothing -- this is
+        // the pooling the per-type layout removes.
+        var matches = await _compiler.ExecuteAsync(_db,
+            _compiler.Compile(Cmp("jellystat.*.days_since_watched", ComparisonOperator.Lte, Json(90.0))));
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public async Task PlayCountAggregate_IsZeroForANeverWatchedTorrent()
+    {
+        SeedWatchHistoryFixture();
+
+        var matches = await _compiler.ExecuteAsync(_db,
+            _compiler.Compile(Cmp("tautulli.*.play_count", ComparisonOperator.Eq, Json(0))));
+
+        var match = Assert.Single(matches);
+        Assert.Equal("never-watched", match.TorrentHash);
+    }
+
+    [Fact]
+    public async Task MediaAndHistoryRowsOfOneSource_DoNotLeakIntoEachOthersFields()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            PathMappingRules = [new() { SourcePrefix = "/downloads", CanonicalPrefix = "/media" }],
+            Torrents =
+            [
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "in-library", Name = "A", ContentPath = "/downloads/a.mkv", SizeBytes = 1, Progress = 1 },
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "not-in-library", Name = "B", ContentPath = "/downloads/b.mkv", SizeBytes = 1, Progress = 1 }
+            ],
+            MediaItems =
+            [
+                new MediaItemRecord
+                {
+                    InstanceId = 5, InstanceName = "jf1", SourceType = SourceType.Jellyfin,
+                    ExternalKey = "1", Title = "A", MediaType = "movie", FilePaths = ["/media/a.mkv"]
+                }
+            ]
+        });
+
+        var inLibrary = await _compiler.ExecuteAsync(_db,
+            _compiler.Compile(Cmp("jellyfin.*.media_count", ComparisonOperator.Gt, Json(0))));
+        Assert.Equal("in-library", Assert.Single(inLibrary).TorrentHash);
+
+        // A media row has no watched_at, so a history field must not see it.
+        var watched = await _compiler.ExecuteAsync(_db,
+            _compiler.Compile(Cmp("jellyfin.*.play_count", ComparisonOperator.Gt, Json(0))));
+        Assert.Empty(watched);
+    }
+
+    /// <summary>Three torrents -- watched recently, watched long ago, never watched -- with Tautulli history.</summary>
+    private void SeedWatchHistoryFixture() => _db.Rebuild(new SnapshotInput
+    {
+        PathMappingRules = [new() { SourcePrefix = "/downloads", CanonicalPrefix = "/media" }],
+        Torrents =
+        [
+            new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "recently-watched", Name = "Recent", ContentPath = "/downloads/recent.mkv", SizeBytes = 1, Progress = 1 },
+            new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "watched-long-ago", Name = "OldWatch", ContentPath = "/downloads/old.mkv", SizeBytes = 1, Progress = 1 },
+            new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "never-watched", Name = "Never", ContentPath = "/downloads/never.mkv", SizeBytes = 1, Progress = 1 }
+        ],
+        WatchHistory =
+        [
+            new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", SourceType = SourceType.Tautulli, FilePath = "/media/recent.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-5) },
+            new WatchHistoryRecord { InstanceId = 2, InstanceName = "tautulli", SourceType = SourceType.Tautulli, FilePath = "/media/old.mkv", WatchedAt = DateTimeOffset.UtcNow.AddDays(-200) }
+        ]
+    });
 }

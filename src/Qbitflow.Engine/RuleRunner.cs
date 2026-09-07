@@ -80,12 +80,12 @@ public class RuleRunner(
 
     private async Task RunCoreAsync(Rule rule, AppSettings settings, RunRecord run, CancellationToken ct)
     {
-        var (instances, snapshot, _) = await BuildSnapshotAsync(ct);
+        var (instances, resolution, snapshot, _) = await BuildSnapshotAsync(ct);
         using (snapshot)
         {
             var targetInstanceIds = JsonSerializer.Deserialize<List<int>>(rule.TargetInstanceIdsJson) ?? [];
             var matches = await EvaluateAsync(
-                snapshot, rule.ConditionTreeJson, rule.UseAdvancedSql, rule.AdvancedSqlWhere, targetInstanceIds, ct);
+                snapshot, resolution, rule.ConditionTreeJson, rule.UseAdvancedSql, rule.AdvancedSqlWhere, targetInstanceIds, ct);
 
             run.MatchedCount = matches.Count;
 
@@ -107,11 +107,11 @@ public class RuleRunner(
     {
         try
         {
-            var (instances, snapshot, torrentCount) = await BuildSnapshotAsync(ct);
+            var (instances, resolution, snapshot, torrentCount) = await BuildSnapshotAsync(ct);
             using (snapshot)
             {
                 var matches = await EvaluateAsync(
-                    snapshot, draft.ConditionTreeJson, draft.UseAdvancedSql, draft.AdvancedSqlWhere, draft.TargetInstanceIds, ct);
+                    snapshot, resolution, draft.ConditionTreeJson, draft.UseAdvancedSql, draft.AdvancedSqlWhere, draft.TargetInstanceIds, ct);
 
                 var actionDefinitions = JsonSerializer.Deserialize<List<ActionDefinition>>(draft.ActionsJson) ?? [];
                 var instancesById = instances.ToDictionary(i => i.Id, ToConnectionInfo);
@@ -151,7 +151,7 @@ public class RuleRunner(
         }
     }
 
-    private async Task<(List<Instance> Instances, SnapshotDatabase Snapshot, int TorrentCount)> BuildSnapshotAsync(CancellationToken ct)
+    private async Task<(List<Instance> Instances, FieldResolutionContext Resolution, SnapshotDatabase Snapshot, int TorrentCount)> BuildSnapshotAsync(CancellationToken ct)
     {
         var instances = await db.Instances.Where(i => i.Enabled).ToListAsync(ct);
         var connections = instances.Select(ToConnectionInfo).ToList();
@@ -179,11 +179,17 @@ public class RuleRunner(
         }
 
         snapshot.Rebuild(input);
-        return (instances, snapshot, input.Torrents.Count);
+
+        // Field keys are validated against what is actually configured, so a rule naming an
+        // instance that has since been renamed or removed fails with a message that names the
+        // real ones instead of quietly matching nothing.
+        var resolution = FieldContextProvider.From(instances, storagePaths);
+        return (instances, resolution, snapshot, input.Torrents.Count);
     }
 
     private async Task<List<MatchedTorrent>> EvaluateAsync(
         SnapshotDatabase snapshot,
+        FieldResolutionContext resolution,
         string conditionTreeJson,
         bool useAdvancedSql,
         string? advancedSqlWhere,
@@ -192,7 +198,7 @@ public class RuleRunner(
     {
         if (useAdvancedSql && !string.IsNullOrWhiteSpace(advancedSqlWhere))
         {
-            var validation = advancedSqlExecutor.Validate(snapshot, advancedSqlWhere, AdvancedSqlMode.WhereClause);
+            var validation = advancedSqlExecutor.Validate(snapshot, advancedSqlWhere, AdvancedSqlMode.WhereClause, resolution);
             if (!validation.IsValid)
             {
                 throw new InvalidOperationException($"Advanced SQL is invalid: {validation.ErrorMessage}");
@@ -206,7 +212,7 @@ public class RuleRunner(
 
         var tree = JsonSerializer.Deserialize<ConditionNode>(conditionTreeJson)
             ?? throw new InvalidOperationException("Rule has no condition tree.");
-        var compiled = conditionCompiler.Compile(tree, targetInstanceIds.Count > 0 ? targetInstanceIds : null);
+        var compiled = conditionCompiler.Compile(tree, resolution, targetInstanceIds.Count > 0 ? targetInstanceIds : null);
         return await conditionCompiler.ExecuteAsync(snapshot, compiled, ct);
     }
 

@@ -33,47 +33,89 @@ function castListValue(valueType, csv) {
         .map(s => castValue(valueType, s));
 }
 
-function newComparisonRow(allFields) {
-    const first = allFields[0];
+// A field key is "<type>.<instance>.<field>". The first two segments are the *source*, which
+// the pickers choose together, and the last is the field. Splitting them in the UI keeps the
+// picker short: a flat list would be types x instances x fields, thousands of options on a
+// real install. The wire value is still the single dotted string the server expects.
+const ANY_INSTANCE = '*';
+
+function splitFieldKey(key) {
+    const parts = (key || '').split('.');
+    if (parts.length !== 3) return { source: '', field: '' };
+    return { source: parts[0] + '.' + parts[1], field: parts[2] };
+}
+
+function sourceLabel(type, instance) {
+    return instance === ANY_INSTANCE ? `${type.label} (any)` : `${type.label}: ${instance}`;
+}
+
+// catalog: [{ type, label, correlation, isAnchor, instances: [name], fields: [{key, valueType, isAggregate, ...}] }]
+function buildSourceIndex(catalog) {
+    const byType = new Map();
+    const all = [];
+
+    for (const type of catalog) {
+        byType.set(type.type, type);
+        // "any instance" is always offered, even before anything is configured, so a rule can be
+        // authored on a fresh install (and so exported rules stay portable between installs).
+        for (const instance of [ANY_INSTANCE, ...type.instances]) {
+            all.push({
+                value: `${type.type}.${instance}`,
+                label: sourceLabel(type, instance),
+                type: type.type,
+                instance,
+                correlation: type.correlation,
+                isAnchor: type.isAnchor
+            });
+        }
+    }
+
+    return {
+        all,
+        byType,
+        // Every source can be compared against at the top level: the compiler correlates
+        // non-torrent sources to the torrent automatically.
+        top: all,
+        // A related-source check only makes sense for a source that has its own rows to match.
+        exists: all.filter(s => s.correlation === 'PathKey'),
+        fieldsFor(sourceValue, inExists) {
+            const typeKey = (sourceValue || '').split('.')[0];
+            const type = byType.get(typeKey);
+            if (!type) return [];
+            // An aggregate already spans every matching row, so it has no meaning applied to the
+            // single row a related-source check is looking at.
+            return inExists ? type.fields.filter(f => !f.isAggregate) : type.fields;
+        }
+    };
+}
+
+function newComparisonRow(sources, sourceValue, inExists) {
+    const source = sourceValue || (sources.top[0] && sources.top[0].value) || '';
+    const fields = sources.fieldsFor(source, inExists);
+    const field = fields[0];
     return {
         kind: 'comparison',
-        Field: first ? first.key : '',
+        _source: source,
+        _field: field ? field.key : '',
         Operator: 'Eq',
-        Value: '',
-        _valueType: first ? first.valueType : 'Text',
+        _valueType: field ? field.valueType : 'Text',
         _rawValue: '',
         _rawListValue: ''
     };
 }
 
-function newExistsRow() {
+function newExistsRow(sources) {
+    const source = (sources.exists[0] && sources.exists[0].value) || '';
     return {
         kind: 'exists',
-        Relation: 'watch_history',
+        Source: source,
         Negate: true,
-        Condition: {
-            kind: 'comparison',
-            Field: 'days_since_watched',
-            Operator: 'Lte',
-            Value: 90,
-            _valueType: 'Real',
-            _rawValue: '90',
-            _rawListValue: ''
-        }
+        Condition: newComparisonRow(sources, source, true)
     };
 }
 
-function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
-    // Flattened list for the top-level ("torrents") field picker, plus synthetic
-    // storage.<name>.<attr> entries built from the configured storage paths.
-    const torrentFields = (fieldsByRelation.torrents || []).map(f => ({ ...f, group: 'torrents' }));
-    const storageFields = [];
-    for (const name of storagePathNames) {
-        for (const attr of (fieldsByRelation.__storage || [])) {
-            storageFields.push({ key: `storage.${name}.${attr.key}`, valueType: attr.valueType, description: attr.description, group: 'storage', label: `storage.${name}.${attr.key}` });
-        }
-    }
-    const allTopLevelFields = [...torrentFields, ...storageFields];
+function conditionBuilder(initialJson, catalog) {
+    const sources = buildSourceIndex(catalog);
 
     let initial;
     try {
@@ -85,16 +127,18 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
         initial = { kind: 'group', Operator: 'And', Children: [] };
     }
 
-    function hydrateComparison(node, fieldList) {
-        const fieldDef = fieldList.find(f => f.key === node.Field) || fieldList[0];
-        const valueType = fieldDef ? fieldDef.valueType : 'Text';
+    function hydrateComparison(node, forcedSource, inExists) {
+        const split = splitFieldKey(node.Field);
+        const source = forcedSource || split.source || (sources.top[0] && sources.top[0].value) || '';
+        const fields = sources.fieldsFor(source, inExists);
+        const fieldDef = fields.find(f => f.key === split.field) || fields[0];
         const isList = node.Operator === 'In' || node.Operator === 'NotIn';
         return {
             kind: 'comparison',
-            Field: node.Field || (fieldDef ? fieldDef.key : ''),
+            _source: source,
+            _field: fieldDef ? fieldDef.key : '',
             Operator: node.Operator || 'Eq',
-            Value: node.Value,
-            _valueType: valueType,
+            _valueType: fieldDef ? fieldDef.valueType : 'Text',
             _rawValue: isList ? '' : (node.Value ?? ''),
             _rawListValue: isList && Array.isArray(node.Value) ? node.Value.join(', ') : ''
         };
@@ -102,11 +146,12 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
 
     function hydrateRow(node) {
         if (node.kind === 'exists') {
+            const source = node.Source || (sources.exists[0] && sources.exists[0].value) || '';
             return {
                 kind: 'exists',
-                Relation: node.Relation || 'watch_history',
+                Source: source,
                 Negate: node.Negate === true || node.Negate === 'true',
-                Condition: hydrateComparison(node.Condition || {}, fieldsByRelation[node.Relation || 'watch_history'] || [])
+                Condition: hydrateComparison(node.Condition || {}, source, true)
             };
         }
         if (node.kind === 'group') {
@@ -116,13 +161,15 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
                 Children: (node.Children || []).map(c => hydrateRow(c))
             };
         }
-        return hydrateComparison(node, allTopLevelFields);
+        return hydrateComparison(node, null, false);
     }
 
     return {
         root: hydrateRow(initial),
-        fieldsFor(relation) {
-            return relation === 'torrents' ? allTopLevelFields : (fieldsByRelation[relation] || []);
+        topSources: sources.top,
+        existsSources: sources.exists,
+        fieldsFor(sourceValue, inExists) {
+            return sources.fieldsFor(sourceValue, inExists);
         },
         operatorsFor(valueType) {
             return OPERATORS_BY_TYPE[valueType] || OPERATORS_BY_TYPE.Text;
@@ -130,35 +177,41 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
         operatorLabel(op) {
             return OPERATOR_LABELS[op] || op;
         },
-        onFieldChange(row, fieldList) {
-            const def = fieldList.find(f => f.key === row.Field);
+        onSourceChange(row, inExists) {
+            const fields = sources.fieldsFor(row._source, inExists);
+            row._field = fields[0] ? fields[0].key : '';
+            this.onFieldChange(row, inExists);
+        },
+        onFieldChange(row, inExists) {
+            const def = sources.fieldsFor(row._source, inExists).find(f => f.key === row._field);
             row._valueType = def ? def.valueType : 'Text';
             row.Operator = 'Eq';
             row._rawValue = '';
             row._rawListValue = '';
         },
+        // Changing which source a related-source check looks at has to move its condition too,
+        // since every field key inside it must name that same source.
+        onExistsSourceChange(row) {
+            row.Condition = newComparisonRow(sources, row.Source, true);
+        },
         addComparison() {
-            this.root.Children.push(newComparisonRow(allTopLevelFields));
+            this.root.Children.push(newComparisonRow(sources, null, false));
         },
         addExists() {
-            this.root.Children.push(newExistsRow());
+            this.root.Children.push(newExistsRow(sources));
         },
         addGroup() {
-            this.root.Children.push({ kind: 'group', Operator: 'And', Children: [newComparisonRow(allTopLevelFields)] });
+            this.root.Children.push({ kind: 'group', Operator: 'And', Children: [newComparisonRow(sources, null, false)] });
         },
         addSubComparison(group) {
-            group.Children.push(newComparisonRow(allTopLevelFields));
+            group.Children.push(newComparisonRow(sources, null, false));
         },
         addSubExists(group) {
-            group.Children.push(newExistsRow());
+            group.Children.push(newExistsRow(sources));
         },
         removeRow(list, row) {
             const idx = list.indexOf(row);
             if (idx >= 0) list.splice(idx, 1);
-        },
-        insertField(row, fieldKey, fieldList) {
-            row.Field = fieldKey;
-            this.onFieldChange(row, fieldList);
         },
         serializeRow(row) {
             if (row.kind === 'group') {
@@ -169,7 +222,7 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
                 // wants a real JSON boolean.
                 return {
                     kind: 'exists',
-                    Relation: row.Relation,
+                    Source: row.Source,
                     Negate: row.Negate === true || row.Negate === 'true',
                     Condition: this.serializeRow(row.Condition)
                 };
@@ -181,7 +234,7 @@ function conditionBuilder(initialJson, fieldsByRelation, storagePathNames) {
                     ? castListValue(row._valueType, row._rawListValue)
                     : castValue(row._valueType, row._rawValue);
             }
-            return { kind: 'comparison', Field: row.Field, Operator: row.Operator, Value: value };
+            return { kind: 'comparison', Field: `${row._source}.${row._field}`, Operator: row.Operator, Value: value };
         },
         serialize() {
             return JSON.stringify(this.serializeRow(this.root));
@@ -402,29 +455,38 @@ function initAdvancedSqlEditor() {
 
 document.addEventListener('DOMContentLoaded', initAdvancedSqlEditor);
 
-function fieldReferencePanel(fieldsByRelation, storagePathNames, udfHelpers) {
+// The field reference lists ready-to-paste keys: one row per (source, field), including the
+// "<type>.*" any-instance form, so what is copied out of the panel is exactly what goes into a
+// picker or the SQL box.
+function fieldReferencePanel(catalog, udfHelpers) {
     const rows = [];
-    for (const [relation, fields] of Object.entries(fieldsByRelation)) {
-        if (relation === '__storage') continue;
-        for (const f of fields) {
-            rows.push({ relation, key: f.key, valueType: f.valueType, description: f.description, example: f.example });
-        }
-    }
-    for (const name of storagePathNames) {
-        for (const attr of (fieldsByRelation.__storage || [])) {
-            rows.push({ relation: 'storage', key: `storage.${name}.${attr.key}`, valueType: attr.valueType, description: attr.description, example: null });
+    for (const type of catalog) {
+        for (const instance of ['*', ...type.instances]) {
+            const source = `${type.type}.${instance}`;
+            for (const f of type.fields) {
+                rows.push({
+                    source,
+                    type: type.type,
+                    key: `${source}.${f.key}`,
+                    valueType: f.valueType,
+                    isAggregate: f.isAggregate,
+                    description: f.description,
+                    example: f.example
+                });
+            }
         }
     }
 
     return {
         search: '',
-        relationFilter: '',
+        typeFilter: '',
         allRows: rows,
+        types: catalog.map(t => ({ value: t.type, label: t.label })),
         udfHelpers,
         get filteredRows() {
             const q = this.search.trim().toLowerCase();
             return this.allRows.filter(r => {
-                if (this.relationFilter && r.relation !== this.relationFilter) return false;
+                if (this.typeFilter && r.type !== this.typeFilter) return false;
                 if (!q) return true;
                 return r.key.toLowerCase().includes(q) || (r.description || '').toLowerCase().includes(q);
             });

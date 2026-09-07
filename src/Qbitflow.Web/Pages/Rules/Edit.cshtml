@@ -5,14 +5,12 @@
 }
 
 <div id="qf-rule-editor-data"
-     data-field-registry="@Model.FieldRegistryJson"
-     data-storage-paths="@Model.StoragePathNamesJson"
+     data-source-catalog="@Model.SourceCatalogJson"
      hidden></div>
 <script>
     (function () {
         var el = document.getElementById('qf-rule-editor-data');
-        window.qfFieldRegistry = JSON.parse(el.dataset.fieldRegistry);
-        window.qfStoragePathNames = JSON.parse(el.dataset.storagePaths);
+        window.qfSourceCatalog = JSON.parse(el.dataset.sourceCatalog);
         window.qfUdfHelpers = [
         @foreach (var h in Model.UdfHelpers)
         {
@@ -137,7 +135,7 @@
         <div class="qf-card-body">
             <div id="visualBuilder" style="display:@(Model.Input.UseAdvancedSql ? "none" : "block")">
                 <div id="qf-condition-builder-root" data-initial="@Model.Input.ConditionTreeJson"
-                     x-data="conditionBuilder($el.dataset.initial, qfFieldRegistry, qfStoragePathNames)">
+                     x-data="conditionBuilder($el.dataset.initial, qfSourceCatalog)">
                     <input type="hidden" name="Input.ConditionTreeJson" :value="serialize()" />
 
                     <div class="qf-cond-group">
@@ -154,8 +152,13 @@
                             <div>
                                 <template x-if="row.kind === 'comparison'">
                                     <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
-                                        <select class="form-select form-select-sm w-auto" x-model="row.Field" x-init="$nextTick(() => $el.value = row.Field)" @@change="onFieldChange(row, fieldsFor('torrents'))">
-                                            <template x-for="f in fieldsFor('torrents')" :key="f.key">
+                                        <select class="form-select form-select-sm w-auto" x-model="row._source" x-init="$nextTick(() => $el.value = row._source)" @@change="onSourceChange(row, false)">
+                                            <template x-for="s in topSources" :key="s.value">
+                                                <option :value="s.value" x-text="s.label"></option>
+                                            </template>
+                                        </select>
+                                        <select class="form-select form-select-sm w-auto" x-model="row._field" x-init="$nextTick(() => $el.value = row._field)" @@change="onFieldChange(row, false)">
+                                            <template x-for="f in fieldsFor(row._source, false)" :key="f.key">
                                                 <option :value="f.key" x-text="f.key"></option>
                                             </template>
                                         </select>
@@ -181,17 +184,17 @@
                                                 <option :value="true">There is NO</option>
                                                 <option :value="false">There IS</option>
                                             </select>
-                                            <select class="form-select form-select-sm w-auto" x-model="row.Relation" @@change="row.Condition = { kind: 'comparison', Field: fieldsFor(row.Relation)[0].key, Operator: 'Eq', Value: '', _valueType: fieldsFor(row.Relation)[0].valueType, _rawValue: '', _rawListValue: '' }">
-                                                <option value="watch_history">watch history</option>
-                                                <option value="media_items">media item</option>
-                                                <option value="play_counts">play-count record</option>
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Source" x-init="$nextTick(() => $el.value = row.Source)" @@change="onExistsSourceChange(row)">
+                                                <template x-for="s in existsSources" :key="s.value">
+                                                    <option :value="s.value" x-text="s.label"></option>
+                                                </template>
                                             </select>
                                             <span class="small text-secondary">matching:</span>
                                             <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(root.Children, row)"><span class="qf-icon qf-icon--close" aria-hidden="true"></span><span class="visually-hidden">Remove</span></button>
                                         </div>
                                         <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
-                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition.Field" x-init="$nextTick(() => $el.value = row.Condition.Field)" @@change="onFieldChange(row.Condition, fieldsFor(row.Relation))">
-                                                <template x-for="f in fieldsFor(row.Relation)" :key="f.key">
+                                            <select class="form-select form-select-sm w-auto" x-model="row.Condition._field" x-init="$nextTick(() => $el.value = row.Condition._field)" @@change="onFieldChange(row.Condition, true)">
+                                                <template x-for="f in fieldsFor(row.Source, true)" :key="f.key">
                                                     <option :value="f.key" x-text="f.key"></option>
                                                 </template>
                                             </select>
@@ -221,8 +224,13 @@
                                             <div>
                                                 <template x-if="subRow.kind === 'comparison'">
                                                     <div class="qf-cond-row d-flex flex-wrap gap-2 align-items-center">
-                                                        <select class="form-select form-select-sm w-auto" x-model="subRow.Field" x-init="$nextTick(() => $el.value = subRow.Field)" @@change="onFieldChange(subRow, fieldsFor('torrents'))">
-                                                            <template x-for="f in fieldsFor('torrents')" :key="f.key">
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow._source" x-init="$nextTick(() => $el.value = subRow._source)" @@change="onSourceChange(subRow, false)">
+                                                            <template x-for="s in topSources" :key="s.value">
+                                                                <option :value="s.value" x-text="s.label"></option>
+                                                            </template>
+                                                        </select>
+                                                        <select class="form-select form-select-sm w-auto" x-model="subRow._field" x-init="$nextTick(() => $el.value = subRow._field)" @@change="onFieldChange(subRow, false)">
+                                                            <template x-for="f in fieldsFor(subRow._source, false)" :key="f.key">
                                                                 <option :value="f.key" x-text="f.key"></option>
                                                             </template>
                                                         </select>
@@ -247,17 +255,17 @@
                                                                 <option :value="true">There is NO</option>
                                                                 <option :value="false">There IS</option>
                                                             </select>
-                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Relation">
-                                                                <option value="watch_history">watch history</option>
-                                                                <option value="media_items">media item</option>
-                                                                <option value="play_counts">play-count record</option>
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Source" x-init="$nextTick(() => $el.value = subRow.Source)" @@change="onExistsSourceChange(subRow)">
+                                                                <template x-for="s in existsSources" :key="s.value">
+                                                                    <option :value="s.value" x-text="s.label"></option>
+                                                                </template>
                                                             </select>
                                                             <span class="small text-secondary">matching:</span>
                                                             <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeRow(row.Children, subRow)"><span class="qf-icon qf-icon--close" aria-hidden="true"></span><span class="visually-hidden">Remove</span></button>
                                                         </div>
                                                         <div class="d-flex flex-wrap gap-2 align-items-center ps-3">
-                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition.Field" x-init="$nextTick(() => $el.value = subRow.Condition.Field)" @@change="onFieldChange(subRow.Condition, fieldsFor(subRow.Relation))">
-                                                                <template x-for="f in fieldsFor(subRow.Relation)" :key="f.key">
+                                                            <select class="form-select form-select-sm w-auto" x-model="subRow.Condition._field" x-init="$nextTick(() => $el.value = subRow.Condition._field)" @@change="onFieldChange(subRow.Condition, true)">
+                                                                <template x-for="f in fieldsFor(subRow.Source, true)" :key="f.key">
                                                                     <option :value="f.key" x-text="f.key"></option>
                                                                 </template>
                                                             </select>
@@ -275,7 +283,7 @@
 
                                         <div class="d-flex gap-2 mt-2">
                                             <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addSubComparison(row)"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Condition</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addSubExists(row)"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Watch-history check</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addSubExists(row)"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Related-source check</button>
                                         </div>
                                     </div>
                                 </template>
@@ -284,7 +292,7 @@
 
                         <div class="d-flex gap-2 mt-2">
                             <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addComparison()"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Condition</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addExists()"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Watch-history check</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addExists()"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Related-source check</button>
                             <button type="button" class="btn btn-sm btn-outline-secondary qf-ico-btn" @@click="addGroup()"><span class="qf-icon qf-icon--add" aria-hidden="true"></span>Group (nested AND/OR)</button>
                         </div>
                     </div>
@@ -300,8 +308,8 @@
                 
                 <label asp-for="Input.AdvancedSqlWhere" class="form-label"></label>
                 <textarea asp-for="Input.AdvancedSqlWhere" class="form-control qf-muted-mono" rows="4"
-                          placeholder="category = 'linux' AND size_gb(size_bytes) > 5"></textarea>
-                <div class="form-text">A boolean WHERE-clause expression against the documented schema. Any key from the field reference can be used directly (e.g. <code>active_days &gt;= 14</code>, <code>storage.&lt;name&gt;.used_percent &lt; 90</code>). Runs read-only, single-statement only.</div>
+                          placeholder="qbittorrent.*.category = 'linux' AND qbittorrent.*.size_gb > 5"></textarea>
+                <div class="form-text">A boolean WHERE-clause expression against the documented schema. Any key from the field reference can be used directly (e.g. <code>qbittorrent.*.active_days &gt;= 14</code>, <code>storage.&lt;name&gt;.used_percent &lt; 90</code>, <code>tautulli.*.play_count = 0</code>). A per-row field of a related source has no single value here &mdash; use one of its aggregates instead. Runs read-only, single-statement only.</div>
                 <button type="button" class="btn btn-sm btn-outline-primary mt-2 qf-ico-btn"
                         hx-post="?handler=ValidateAdvancedSql" hx-target="#advanced-sql-preview" hx-swap="innerHTML"><span class="qf-icon qf-icon--check" aria-hidden="true"></span>Validate</button>
                 <pre id="advanced-sql-preview" class="qf-sql-preview mt-2" style="display:none"></pre>
@@ -368,7 +376,7 @@
 </form>
 
 <div class="offcanvas offcanvas-end" tabindex="-1" id="fieldRefPanel" style="width: 440px;"
-     x-data="fieldReferencePanel(qfFieldRegistry, qfStoragePathNames, qfUdfHelpers)">
+     x-data="fieldReferencePanel(qfSourceCatalog, qfUdfHelpers)">
     <div class="offcanvas-header">
         <h5 class="offcanvas-title">Field reference</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
@@ -381,21 +389,19 @@
                     <span class="qf-icon qf-icon--copy" aria-hidden="true"></span><span data-copy-label>Copy all</span>
                 </button>
             </div>
-            <select class="form-select form-select-sm" x-model="relationFilter">
+            <select class="form-select form-select-sm" x-model="typeFilter">
                 <option value="">All sources</option>
-                <option value="torrents">Torrents</option>
-                <option value="watch_history">Watch history</option>
-                <option value="media_items">Media items</option>
-                <option value="play_counts">Play counts</option>
-                <option value="storage">Storage</option>
+                <template x-for="t in types" :key="t.value">
+                    <option :value="t.value" x-text="t.label"></option>
+                </template>
             </select>
         </div>
         <div style="overflow-y: auto; flex: 1;">
-            <template x-for="row in filteredRows" :key="row.relation + '.' + row.key">
+            <template x-for="row in filteredRows" :key="row.key">
                 <div class="qf-field-row d-flex align-items-start gap-2" :data-copy="row.key" title="Click to copy">
                     <div class="flex-grow-1">
                         <div class="qf-field-key" x-text="row.key"></div>
-                        <div class="qf-field-type" x-text="row.valueType + ' · ' + row.relation"></div>
+                        <div class="qf-field-type" x-text="row.valueType + ' · ' + row.source"></div>
                         <div class="small text-secondary" x-text="row.description"></div>
                     </div>
                     <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap qf-ico-btn" :data-copy="row.key">

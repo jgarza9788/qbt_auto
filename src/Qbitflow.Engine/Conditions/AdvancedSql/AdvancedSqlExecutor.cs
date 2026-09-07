@@ -33,7 +33,10 @@ public class AdvancedSqlExecutor
         @"\b(ATTACH|DETACH|PRAGMA|VACUUM|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|REINDEX)\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    public AdvancedSqlValidationResult Validate(SnapshotDatabase snapshot, string rawSql, AdvancedSqlMode mode)
+    public AdvancedSqlValidationResult Validate(SnapshotDatabase snapshot, string rawSql, AdvancedSqlMode mode) =>
+        Validate(snapshot, rawSql, mode, FieldResolutionContext.Lenient);
+
+    public AdvancedSqlValidationResult Validate(SnapshotDatabase snapshot, string rawSql, AdvancedSqlMode mode, FieldResolutionContext resolution)
     {
         var shapeError = ValidateShape(rawSql);
         if (shapeError is not null)
@@ -44,15 +47,11 @@ public class AdvancedSqlExecutor
         string expandedSql;
         try
         {
-            // Both expanders rewrite visual-builder field keys into their raw-SQL equivalent so
-            // the Field reference panel's keys work verbatim here too. FieldKeyExpander handles
-            // the computed torrent keys (active_days, size_gb, ...) and only applies to a bare
-            // WHERE predicate (it assumes the "FROM torrents t" alias); it must run first so the
-            // "name" column that StorageFieldExpander then injects into its subquery isn't itself
-            // mistaken for a field key. StorageFieldExpander rewrites storage.<name>.<attr> into
-            // the scalar subquery the structured compiler uses.
-            var keyExpanded = mode == AdvancedSqlMode.WhereClause ? FieldKeyExpander.Expand(rawSql) : rawSql;
-            expandedSql = StorageFieldExpander.Expand(keyExpanded);
+            // One pass rewrites every <type>.<instance>.<field> key into the SQL the structured
+            // compiler emits, so a key copied from the Field reference panel works verbatim here.
+            // A single expander (rather than the chained pair this replaced) also removes the
+            // ordering hazard where one rewriter's output could be re-read by the next.
+            expandedSql = SourceFieldExpander.Expand(rawSql, mode, resolution);
         }
         catch (ConditionCompileException ex)
         {
@@ -61,7 +60,7 @@ public class AdvancedSqlExecutor
 
         var trimmed = expandedSql.Trim().TrimEnd(';');
         var compiledSql = mode == AdvancedSqlMode.WhereClause
-            ? $"SELECT DISTINCT t.instance_id AS instance_id, t.hash AS torrent_hash FROM torrents t WHERE {trimmed}"
+            ? $"SELECT DISTINCT t.instance_id AS instance_id, t.hash AS torrent_hash FROM qbittorrent t WHERE {trimmed}"
             : trimmed;
 
         using var readOnly = OpenReadOnly(snapshot);

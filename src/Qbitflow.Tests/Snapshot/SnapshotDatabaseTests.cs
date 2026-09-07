@@ -34,7 +34,7 @@ public class SnapshotDatabaseTests : IDisposable
         _db.Rebuild(input);
 
         using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT hash, name, category, tags, path_key, size_bytes FROM torrents";
+        cmd.CommandText = "SELECT hash, name, category, tags, path_key, size_bytes FROM qbittorrent";
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal("h1", reader.GetString(0));
@@ -65,7 +65,7 @@ public class SnapshotDatabaseTests : IDisposable
         });
 
         using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT tracker, total_size_bytes, auto_tmm FROM torrents WHERE hash = 'h1'";
+        cmd.CommandText = "SELECT tracker, total_size_bytes, auto_tmm FROM qbittorrent WHERE hash = 'h1'";
         using (var reader = cmd.ExecuteReader())
         {
             Assert.True(reader.Read());
@@ -75,7 +75,7 @@ public class SnapshotDatabaseTests : IDisposable
         }
 
         using var derived = _db.Connection.CreateCommand();
-        derived.CommandText = "SELECT seeding_time_seconds / 86400.0, days_since(last_activity) FROM torrents WHERE hash = 'h1'";
+        derived.CommandText = "SELECT seeding_time_seconds / 86400.0, days_since(last_activity) FROM qbittorrent WHERE hash = 'h1'";
         using var dr = derived.ExecuteReader();
         Assert.True(dr.Read());
         Assert.Equal(2.0, dr.GetDouble(0), precision: 6);
@@ -117,8 +117,8 @@ public class SnapshotDatabaseTests : IDisposable
         using var cmd = _db.Connection.CreateCommand();
         cmd.CommandText = """
             SELECT t.hash, m.title
-            FROM torrents t
-            JOIN media_items m ON t.path_key = m.path_key
+            FROM qbittorrent t
+            JOIN plex m ON t.path_key = m.path_key AND m.kind = 'media'
             """;
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
@@ -141,7 +141,7 @@ public class SnapshotDatabaseTests : IDisposable
         });
 
         using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT hash FROM torrents";
+        cmd.CommandText = "SELECT hash FROM qbittorrent";
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal("new", reader.GetString(0));
@@ -160,7 +160,7 @@ public class SnapshotDatabaseTests : IDisposable
         });
 
         using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT available, error FROM storage_paths WHERE storage_path_id = 1";
+        cmd.CommandText = "SELECT available, error FROM storage WHERE storage_path_id = 1";
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal(0L, reader.GetInt64(0));
@@ -168,20 +168,24 @@ public class SnapshotDatabaseTests : IDisposable
     }
 
     [Fact]
-    public void PlayCounts_View_AggregatesWatchHistoryByPathKey()
+    public void WatchEvents_AggregateByPathKey_WithinTheirOwnSourceTypeTable()
     {
         _db.Rebuild(new SnapshotInput
         {
             WatchHistory =
             [
-                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", FilePath = "/media/foo.mkv", UserName = "alice", WatchedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"), PercentComplete = 100 },
-                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", FilePath = "/media/foo.mkv", UserName = "bob", WatchedAt = DateTimeOffset.Parse("2026-01-05T00:00:00Z"), PercentComplete = 95 },
-                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", FilePath = "/media/bar.mkv", UserName = "alice", WatchedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z"), PercentComplete = 100 }
+                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", SourceType = SourceType.Tautulli, FilePath = "/media/foo.mkv", UserName = "alice", WatchedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z"), PercentComplete = 100 },
+                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", SourceType = SourceType.Tautulli, FilePath = "/media/foo.mkv", UserName = "bob", WatchedAt = DateTimeOffset.Parse("2026-01-05T00:00:00Z"), PercentComplete = 95 },
+                new WatchHistoryRecord { InstanceId = 1, InstanceName = "t", SourceType = SourceType.Tautulli, FilePath = "/media/bar.mkv", UserName = "alice", WatchedAt = DateTimeOffset.Parse("2026-01-02T00:00:00Z"), PercentComplete = 100 }
             ]
         });
 
         using var cmd = _db.Connection.CreateCommand();
-        cmd.CommandText = "SELECT play_count, distinct_viewers FROM play_counts WHERE path_key = '/media/foo.mkv'";
+        cmd.CommandText = """
+            SELECT COUNT(*), COUNT(DISTINCT user_name)
+            FROM tautulli
+            WHERE kind = 'history' AND path_key = '/media/foo.mkv'
+            """;
         using var reader = cmd.ExecuteReader();
         Assert.True(reader.Read());
         Assert.Equal(2L, reader.GetInt64(0));
@@ -246,19 +250,25 @@ public class SnapshotDatabaseTests : IDisposable
             indexNames.Add(reader.GetString(0));
         }
 
-        Assert.Contains("ix_torrents_path_key", indexNames);
-        Assert.Contains("ix_torrents_category", indexNames);
-        Assert.Contains("ix_torrents_state", indexNames);
-        Assert.Contains("ix_torrent_files_hash", indexNames);
-        Assert.Contains("ix_torrent_files_path_key", indexNames);
-        Assert.Contains("ix_media_items_path_key", indexNames);
-        Assert.Contains("ix_media_items_external_key", indexNames);
-        Assert.Contains("ix_watch_history_path_key", indexNames);
-        Assert.Contains("ix_watch_history_watched_at", indexNames);
+        Assert.Contains("ix_qbittorrent_path_key", indexNames);
+        Assert.Contains("ix_qbittorrent_instance", indexNames);
+        Assert.Contains("ix_qbittorrent_category", indexNames);
+        Assert.Contains("ix_qbittorrent_state", indexNames);
+        Assert.Contains("ix_qbittorrent_files_hash", indexNames);
+        Assert.Contains("ix_qbittorrent_files_path_key", indexNames);
+        Assert.Contains("ix_storage_instance", indexNames);
+
+        // Every media/history type gets the same pair, generated from the enum.
+        foreach (var type in SourceNaming.MediaHistoryTypes)
+        {
+            var table = SourceNaming.TypeKey(type);
+            Assert.Contains($"ix_{table}_path_key", indexNames);
+            Assert.Contains($"ix_{table}_instance", indexNames);
+        }
     }
 
     [Fact]
-    public void Schema_CreatesExpectedTablesAndView()
+    public void Schema_CreatesOneTablePerSourceType()
     {
         using var cmd = _db.Connection.CreateCommand();
         cmd.CommandText = "SELECT name, type FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%'";
@@ -269,11 +279,65 @@ public class SnapshotDatabaseTests : IDisposable
             objects[reader.GetString(0)] = reader.GetString(1);
         }
 
-        Assert.Equal("table", objects["torrents"]);
-        Assert.Equal("table", objects["torrent_files"]);
-        Assert.Equal("table", objects["media_items"]);
-        Assert.Equal("table", objects["watch_history"]);
-        Assert.Equal("view", objects["play_counts"]);
-        Assert.Equal("table", objects["storage_paths"]);
+        Assert.Equal("table", objects["qbittorrent"]);
+        Assert.Equal("table", objects["qbittorrent_files"]);
+        Assert.Equal("table", objects["storage"]);
+
+        // One table per source type is the whole point: a field key's <type> segment IS a
+        // table name, so every enum value must have one.
+        foreach (var type in SourceNaming.MediaHistoryTypes)
+        {
+            Assert.Equal("table", objects[SourceNaming.TypeKey(type)]);
+        }
+
+        // The shape-pooled tables are gone, not renamed.
+        Assert.DoesNotContain("media_items", objects.Keys);
+        Assert.DoesNotContain("watch_history", objects.Keys);
+        Assert.DoesNotContain("play_counts", objects.Keys);
+    }
+
+    [Fact]
+    public void Rebuild_RoutesEachRecordToItsOwnSourceTypesTable()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            MediaItems =
+            [
+                new MediaItemRecord
+                {
+                    InstanceId = 1, InstanceName = "jf1", SourceType = SourceType.Jellyfin,
+                    ExternalKey = "1", Title = "Library item", FilePaths = ["/media/a.mkv"]
+                }
+            ],
+            WatchHistory =
+            [
+                new WatchHistoryRecord
+                {
+                    InstanceId = 2, InstanceName = "js1", SourceType = SourceType.Jellystat,
+                    MediaTitle = "Watched item", FilePath = "/media/a.mkv",
+                    UserName = "alice", WatchedAt = DateTimeOffset.Parse("2026-01-01T00:00:00Z")
+                }
+            ]
+        });
+
+        Assert.Equal([("media", "Library item", "jf1")], Rows("jellyfin"));
+        Assert.Equal([("history", "Watched item", "js1")], Rows("jellystat"));
+
+        // A type with no rows still has an empty table rather than not existing.
+        Assert.Empty(Rows("tautulli"));
+        Assert.Empty(Rows("streamystats"));
+    }
+
+    private List<(string Kind, string Title, string Instance)> Rows(string table)
+    {
+        using var cmd = _db.Connection.CreateCommand();
+        cmd.CommandText = $"SELECT kind, title, instance FROM {table}";
+        using var reader = cmd.ExecuteReader();
+        var rows = new List<(string, string, string)>();
+        while (reader.Read())
+        {
+            rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+        }
+        return rows;
     }
 }

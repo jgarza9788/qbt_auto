@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISourceAdapter, TautulliAdapter>();
         services.AddSingleton<ISourceAdapter, JellystatAdapter>();
         services.AddSingleton<ISourceAdapter, JellyglanceAdapter>();
+        services.AddSingleton<ISourceAdapter, StreamystatsAdapter>();
 
         services.AddSingleton<ISourceAdapterResolver, SourceAdapterResolver>();
         services.AddSingleton<ISourceRefreshCoordinator, SourceRefreshCoordinator>();

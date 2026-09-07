@@ -20,6 +20,7 @@ public class EditModel(
     AppDbContext db,
     ConditionSqlCompiler conditionCompiler,
     AdvancedSqlExecutor advancedSqlExecutor,
+    IFieldContextProvider fieldContextProvider,
     IRuleRunner ruleRunner) : PageModel
 {
     [BindProperty]
@@ -27,13 +28,13 @@ public class EditModel(
 
     public bool IsNew => Input.Id is null;
     public List<Instance> QbtInstances { get; private set; } = [];
+    public List<Instance> AllInstances { get; private set; } = [];
     public List<string> StoragePathNames { get; private set; } = [];
 
-    public string FieldRegistryJson => JsonSerializer.Serialize(BuildFieldRegistryPayload());
-    public string StoragePathNamesJson => JsonSerializer.Serialize(StoragePathNames);
+    public string SourceCatalogJson => JsonSerializer.Serialize(BuildSourceCatalogPayload());
     public string SchedulePresetsJson => JsonSerializer.Serialize(
         CommonSchedulePresets.Presets.Select(p => new { label = p.Label, cron = p.CronExpression }));
-    public IReadOnlyList<(string Signature, string Description)> UdfHelpers => SnapshotFieldRegistry.Helpers;
+    public IReadOnlyList<(string Signature, string Description)> UdfHelpers => SourceFieldCatalog.Helpers;
 
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken ct)
     {
@@ -184,14 +185,14 @@ public class EditModel(
         return RedirectToPage("/Rules/Index");
     }
 
-    public IActionResult OnPostPreviewCondition()
+    public async Task<IActionResult> OnPostPreviewConditionAsync(CancellationToken ct)
     {
         try
         {
             var tree = JsonSerializer.Deserialize<ConditionNode>(Input.ConditionTreeJson)
                 ?? throw new InvalidOperationException("Condition is empty.");
             var targetIds = Input.TargetInstanceIds.Count > 0 ? Input.TargetInstanceIds : null;
-            var compiled = conditionCompiler.Compile(tree, targetIds);
+            var compiled = conditionCompiler.Compile(tree, await fieldContextProvider.GetAsync(ct), targetIds);
             return Content(compiled.Sql, "text/plain");
         }
         catch (Exception ex)
@@ -219,10 +220,11 @@ public class EditModel(
         return Partial("_DryRunResult", preview);
     }
 
-    public IActionResult OnPostValidateAdvancedSql()
+    public async Task<IActionResult> OnPostValidateAdvancedSqlAsync(CancellationToken ct)
     {
         using var snapshot = new SnapshotDatabase();
-        var validation = advancedSqlExecutor.Validate(snapshot, Input.AdvancedSqlWhere ?? "", AdvancedSqlMode.WhereClause);
+        var validation = advancedSqlExecutor.Validate(
+            snapshot, Input.AdvancedSqlWhere ?? "", AdvancedSqlMode.WhereClause, await fieldContextProvider.GetAsync(ct));
         if (!validation.IsValid)
         {
             Response.StatusCode = 400;
@@ -252,27 +254,45 @@ public class EditModel(
 
     private async Task LoadReferenceDataAsync(CancellationToken ct)
     {
-        QbtInstances = await db.Instances.AsNoTracking()
-            .Where(i => i.SourceType == SourceType.Qbittorrent)
-            .OrderBy(i => i.Name)
-            .ToListAsync(ct);
+        // Every type's instances now, not just qBittorrent's: an instance name is a segment of
+        // every field key, so the editor needs them all to offer the sources a rule can address.
+        AllInstances = await db.Instances.AsNoTracking().OrderBy(i => i.Name).ToListAsync(ct);
+        QbtInstances = [.. AllInstances.Where(i => i.SourceType == SourceType.Qbittorrent)];
         StoragePathNames = await db.StoragePaths.AsNoTracking().OrderBy(s => s.Name).Select(s => s.Name).ToListAsync(ct);
     }
 
-    private static Dictionary<string, object> BuildFieldRegistryPayload()
-    {
-        var result = new Dictionary<string, object>();
-        foreach (var (relation, def) in SnapshotFieldRegistry.Relations)
+    /// <summary>
+    /// The browser's half of the field-key grammar: for each source type, the instances configured
+    /// for it and the fields it exposes. The editor composes "type.instance.field" from those three
+    /// lists rather than being handed a pre-flattened cross-product, which would be thousands of
+    /// entries on an install with several instances.
+    /// </summary>
+    private object BuildSourceCatalogPayload() =>
+        SourceFieldCatalog.Types.Values.Select(type => new
         {
-            result[relation] = def.Fields.Values
-                .Select(f => new { key = f.Key, valueType = f.ValueType.ToString(), description = f.Description, example = f.ExampleValue })
-                .ToList();
-        }
-        result["__storage"] = SnapshotFieldRegistry.StorageAttributes
-            .Select(kv => new { key = kv.Key, valueType = kv.Value.ValueType.ToString(), description = (string?)null })
-            .ToList();
-        return result;
-    }
+            type = type.TypeKey,
+            label = type.DisplayName,
+            correlation = type.Correlation.ToString(),
+            isAnchor = type.Correlation == SourceCorrelation.Anchor,
+            instances = InstanceNamesFor(type),
+            fields = type.Fields.Values
+                .OrderBy(f => f.Key, StringComparer.Ordinal)
+                .Select(f => new
+                {
+                    key = f.Key,
+                    valueType = f.ValueType.ToString(),
+                    isAggregate = f.IsAggregate,
+                    kind = f.KindFilter,
+                    description = f.Description,
+                    example = f.ExampleValue
+                })
+                .ToList()
+        }).ToList();
+
+    private List<string> InstanceNamesFor(SourceTypeDefinition type) =>
+        type.TypeKey == SourceNaming.StorageTypeKey
+            ? StoragePathNames
+            : [.. AllInstances.Where(i => SourceNaming.TypeKey(i.SourceType) == type.TypeKey).Select(i => i.Name)];
 
     public class InputModel
     {

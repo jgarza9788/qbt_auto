@@ -60,6 +60,7 @@ builder.Services.AddScoped<IParallelismSettingsProvider, ParallelismSettingsProv
 builder.Services.AddQbitflowSources();
 
 builder.Services.AddSingleton<ConditionSqlCompiler>();
+builder.Services.AddScoped<IFieldContextProvider, FieldContextProvider>();
 builder.Services.AddSingleton<AdvancedSqlExecutor>();
 builder.Services.AddSingleton<IActionExecutor, ActionExecutor>();
 builder.Services.AddScoped<IRuleRunner, RuleRunner>();

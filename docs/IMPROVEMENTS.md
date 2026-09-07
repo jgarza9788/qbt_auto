@@ -21,6 +21,30 @@ entrypoint start as root, `chown` the data dir, then drop to `app` via `gosu`.
 
 ---
 
+## Update: source data is now addressed as `<type>.<instance>.<field>`
+
+This assessment predates that change, so some names below are stale. Specifically:
+
+- `SnapshotFieldRegistry` is now `SourceFieldCatalog`, keyed by source type rather than by
+  relation, and `RelationDefinition` is gone.
+- The snapshot schema is one table per source type (`qbittorrent`, `jellyfin`, `tautulli`, ...
+  plus `storage`), generated from the `SourceType` enum. `media_items`, `watch_history` and
+  the `play_counts` view no longer exist; `torrents` is `qbittorrent` and `torrent_files` is
+  `qbittorrent_files`.
+- `play_counts` became per-type aggregate fields (`play_count`, `last_watched_at`, ...)
+  compiled as correlated scalar subqueries.
+- `ExistsNode.Relation` is now `ExistsNode.Source`, a `<type>.<instance>` reference.
+
+Two items below are affected in substance, not just naming:
+
+- **1.1 still applies, and now to Streamystats too.** Its default `start_time` field is the
+  same ISO-8601-vs-epoch situation as Jellystat and Jellyglance. `GetUnixSeconds` still only
+  accepts a numeric epoch.
+- **1.2 is unchanged in substance.** `qbittorrent_files` is still never populated and still
+  isn't in the field catalog; the table was renamed for consistency and nothing more.
+
+---
+
 ## Tier 1 — Broken or no-op features (fix first)
 
 These are implemented but not wired, so they silently do nothing. A user who trusts the UI

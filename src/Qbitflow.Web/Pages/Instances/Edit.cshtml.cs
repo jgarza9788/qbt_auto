@@ -178,6 +178,7 @@ public class EditModel(AppDbContext db, ISecretProtector secretProtector, ISourc
         public int? Id { get; set; }
 
         [Required]
+        [RegularExpression(SourceNaming.NamePattern, ErrorMessage = SourceNaming.NameValidationMessage)]
         public string Name { get; set; } = "";
 
         [Required]

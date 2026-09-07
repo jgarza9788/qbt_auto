@@ -10,7 +10,7 @@ namespace Qbitflow.Sources.Adapters;
 
 /// <summary>
 /// Shared "fetch a JSON array of watch/play events from a REST endpoint" logic for
-/// Tautulli, Jellystat, and Jellyglance -- they differ only in URL shape, auth
+/// Tautulli, Jellystat, Jellyglance, and Streamystats -- they differ only in URL shape, auth
 /// placement, and JSON field names, all of which are supplied by the subclass (and
 /// further overridable per-instance via ExtraConfigJson, see RestHistoryConfig).
 /// </summary>
@@ -77,6 +77,7 @@ public abstract class RestHistoryAdapterBase(IInstanceHttpClientFactory httpClie
                 {
                     InstanceId = connection.InstanceId,
                     InstanceName = connection.InstanceName,
+                    SourceType = SourceType,
                     MediaTitle = JsonPathResolver.GetString(item, config.FieldMap.GetValueOrDefault("title")),
                     FilePath = JsonPathResolver.GetString(item, config.FieldMap.GetValueOrDefault("filePath")),
                     UserName = JsonPathResolver.GetString(item, config.FieldMap.GetValueOrDefault("user")),

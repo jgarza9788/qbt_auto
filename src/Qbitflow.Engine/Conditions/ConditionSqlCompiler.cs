@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Qbitflow.Core.Domain;
 using Qbitflow.Core.Domain.Conditions;
 using Qbitflow.Snapshot;
 
@@ -7,26 +8,49 @@ namespace Qbitflow.Engine.Conditions;
 
 /// <summary>
 /// Compiles a structured ConditionNode tree into one parameterized
-/// "SELECT instance_id, torrent_hash FROM torrents t WHERE ..." query against the
-/// snapshot schema. Every value from the tree is bound as a SQLite parameter -- field
-/// keys are resolved only through SnapshotFieldRegistry, so there is no way for a
-/// condition to reach arbitrary SQL text.
+/// "SELECT instance_id, torrent_hash FROM qbittorrent t WHERE ..." query against the snapshot
+/// schema. Every value from the tree is bound as a SQLite parameter and every field key is
+/// resolved through <see cref="SourceFieldCatalog"/>, so there is no way for a condition to reach
+/// arbitrary SQL text -- not even through the instance segment, which is bound rather than
+/// interpolated.
+///
+/// A rule always resolves to a set of torrents, so <c>qbittorrent</c> is the outer row and every
+/// other source is reached from it. A comparison on another source's row field is correlated
+/// automatically -- <c>jellyfin.jf1.title contains 'Foo'</c> at the top level becomes an EXISTS
+/// over the jellyfin table joined on path_key -- so an explicit <see cref="ExistsNode"/> is only
+/// needed when several conditions have to hold on the <em>same</em> row.
 /// </summary>
 public class ConditionSqlCompiler
 {
-    public CompiledQuery Compile(ConditionNode root, IReadOnlyList<int>? targetInstanceIds = null)
+    /// <summary>The alias of the outer torrent row; every correlation is written against it.</summary>
+    private const string AnchorAlias = "t";
+
+    /// <summary>Where a node is being compiled: the outer torrent row, or inside one source's EXISTS subquery.</summary>
+    private sealed record Scope(SourceTypeDefinition Type, string Instance, string Alias)
     {
+        public bool IsAnchor => Type.Correlation == SourceCorrelation.Anchor && Alias == AnchorAlias;
+        public string Source => $"{Type.TypeKey}.{Instance}";
+    }
+
+    public CompiledQuery Compile(ConditionNode root, IReadOnlyList<int>? targetInstanceIds = null) =>
+        Compile(root, FieldResolutionContext.Lenient, targetInstanceIds);
+
+    public CompiledQuery Compile(ConditionNode root, FieldResolutionContext resolution, IReadOnlyList<int>? targetInstanceIds = null)
+    {
+        var anchorType = SourceFieldCatalog.Types[SourceNaming.TypeKey(SourceNaming.AnchorType)];
         var ctx = new CompileContext();
-        var predicate = CompileNode(root, "torrents", "t", ctx);
+        var scope = new Scope(anchorType, SourceNaming.Wildcard, AnchorAlias);
+        var predicate = CompileNode(root, scope, resolution, ctx);
 
         var whereClauses = new List<string> { $"({predicate})" };
         if (targetInstanceIds is { Count: > 0 })
         {
             var placeholders = targetInstanceIds.Select(id => ctx.AddParameter(id));
-            whereClauses.Add($"t.instance_id IN ({string.Join(",", placeholders)})");
+            whereClauses.Add($"{AnchorAlias}.instance_id IN ({string.Join(",", placeholders)})");
         }
 
-        var sql = $"SELECT DISTINCT t.instance_id AS instance_id, t.hash AS torrent_hash FROM torrents t WHERE {string.Join(" AND ", whereClauses)}";
+        var sql = $"SELECT DISTINCT {AnchorAlias}.instance_id AS instance_id, {AnchorAlias}.hash AS torrent_hash "
+                + $"FROM {anchorType.TableName} {AnchorAlias} WHERE {string.Join(" AND ", whereClauses)}";
         return new CompiledQuery { Sql = sql, Parameters = ctx.Parameters };
     }
 
@@ -48,16 +72,16 @@ public class ConditionSqlCompiler
         return results;
     }
 
-    private string CompileNode(ConditionNode node, string relation, string alias, CompileContext ctx) => node switch
+    private string CompileNode(ConditionNode node, Scope scope, FieldResolutionContext resolution, CompileContext ctx) => node switch
     {
-        GroupNode g => CompileGroup(g, relation, alias, ctx),
-        NotNode n => $"NOT ({CompileNode(n.Child, relation, alias, ctx)})",
-        ComparisonNode c => CompileComparison(c, relation, alias, ctx),
-        ExistsNode e => CompileExists(e, alias, ctx),
+        GroupNode g => CompileGroup(g, scope, resolution, ctx),
+        NotNode n => $"NOT ({CompileNode(n.Child, scope, resolution, ctx)})",
+        ComparisonNode c => CompileComparison(c, scope, resolution, ctx),
+        ExistsNode e => CompileExists(e, scope, resolution, ctx),
         _ => throw new ConditionCompileException($"Unsupported condition node type '{node.GetType().Name}'.")
     };
 
-    private string CompileGroup(GroupNode g, string relation, string alias, CompileContext ctx)
+    private string CompileGroup(GroupNode g, Scope scope, FieldResolutionContext resolution, CompileContext ctx)
     {
         if (g.Children.Count == 0)
         {
@@ -66,68 +90,211 @@ public class ConditionSqlCompiler
         }
 
         var op = g.Operator == LogicalOperator.And ? " AND " : " OR ";
-        var parts = g.Children.Select(c => $"({CompileNode(c, relation, alias, ctx)})");
+        var parts = g.Children.Select(c => $"({CompileNode(c, scope, resolution, ctx)})");
         return string.Join(op, parts);
     }
 
-    private string CompileExists(ExistsNode e, string outerAlias, CompileContext ctx)
+    private string CompileComparison(ComparisonNode c, Scope scope, FieldResolutionContext resolution, CompileContext ctx)
     {
-        if (!SnapshotFieldRegistry.Relations.TryGetValue(e.Relation, out var relDef))
+        if (!FieldKey.TryParse(c.Field, out var key, out var parseError))
         {
-            throw new ConditionCompileException($"Unknown relation '{e.Relation}'.");
+            throw new ConditionCompileException(parseError!);
         }
 
-        var innerAlias = ctx.NextAlias(relDef.AliasPrefix);
-        var innerPredicate = CompileNode(e.Condition, e.Relation, innerAlias, ctx);
+        var type = ResolveType(key.Type, c.Field);
+        if (!type.Fields.TryGetValue(key.Field, out var field))
+        {
+            throw new ConditionCompileException(
+                $"Unknown field '{key.Field}' for source type '{key.Type}'. Available: {string.Join(", ", type.Fields.Keys.Order())}.");
+        }
 
-        // Plain equality, not the path_matches() UDF: both sides are already normalized by
-        // the same PathKeyNormalizer at ingest, so exact match is correct here, and unlike a
-        // UDF call it lets SQLite use ix_watch_history_path_key/ix_media_items_path_key for
-        // an index seek per outer row instead of a full O(N*M) scan with a managed callback
-        // per comparison -- the difference is 34s vs a few ms at 10k torrents (see
-        // BenchmarkTests). path_matches() stays available for advanced-mode SQL and explicit
-        // substring-tolerant comparisons; it's just not the default correlation here.
-        var correlation = $"{innerAlias}.path_key = {outerAlias}.path_key";
+        ValidateInstance(key.Type, key.Instance, resolution);
+
+        // Inside an explicit EXISTS the rows are already fixed to one source, so a key naming a
+        // different one would silently compare against the wrong table.
+        if (!scope.IsAnchor)
+        {
+            if (key.Source != scope.Source)
+            {
+                throw new ConditionCompileException(
+                    $"Field '{c.Field}' does not belong to this check's source '{scope.Source}'.");
+            }
+            if (field.IsAggregate)
+            {
+                throw new ConditionCompileException(
+                    $"'{c.Field}' is an aggregate over all matching rows; use it on its own rather than inside a related-source check.");
+            }
+            var kindClause = field.KindFilter is { } kind ? $"{scope.Alias}.kind = {ctx.AddParameter(kind)} AND " : "";
+            return kindClause + $"({CompileOperator(field.ResolveRow(scope.Alias), field.ValueType, c, ctx)})";
+        }
+
+        return type.Correlation switch
+        {
+            SourceCorrelation.Anchor => CompileAnchorComparison(c, key, field, resolution, ctx),
+            SourceCorrelation.PathKey when field.IsAggregate => CompileAggregateComparison(c, key, type, field, ctx),
+            SourceCorrelation.PathKey => CompileCorrelatedComparison(c, key, type, field, ctx),
+            SourceCorrelation.Standalone => CompileStandaloneComparison(c, key, type, field, ctx),
+            _ => throw new ConditionCompileException($"Source type '{key.Type}' cannot be compared against.")
+        };
+    }
+
+    /// <summary>A field on the torrent itself. Naming an instance restricts which torrents match.</summary>
+    private static string CompileAnchorComparison(ComparisonNode c, FieldKey key, FieldDefinition field, FieldResolutionContext resolution, CompileContext ctx)
+    {
+        if (key.IsWildcardInstance)
+        {
+            return CompileOperator(field.ResolveRow(AnchorAlias), field.ValueType, c, ctx);
+        }
+
+        // Bound before the value so parameter numbering follows the order they appear in the SQL.
+        var instanceParam = ctx.AddParameter(CanonicalName(key, resolution));
+        var predicate = CompileOperator(field.ResolveRow(AnchorAlias), field.ValueType, c, ctx);
+        return $"{AnchorAlias}.instance = {instanceParam} AND ({predicate})";
+    }
+
+    /// <summary>
+    /// A row field on a correlated source. Compiled as an EXISTS over that source's rows joined to
+    /// the torrent by path_key, so "any matching row satisfies it" -- the same thing an explicit
+    /// related-source check does, without making the author build one for a single comparison.
+    /// </summary>
+    private static string CompileCorrelatedComparison(ComparisonNode c, FieldKey key, SourceTypeDefinition type, FieldDefinition field, CompileContext ctx)
+    {
+        var alias = ctx.NextAlias(type.AliasPrefix);
+        var where = CorrelationClauses(key, type, alias, ctx, field);
+        where.Add($"({CompileOperator(field.ResolveRow(alias), field.ValueType, c, ctx)})");
+        return $"EXISTS (SELECT 1 FROM {type.TableName} {alias} WHERE {string.Join(" AND ", where)})";
+    }
+
+    /// <summary>
+    /// An aggregate over the correlated rows (play_count, last_watched_at, ...). It carries its own
+    /// correlation, so it compiles to a scalar subquery compared directly -- which is what makes
+    /// "never watched" the plain <c>play_count = 0</c> rather than a negated EXISTS.
+    /// </summary>
+    private static string CompileAggregateComparison(ComparisonNode c, FieldKey key, SourceTypeDefinition type, FieldDefinition field, CompileContext ctx)
+    {
+        var alias = ctx.NextAlias(type.AliasPrefix);
+        var where = CorrelationClauses(key, type, alias, ctx, field);
+        var inner = $"(SELECT {field.ResolveAggregate(alias)} FROM {type.TableName} {alias} WHERE {string.Join(" AND ", where)})";
+        var expr = field.AggregateWrapper is { } wrapper ? wrapper.Replace("{inner}", inner) : inner;
+        return CompileOperator(expr, field.ValueType, c, ctx);
+    }
+
+    /// <summary>A field on a source that isn't tied to a torrent at all -- storage paths.</summary>
+    private static string CompileStandaloneComparison(ComparisonNode c, FieldKey key, SourceTypeDefinition type, FieldDefinition field, CompileContext ctx)
+    {
+        var alias = ctx.NextAlias(type.AliasPrefix);
+        var where = new List<string>();
+        if (!key.IsWildcardInstance)
+        {
+            where.Add($"{alias}.instance = {ctx.AddParameter(key.Instance)}");
+        }
+        where.Add($"({CompileOperator(field.ResolveRow(alias), field.ValueType, c, ctx)})");
+        return $"EXISTS (SELECT 1 FROM {type.TableName} {alias} WHERE {string.Join(" AND ", where)})";
+    }
+
+    private string CompileExists(ExistsNode e, Scope scope, FieldResolutionContext resolution, CompileContext ctx)
+    {
+        if (!scope.IsAnchor)
+        {
+            throw new ConditionCompileException("A related-source check cannot be nested inside another one.");
+        }
+
+        if (!FieldKey.TryParseSource(e.Source, out var typeKey, out var instance, out var sourceError))
+        {
+            throw new ConditionCompileException(sourceError!);
+        }
+
+        var type = ResolveType(typeKey, e.Source);
+        if (type.Correlation == SourceCorrelation.Anchor)
+        {
+            throw new ConditionCompileException(
+                $"'{e.Source}' is the torrent itself; compare its fields directly rather than through a related-source check.");
+        }
+
+        ValidateInstance(typeKey, instance, resolution);
+
+        var alias = ctx.NextAlias(type.AliasPrefix);
+
+        // The instance is bound before the inner predicate is compiled so parameter numbering
+        // follows the order the placeholders appear in the emitted SQL.
+        var instanceParam = instance == SourceNaming.Wildcard ? null : ctx.AddParameter(instance);
+        var innerScope = new Scope(type, instance, alias);
+        var innerPredicate = CompileNode(e.Condition, innerScope, resolution, ctx);
+
+        var where = new List<string>();
+        if (type.Correlation == SourceCorrelation.PathKey)
+        {
+            // Plain equality, not the path_matches() UDF: both sides are already normalized by the
+            // same PathKeyNormalizer at ingest, so exact match is correct here, and unlike a UDF
+            // call it lets ix_<type>_path_key drive an index seek per outer row instead of a full
+            // O(N*M) scan with a managed callback per comparison -- the difference is 34s vs a few
+            // ms at 10k torrents (see BenchmarkTests). path_matches() stays available for
+            // advanced-mode SQL and explicit substring-tolerant comparisons.
+            where.Add($"{alias}.path_key = {AnchorAlias}.path_key");
+        }
+        if (instanceParam is not null)
+        {
+            where.Add($"{alias}.instance = {instanceParam}");
+        }
+        where.Add($"({innerPredicate})");
+
         var prefix = e.Negate ? "NOT EXISTS" : "EXISTS";
-
-        return $"{prefix} (SELECT 1 FROM {relDef.TableName} {innerAlias} WHERE {correlation} AND ({innerPredicate}))";
+        return $"{prefix} (SELECT 1 FROM {type.TableName} {alias} WHERE {string.Join(" AND ", where)})";
     }
 
-    private string CompileComparison(ComparisonNode c, string relation, string alias, CompileContext ctx)
+    /// <summary>The path_key correlation, instance and kind filters shared by every correlated subquery.</summary>
+    private static List<string> CorrelationClauses(FieldKey key, SourceTypeDefinition type, string alias, CompileContext ctx, FieldDefinition field)
     {
-        if (relation == "torrents" && c.Field.StartsWith("storage.", StringComparison.Ordinal))
+        var where = new List<string> { $"{alias}.path_key = {AnchorAlias}.path_key" };
+        if (!key.IsWildcardInstance)
         {
-            return CompileStorageComparison(c, ctx);
+            where.Add($"{alias}.instance = {ctx.AddParameter(key.Instance)}");
         }
-
-        if (!SnapshotFieldRegistry.Relations.TryGetValue(relation, out var relDef) || !relDef.Fields.TryGetValue(c.Field, out var fieldDef))
+        if (field.KindFilter is { } kind)
         {
-            throw new ConditionCompileException($"Unknown field '{c.Field}' for relation '{relation}'.");
+            where.Add($"{alias}.kind = {ctx.AddParameter(kind)}");
         }
-
-        return CompileOperator(fieldDef.Resolve(alias), fieldDef.ValueType, c, ctx);
+        return where;
     }
 
-    private string CompileStorageComparison(ComparisonNode c, CompileContext ctx)
+    private static SourceTypeDefinition ResolveType(string typeKey, string reference)
     {
-        var parts = c.Field.Split('.', 3);
-        if (parts.Length != 3)
+        if (SourceFieldCatalog.Types.TryGetValue(typeKey, out var type))
         {
-            throw new ConditionCompileException($"Invalid storage field '{c.Field}'; expected 'storage.<name>.<attribute>'.");
+            return type;
         }
-
-        var storageName = parts[1];
-        var attribute = parts[2];
-
-        if (!SnapshotFieldRegistry.StorageAttributes.TryGetValue(attribute, out var attrDef))
-        {
-            throw new ConditionCompileException($"Unknown storage attribute '{attribute}'.");
-        }
-
-        var nameParam = ctx.AddParameter(storageName);
-        var expr = $"(SELECT {attrDef.Column} FROM storage_paths WHERE name = {nameParam})";
-        return CompileOperator(expr, attrDef.ValueType, c, ctx);
+        throw new ConditionCompileException(
+            $"Unknown source type '{typeKey}' in '{reference}'. Valid types: {string.Join(", ", SourceFieldCatalog.Types.Keys)}.");
     }
+
+    private static void ValidateInstance(string typeKey, string instance, FieldResolutionContext resolution)
+    {
+        if (instance == SourceNaming.Wildcard || !resolution.ValidatesInstances)
+        {
+            return;
+        }
+
+        var configured = resolution.NamesFor(typeKey);
+        if (configured.Any(n => string.Equals(n, instance, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        // Instance names are globally unique, so if the name exists at all we can say what it is.
+        if (resolution.TypeOf(instance) is { } actualType)
+        {
+            throw new ConditionCompileException(
+                $"'{instance}' is a {actualType} instance, not a {typeKey} instance.");
+        }
+
+        var known = configured.Count > 0 ? string.Join(", ", configured) : "(none configured)";
+        throw new ConditionCompileException(
+            $"No {typeKey} instance named '{instance}'. Configured: {known}. Use '{typeKey}.{SourceNaming.Wildcard}' to match any.");
+    }
+
+    private static string CanonicalName(FieldKey key, FieldResolutionContext resolution) =>
+        resolution.NamesFor(key.Type).FirstOrDefault(n => string.Equals(n, key.Instance, StringComparison.OrdinalIgnoreCase))
+        ?? key.Instance;
 
     private static string CompileOperator(string expr, FieldValueType valueType, ComparisonNode c, CompileContext ctx)
     {

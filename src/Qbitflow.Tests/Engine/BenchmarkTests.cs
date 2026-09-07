@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Qbitflow.Core.Domain.Conditions;
+using Qbitflow.Core.Domain;
 using Qbitflow.Core.Domain.SourceData;
 using Qbitflow.Engine.Conditions;
 using Qbitflow.Snapshot;
@@ -93,6 +94,7 @@ public class BenchmarkTests
             {
                 InstanceId = 2,
                 InstanceName = "bench-tautulli",
+                SourceType = SourceType.Tautulli,
                 MediaTitle = torrent.Name,
                 FilePath = torrent.ContentPath,
                 UserName = i % 2 == 0 ? "alice" : "bob",
@@ -112,14 +114,14 @@ public class BenchmarkTests
         {
             ConditionNode tree = (i % 5) switch
             {
-                0 => Cmp("category", ComparisonOperator.Eq, Categories[i % Categories.Length]),
+                0 => Cmp("qbittorrent.*.category", ComparisonOperator.Eq, Categories[i % Categories.Length]),
                 1 => new GroupNode
                 {
                     Operator = LogicalOperator.And,
                     Children =
                     [
-                        Cmp("state", ComparisonOperator.Eq, States[i % States.Length]),
-                        Cmp("size_gb", ComparisonOperator.Gt, 5.0)
+                        Cmp("qbittorrent.*.state", ComparisonOperator.Eq, States[i % States.Length]),
+                        Cmp("qbittorrent.*.size_gb", ComparisonOperator.Gt, 5.0)
                     ]
                 },
                 2 => new GroupNode
@@ -127,17 +129,20 @@ public class BenchmarkTests
                     Operator = LogicalOperator.Or,
                     Children =
                     [
-                        Cmp("category", ComparisonOperator.Eq, "linux"),
-                        Cmp("category", ComparisonOperator.Eq, "tv")
+                        Cmp("qbittorrent.*.category", ComparisonOperator.Eq, "linux"),
+                        Cmp("qbittorrent.*.category", ComparisonOperator.Eq, "tv")
                     ]
                 },
                 3 => new ExistsNode
                 {
-                    Relation = "watch_history",
+                    Source = "tautulli.*",
                     Negate = true,
-                    Condition = Cmp("days_since_watched", ComparisonOperator.Lte, 90.0)
+                    Condition = Cmp("tautulli.*.days_since_watched", ComparisonOperator.Lte, 90.0)
                 },
-                _ => Cmp("days_since_added", ComparisonOperator.Gt, 30.0)
+                // An aggregate too: it is a correlated scalar subquery per outer row, so it is the
+                // shape most at risk of losing the path_key index seek the EXISTS above relies on.
+                4 => Cmp("tautulli.*.play_count", ComparisonOperator.Eq, 0),
+                _ => Cmp("qbittorrent.*.days_since_added", ComparisonOperator.Gt, 30.0)
             };
 
             rules.Add(tree);

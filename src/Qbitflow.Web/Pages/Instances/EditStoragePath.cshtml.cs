@@ -86,6 +86,7 @@ public class EditStoragePathModel(AppDbContext db) : PageModel
         public int? Id { get; set; }
 
         [Required]
+        [RegularExpression(SourceNaming.NamePattern, ErrorMessage = SourceNaming.NameValidationMessage)]
         public string Name { get; set; } = "";
 
         [Required]

@@ -7,7 +7,8 @@ public enum SourceType
     Jellyfin,
     Tautulli,
     Jellystat,
-    Jellyglance
+    Jellyglance,
+    Streamystats
 }
 
 public enum ParallelismLevel

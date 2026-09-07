@@ -2,7 +2,7 @@
   "Rules": [
     {
       "Name": "Tag unwatched media (90+ days)",
-      "Description": "Tags torrents whose linked media has no watch history in the last 90 days.",
+      "Description": "Tags torrents whose linked media has no watch history in the last 90 days. Uses tautulli.* (any Tautulli instance) -- change the source to jellystat / jellyglance / streamystats if that's what you run.",
       "Enabled": true,
       "Priority": 10,
       "StopOnMatch": false,
@@ -10,7 +10,7 @@
       "CronExpression": "0 4 * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"exists\",\"Relation\":\"watch_history\",\"Negate\":true,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"exists\",\"Source\":\"tautulli.*\",\"Negate\":true,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"tautulli.*.days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}}]}",
       "ActionsJson": "[{\"type\":\"add_tags\",\"Tags\":[\"stale\"]}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -24,7 +24,7 @@
       "CronExpression": "0 4 * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"tags\",\"Operator\":\"Contains\",\"Value\":\"stale\"},{\"kind\":\"exists\",\"Relation\":\"watch_history\",\"Negate\":false,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}}]}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.tags\",\"Operator\":\"Contains\",\"Value\":\"stale\"},{\"kind\":\"comparison\",\"Field\":\"tautulli.*.days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}]}",
       "ActionsJson": "[{\"type\":\"remove_tags\",\"Tags\":[\"stale\"]}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -38,7 +38,7 @@
       "CronExpression": "*/30 * * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"comparison\",\"Field\":\"category\",\"Operator\":\"Eq\",\"Value\":\"archived\"}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.category\",\"Operator\":\"Eq\",\"Value\":\"archived\"}]}",
       "ActionsJson": "[{\"type\":\"set_upload_limit\",\"LimitBytesPerSec\":500000}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -52,7 +52,7 @@
       "CronExpression": "0 5 * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"progress\",\"Operator\":\"Gte\",\"Value\":1.0},{\"kind\":\"exists\",\"Relation\":\"watch_history\",\"Negate\":true,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}}]}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.progress\",\"Operator\":\"Gte\",\"Value\":1.0},{\"kind\":\"exists\",\"Source\":\"tautulli.*\",\"Negate\":true,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"tautulli.*.days_since_watched\",\"Operator\":\"Lte\",\"Value\":90}}]}",
       "ActionsJson": "[{\"type\":\"move\",\"DestinationPath\":\"/media/cold-storage\",\"WaitForCompletion\":true}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -66,7 +66,7 @@
       "CronExpression": "0 6 * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"progress\",\"Operator\":\"Gte\",\"Value\":1.0},{\"kind\":\"comparison\",\"Field\":\"size_gb\",\"Operator\":\"Gt\",\"Value\":20}]}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.progress\",\"Operator\":\"Gte\",\"Value\":1.0},{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.size_gb\",\"Operator\":\"Gt\",\"Value\":20}]}",
       "ActionsJson": "[{\"type\":\"add_tags\",\"Tags\":[\"large\"]}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -80,7 +80,7 @@
       "CronExpression": "*/15 * * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"category\",\"Operator\":\"Eq\",\"Value\":\"downloads\"},{\"kind\":\"comparison\",\"Field\":\"storage.downloads.used_percent\",\"Operator\":\"Gt\",\"Value\":85}]}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.category\",\"Operator\":\"Eq\",\"Value\":\"downloads\"},{\"kind\":\"comparison\",\"Field\":\"storage.downloads.used_percent\",\"Operator\":\"Gt\",\"Value\":85}]}",
       "ActionsJson": "[{\"type\":\"add_tags\",\"Tags\":[\"low-disk-space\"]}]",
       "TargetInstanceIdsJson": "[]"
     },
@@ -94,13 +94,13 @@
       "CronExpression": "*/30 * * * *",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"comparison\",\"Field\":\"category\",\"Operator\":\"Eq\",\"Value\":\"priority\"}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.category\",\"Operator\":\"Eq\",\"Value\":\"priority\"}]}",
       "ActionsJson": "[{\"type\":\"set_upload_limit\",\"LimitBytesPerSec\":0}]",
       "TargetInstanceIdsJson": "[]"
     },
     {
       "Name": "Flag old, never-watched torrents",
-      "Description": "Torrents added 180+ days ago whose linked media has never once been played -- good candidates for deletion review.",
+      "Description": "Torrents added 180+ days ago whose linked media has never once been played -- good candidates for deletion review. play_count aggregates every watch event for the torrent's content, so 0 means never watched.",
       "Enabled": true,
       "Priority": 50,
       "StopOnMatch": false,
@@ -108,8 +108,22 @@
       "CronExpression": "0 7 * * 0",
       "TimeZoneId": "UTC",
       "UseAdvancedSql": false,
-      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"days_since_added\",\"Operator\":\"Gt\",\"Value\":180},{\"kind\":\"exists\",\"Relation\":\"play_counts\",\"Negate\":true,\"Condition\":{\"kind\":\"comparison\",\"Field\":\"play_count\",\"Operator\":\"Gt\",\"Value\":0}}]}",
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.days_since_added\",\"Operator\":\"Gt\",\"Value\":180},{\"kind\":\"comparison\",\"Field\":\"tautulli.*.play_count\",\"Operator\":\"Eq\",\"Value\":0}]}",
       "ActionsJson": "[{\"type\":\"add_tags\",\"Tags\":[\"review-for-deletion\"]}]",
+      "TargetInstanceIdsJson": "[]"
+    },
+    {
+      "Name": "Flag torrents missing from the media library",
+      "Description": "Finished torrents that no Jellyfin library item points at -- either the library hasn't scanned them yet, or nothing is using them.",
+      "Enabled": true,
+      "Priority": 60,
+      "StopOnMatch": false,
+      "DryRun": true,
+      "CronExpression": "0 8 * * 0",
+      "TimeZoneId": "UTC",
+      "UseAdvancedSql": false,
+      "ConditionTreeJson": "{\"kind\":\"group\",\"Operator\":\"And\",\"Children\":[{\"kind\":\"comparison\",\"Field\":\"qbittorrent.*.progress\",\"Operator\":\"Gte\",\"Value\":1.0},{\"kind\":\"comparison\",\"Field\":\"jellyfin.*.media_count\",\"Operator\":\"Eq\",\"Value\":0}]}",
+      "ActionsJson": "[{\"type\":\"add_tags\",\"Tags\":[\"not-in-library\"]}]",
       "TargetInstanceIdsJson": "[]"
     }
   ]

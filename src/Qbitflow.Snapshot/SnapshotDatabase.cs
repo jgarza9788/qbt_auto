@@ -60,11 +60,10 @@ public class SnapshotDatabase : IDisposable
         using var transaction = _connection.BeginTransaction();
         try
         {
-            RebuildTorrents(transaction, input.Torrents, input.PathMappingRules);
-            RebuildTorrentFiles(transaction, input.TorrentFiles, input.PathMappingRules);
-            RebuildMediaItems(transaction, input.MediaItems, input.PathMappingRules);
-            RebuildWatchHistory(transaction, input.WatchHistory, input.PathMappingRules);
-            RebuildStoragePaths(transaction, input.StoragePaths);
+            RebuildQbittorrent(transaction, input.Torrents, input.PathMappingRules);
+            RebuildQbittorrentFiles(transaction, input.TorrentFiles, input.PathMappingRules);
+            RebuildMediaHistory(transaction, input.MediaItems, input.WatchHistory, input.PathMappingRules);
+            RebuildStorage(transaction, input.StoragePaths);
             transaction.Commit();
         }
         catch
@@ -74,22 +73,22 @@ public class SnapshotDatabase : IDisposable
         }
     }
 
-    private void RebuildTorrents(SqliteTransaction tx, IEnumerable<TorrentRecord> torrents, IReadOnlyList<PathMappingRule> rules)
+    private void RebuildQbittorrent(SqliteTransaction tx, IEnumerable<TorrentRecord> torrents, IReadOnlyList<PathMappingRule> rules)
     {
-        Execute(tx, "DELETE FROM torrents");
+        Execute(tx, "DELETE FROM qbittorrent");
 
         using var insert = _connection.CreateCommand();
         insert.Transaction = tx;
         insert.CommandText = """
-            INSERT INTO torrents
-            (instance_id, instance_name, hash, name, category, tags, save_path, content_path, path_key,
+            INSERT INTO qbittorrent
+            (instance_id, instance, hash, name, category, tags, save_path, content_path, path_key,
              size_bytes, progress, state, downloaded_bytes, uploaded_bytes, ratio, added_on, completion_on,
              upload_limit_bps, download_limit_bps, tracker, total_size_bytes, amount_left_bytes, completed_bytes,
              dl_speed_bps, up_speed_bps, eta_seconds, seeding_time_seconds, active_time_seconds,
              connected_seeds, total_seeds, connected_leechers, total_leechers, availability, auto_tmm,
              ratio_limit, seeding_time_limit_minutes, last_activity, seen_complete)
             VALUES
-            ($instance_id, $instance_name, $hash, $name, $category, $tags, $save_path, $content_path, $path_key,
+            ($instance_id, $instance, $hash, $name, $category, $tags, $save_path, $content_path, $path_key,
              $size_bytes, $progress, $state, $downloaded_bytes, $uploaded_bytes, $ratio, $added_on, $completion_on,
              $upload_limit_bps, $download_limit_bps, $tracker, $total_size_bytes, $amount_left_bytes, $completed_bytes,
              $dl_speed_bps, $up_speed_bps, $eta_seconds, $seeding_time_seconds, $active_time_seconds,
@@ -101,7 +100,7 @@ public class SnapshotDatabase : IDisposable
         {
             insert.Parameters.Clear();
             insert.Parameters.AddWithValue("$instance_id", t.InstanceId);
-            insert.Parameters.AddWithValue("$instance_name", t.InstanceName);
+            insert.Parameters.AddWithValue("$instance", t.InstanceName);
             insert.Parameters.AddWithValue("$hash", t.Hash);
             insert.Parameters.AddWithValue("$name", t.Name);
             insert.Parameters.AddWithValue("$category", DbValues.Of(t.Category));
@@ -142,14 +141,14 @@ public class SnapshotDatabase : IDisposable
         }
     }
 
-    private void RebuildTorrentFiles(SqliteTransaction tx, IEnumerable<TorrentFileRecord> files, IReadOnlyList<PathMappingRule> rules)
+    private void RebuildQbittorrentFiles(SqliteTransaction tx, IEnumerable<TorrentFileRecord> files, IReadOnlyList<PathMappingRule> rules)
     {
-        Execute(tx, "DELETE FROM torrent_files");
+        Execute(tx, "DELETE FROM qbittorrent_files");
 
         using var insert = _connection.CreateCommand();
         insert.Transaction = tx;
         insert.CommandText = """
-            INSERT INTO torrent_files (instance_id, torrent_hash, file_path, path_key, size_bytes, progress)
+            INSERT INTO qbittorrent_files (instance_id, torrent_hash, file_path, path_key, size_bytes, progress)
             VALUES ($instance_id, $torrent_hash, $file_path, $path_key, $size_bytes, $progress)
             """;
 
@@ -169,20 +168,28 @@ public class SnapshotDatabase : IDisposable
         }
     }
 
-    private void RebuildMediaItems(SqliteTransaction tx, IEnumerable<MediaItemRecord> items, IReadOnlyList<PathMappingRule> rules)
+    /// <summary>
+    /// Writes media-library items and watch events into the table named after the source type
+    /// that produced them, discriminated by the "kind" column. Every one of those tables shares
+    /// the same wide shape, so a single insert statement is reused across all of them -- the only
+    /// thing that varies is the table name, which comes from the enum and never from user input.
+    /// Tables belonging to types with no configured instance are simply left empty.
+    /// </summary>
+    private void RebuildMediaHistory(
+        SqliteTransaction tx,
+        IEnumerable<MediaItemRecord> mediaItems,
+        IEnumerable<WatchHistoryRecord> watchHistory,
+        IReadOnlyList<PathMappingRule> rules)
     {
-        Execute(tx, "DELETE FROM media_items");
+        foreach (var type in SourceNaming.MediaHistoryTypes)
+        {
+            Execute(tx, $"DELETE FROM {SnapshotSchema.TableFor(type)}");
+        }
 
         using var insert = _connection.CreateCommand();
         insert.Transaction = tx;
-        insert.CommandText = """
-            INSERT INTO media_items
-            (instance_id, instance_name, source_type, external_key, title, media_type, file_path, path_key, added_at)
-            VALUES
-            ($instance_id, $instance_name, $source_type, $external_key, $title, $media_type, $file_path, $path_key, $added_at)
-            """;
 
-        foreach (var m in items)
+        foreach (var m in mediaItems)
         {
             // One row per file path -- almost always exactly one, but a multi-version Plex
             // item can have more than one, and an item with none still gets a single row
@@ -190,42 +197,37 @@ public class SnapshotDatabase : IDisposable
             var filePaths = m.FilePaths.Count > 0 ? m.FilePaths : [null];
             foreach (var filePath in filePaths)
             {
+                insert.CommandText = InsertInto(m.SourceType);
                 insert.Parameters.Clear();
                 insert.Parameters.AddWithValue("$instance_id", m.InstanceId);
-                insert.Parameters.AddWithValue("$instance_name", m.InstanceName);
-                insert.Parameters.AddWithValue("$source_type", m.SourceType.ToString());
+                insert.Parameters.AddWithValue("$instance", m.InstanceName);
+                insert.Parameters.AddWithValue("$kind", SnapshotSchema.KindMedia);
                 insert.Parameters.AddWithValue("$external_key", m.ExternalKey);
                 insert.Parameters.AddWithValue("$title", m.Title);
                 insert.Parameters.AddWithValue("$media_type", DbValues.Of(m.MediaType));
                 insert.Parameters.AddWithValue("$file_path", DbValues.Of(filePath));
                 insert.Parameters.AddWithValue("$path_key", DbValues.Of(PathKeyNormalizer.Normalize(filePath, rules)));
                 insert.Parameters.AddWithValue("$added_at", DbValues.Of(m.AddedAt));
+                insert.Parameters.AddWithValue("$user_name", DBNull.Value);
+                insert.Parameters.AddWithValue("$watched_at", DBNull.Value);
+                insert.Parameters.AddWithValue("$percent_complete", DBNull.Value);
                 insert.ExecuteNonQuery();
             }
         }
-    }
 
-    private void RebuildWatchHistory(SqliteTransaction tx, IEnumerable<WatchHistoryRecord> history, IReadOnlyList<PathMappingRule> rules)
-    {
-        Execute(tx, "DELETE FROM watch_history");
-
-        using var insert = _connection.CreateCommand();
-        insert.Transaction = tx;
-        insert.CommandText = """
-            INSERT INTO watch_history
-            (instance_id, instance_name, media_title, file_path, path_key, user_name, watched_at, percent_complete)
-            VALUES
-            ($instance_id, $instance_name, $media_title, $file_path, $path_key, $user_name, $watched_at, $percent_complete)
-            """;
-
-        foreach (var w in history)
+        foreach (var w in watchHistory)
         {
+            insert.CommandText = InsertInto(w.SourceType);
             insert.Parameters.Clear();
             insert.Parameters.AddWithValue("$instance_id", w.InstanceId);
-            insert.Parameters.AddWithValue("$instance_name", w.InstanceName);
-            insert.Parameters.AddWithValue("$media_title", DbValues.Of(w.MediaTitle));
+            insert.Parameters.AddWithValue("$instance", w.InstanceName);
+            insert.Parameters.AddWithValue("$kind", SnapshotSchema.KindHistory);
+            insert.Parameters.AddWithValue("$external_key", DBNull.Value);
+            insert.Parameters.AddWithValue("$title", DbValues.Of(w.MediaTitle));
+            insert.Parameters.AddWithValue("$media_type", DBNull.Value);
             insert.Parameters.AddWithValue("$file_path", DbValues.Of(w.FilePath));
             insert.Parameters.AddWithValue("$path_key", DbValues.Of(PathKeyNormalizer.Normalize(w.FilePath, rules)));
+            insert.Parameters.AddWithValue("$added_at", DBNull.Value);
             insert.Parameters.AddWithValue("$user_name", DbValues.Of(w.UserName));
             insert.Parameters.AddWithValue("$watched_at", DbValues.Of(w.WatchedAt));
             insert.Parameters.AddWithValue("$percent_complete", DbValues.Of(w.PercentComplete));
@@ -233,18 +235,36 @@ public class SnapshotDatabase : IDisposable
         }
     }
 
-    private void RebuildStoragePaths(SqliteTransaction tx, IEnumerable<StorageUsageRecord> paths)
+    private static string InsertInto(SourceType type)
     {
-        Execute(tx, "DELETE FROM storage_paths");
+        if (type == SourceNaming.AnchorType)
+        {
+            throw new InvalidOperationException(
+                $"{type} records belong in the qbittorrent table, not the shared media/history shape.");
+        }
+
+        return $"""
+            INSERT INTO {SnapshotSchema.TableFor(type)}
+            (instance_id, instance, kind, external_key, title, media_type, file_path, path_key,
+             added_at, user_name, watched_at, percent_complete)
+            VALUES
+            ($instance_id, $instance, $kind, $external_key, $title, $media_type, $file_path, $path_key,
+             $added_at, $user_name, $watched_at, $percent_complete)
+            """;
+    }
+
+    private void RebuildStorage(SqliteTransaction tx, IEnumerable<StorageUsageRecord> paths)
+    {
+        Execute(tx, "DELETE FROM storage");
 
         using var insert = _connection.CreateCommand();
         insert.Transaction = tx;
         insert.CommandText = """
-            INSERT INTO storage_paths
-            (storage_path_id, name, path, available, error, total_bytes, used_bytes, free_bytes,
+            INSERT INTO storage
+            (storage_path_id, instance, path, available, error, total_bytes, used_bytes, free_bytes,
              used_percent, free_percent, folder_size_bytes, folder_size_computed_at)
             VALUES
-            ($storage_path_id, $name, $path, $available, $error, $total_bytes, $used_bytes, $free_bytes,
+            ($storage_path_id, $instance, $path, $available, $error, $total_bytes, $used_bytes, $free_bytes,
              $used_percent, $free_percent, $folder_size_bytes, $folder_size_computed_at)
             """;
 
@@ -252,7 +272,7 @@ public class SnapshotDatabase : IDisposable
         {
             insert.Parameters.Clear();
             insert.Parameters.AddWithValue("$storage_path_id", s.StoragePathId);
-            insert.Parameters.AddWithValue("$name", s.Name);
+            insert.Parameters.AddWithValue("$instance", s.Name);
             insert.Parameters.AddWithValue("$path", s.Path);
             insert.Parameters.AddWithValue("$available", s.Available ? 1 : 0);
             insert.Parameters.AddWithValue("$error", DbValues.Of(s.Error));
