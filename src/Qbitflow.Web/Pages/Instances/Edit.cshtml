@@ -4,7 +4,7 @@
     ViewData["Title"] = Model.IsNew ? "Add instance" : "Edit instance";
 }
 
-<div class="qf-card" style="max-width: 640px;">
+<div class="qf-card" style="max-width: 640px; margin: 0 auto;">
     <div class="qf-card-header">
         <h2>@(Model.IsNew ? "Add instance" : $"Edit instance: {Model.Input.Name}")</h2>
     </div>
@@ -26,12 +26,18 @@
                 <div class="col-12">
                     <label asp-for="Input.BaseUrl" class="form-label"></label>
                     <input asp-for="Input.BaseUrl" class="form-control" placeholder="http://192.168.1.10:8080" />
+                    <div class="form-text">
+                        For <strong>Streamystats</strong> this is its PostgreSQL host, not a web address &mdash;
+                        e.g. <code>vectorchord:5432</code>. Pasting the whole <code>DATABASE_URL</code> works too,
+                        but any credentials in it are ignored: put those in Username/Password below so they are
+                        encrypted at rest.
+                    </div>
                 </div>
 
                 <div class="col-md-6">
                     <label asp-for="Input.Username" class="form-label"></label>
                     <input asp-for="Input.Username" class="form-control" autocomplete="off" />
-                    <div class="form-text">Used by qBittorrent's username/password login.</div>
+                    <div class="form-text">qBittorrent's login, or the PostgreSQL user for Streamystats.</div>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Input.Password" class="form-label"></label>
@@ -42,7 +48,10 @@
                     <label asp-for="Input.ApiKey" class="form-label"></label>
                     <input asp-for="Input.ApiKey" type="password" class="form-control" autocomplete="new-password"
                            placeholder="@(Model.Input.HasExistingApiKey ? "Leave blank to keep existing" : "")" />
-                    <div class="form-text">Used by Plex (X-Plex-Token), Jellyfin, Tautulli, Jellystat, and Jellyglance.</div>
+                    <div class="form-text">
+                        Used by Plex (X-Plex-Token), Jellyfin, Tautulli, Jellystat, and Jellyglance.
+                        Streamystats does not use it &mdash; it connects to PostgreSQL with the Username/Password above.
+                    </div>
                 </div>
 
                 <div class="col-md-4">
@@ -65,7 +74,12 @@
                 <div class="col-12">
                     <label asp-for="Input.ExtraConfigJson" class="form-label"></label>
                     <textarea asp-for="Input.ExtraConfigJson" class="form-control qf-muted-mono" rows="3" placeholder='{"historyPath": "/api/getHistory"}'></textarea>
-                    <div class="form-text">Advanced, source-specific overrides (e.g. Jellystat/Jellyglance history endpoint shape). Leave blank for defaults.</div>
+                    <div class="form-text">
+                        Advanced, source-specific overrides. Leave blank for defaults.
+                        Jellystat / Jellyglance: <code>historyPath</code>, <code>resultsPath</code>, <code>fieldMap</code>.
+                        Streamystats: <code>database</code> (default <code>streamystats</code>),
+                        <code>serverId</code> (omit to read every server), <code>maxRows</code>, <code>sslMode</code>.
+                    </div>
                 </div>
             </div>
 

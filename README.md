@@ -77,7 +77,7 @@ what it got back before you save.
 | `Tautulli` | Playback events — who watched what, when | API key | `?apikey=` query parameter |
 | `Jellystat` | Playback events | API key | `X-Api-Key` header |
 | `Jellyglance` | Playback events | API key | `X-Api-Key` header |
-| `Streamystats` | Playback events | API key | `X-Api-Key` header |
+| `Streamystats` | Playback events | PostgreSQL user + password | direct database connection, **not** HTTP — [see below](#streamystats-connects-to-postgresql) |
 
 Credentials are encrypted at rest with ASP.NET Core Data Protection (the key ring lives
 beside the database in `QBITFLOW_DATA_DIR`), are decrypted only in memory when an
@@ -102,9 +102,9 @@ constraints apply to storage-path names.
 
 #### Adapting a source whose API doesn't match
 
-Tautulli has a stable documented API and its defaults should just work. Jellystat,
-Jellyglance and Streamystats do not, so their shipped endpoint and field mapping are a
-best-effort starting point. If yours is shaped differently, override it per-instance in
+Tautulli has a stable documented API and its defaults should just work. Jellystat and
+Jellyglance do not, so their shipped endpoint and field mapping are a best-effort
+starting point. If yours is shaped differently, override it per-instance in
 **Extra config (JSON)** — no code change, no rebuild:
 
 ```jsonc
@@ -123,6 +123,70 @@ best-effort starting point. If yours is shaped differently, override it per-inst
 
 Only the keys you list are overridden; the rest keep their defaults. `filePath` is the
 one that matters most — it is what correlates a playback event back to a torrent.
+
+#### Streamystats connects to PostgreSQL
+
+Streamystats is the one source qbitflow does not reach over HTTP, because its REST API
+cannot serve this data:
+
+- The only endpoint holding playback history is `GET /api/export/<serverId>`, and it is
+  gated behind a browser session cookie (`requireAdmin` → `requireSession` → a JWT
+  cookie). Login is a Next.js server action, not a callable endpoint, so there is no way
+  for a server-to-server client to obtain that cookie.
+- Every route an API key *can* reach returns something else — item details, watchlists,
+  recommendations, the Jellyfin activity log.
+- Even the export payload has **no file path**. A Streamystats session records what was
+  played, not where the file is; the path lives on a separate `items` table.
+
+So the adapter connects to the Streamystats database and reads both at once:
+
+```sql
+SELECT s.item_name, s.user_name, s.start_time, s.percent_complete, i.path
+FROM sessions s
+LEFT JOIN items i ON i.id = s.item_id AND i.server_id = s.server_id
+```
+
+That join is the whole point — `items.path` comes straight from Jellyfin's `Path`, and
+without it a playback event could never be matched to a torrent.
+
+**Setting it up.** Add an instance of type `Streamystats` and fill in:
+
+| Field | Value |
+|---|---|
+| Base URL | the database host, e.g. `vectorchord:5432`. A bare host defaults to port 5432. |
+| Username / Password | the PostgreSQL credentials (`POSTGRES_USER` / `POSTGRES_PASSWORD`, both `postgres` by default) |
+| API key | leave blank — unused for this source |
+| Timeout | used as both the connect and command timeout |
+
+qbitflow must be able to reach that database. With both on the same Docker network the
+host is the compose service name (`vectorchord` in Streamystats' own `docker-compose.yml`);
+otherwise publish 5432 and point at the host address. You can paste the whole
+`DATABASE_URL` into Base URL if that's easier — the host, port and database name are read
+from it, but **any credentials in it are ignored**, because Base URL is stored in the
+clear while Username/Password are encrypted at rest.
+
+Optional **Extra config (JSON)**:
+
+```jsonc
+{
+  "database": "streamystats",  // default; change if you renamed it
+  "serverId": 1,               // omit to import every server in the database
+  "maxRows": 50000,            // most recent N sessions; default 50000
+  "sslMode": "VerifyFull"      // default "Prefer" — see below
+}
+```
+
+The connection is opened read-only (`default_transaction_read_only=on`), so PostgreSQL
+itself rejects a write rather than the adapter merely promising not to issue one.
+
+Note the instance's **Verify SSL certificate** checkbox does not apply here — it maps
+onto an HTTPS handler. The connection defaults to `SslMode=Prefer`, which uses TLS when
+the server offers it and stays plain when it doesn't (the normal case for a container
+Postgres). Set `"sslMode": "VerifyFull"` above to require a validated certificate.
+
+**Test connection** reports how many sessions it found *and* how many carry a file path.
+If the second number is 0, Streamystats hasn't finished its library sync and nothing will
+correlate yet.
 
 ### Storage paths
 
@@ -577,10 +641,14 @@ path mappings applied, and is what every cross-source correlation joins on.
   both sides are normalized identically at ingest, and a UDF-based join forces SQLite
   into a row-by-row managed callback instead of an index seek. This one line is the
   difference between the benchmark passing in under a second and taking 34.
-- **Jellystat, Jellyglance and Streamystats adapters are config-driven, not hardcoded**
-  — none has a single stable public API at the time of writing, so their default
-  endpoint/field-mapping is a best-effort starting point, overridable per-instance
-  via `ExtraConfigJson` without a code change.
+- **Jellystat and Jellyglance adapters are config-driven, not hardcoded** — neither has
+  a single stable public API at the time of writing, so their default endpoint/field-mapping
+  is a best-effort starting point, overridable per-instance via `ExtraConfigJson` without a
+  code change.
+- **Streamystats is read from PostgreSQL, not HTTP** — forced, not chosen. Its API gates
+  playback history behind a browser session cookie, and the payload has no file path
+  anyway. The database has both, and `ISourceAdapter` never assumed HTTP, so this cost one
+  adapter and an `Npgsql` dependency rather than an architectural change.
 - **Source data is stored by source, not by shape.** Each source type gets its own
   snapshot table with an `instance` column, which is what makes
   `<type>.<instance>.<field>` resolve directly. The alternative — pooling every media
@@ -608,7 +676,8 @@ enum, so a new media/history source is a small, well-defined change:
    editor's source dropdown.
 2. Add an adapter in `src/Qbitflow.Sources/Adapters/`. A REST watch-history source can
    usually derive from `RestHistoryAdapterBase` and supply three defaults — see
-   `StreamystatsAdapter.cs`, which is ~35 lines.
+   `JellyglanceAdapter.cs`, which is ~35 lines. A source without a usable API can talk to
+   its database instead; `StreamystatsAdapter.cs` implements `ISourceAdapter` directly.
 3. Register it in `ServiceCollectionExtensions.cs` and give it a TTL in
    `SourceCacheOptions.cs`.
 4. Have it stamp `SourceType` on the records it emits — that is what routes each row to
@@ -641,7 +710,9 @@ instance._
 - Explicit per-rule dataset declarations, so a refresh only touches the sources a
   given rule's condition actually references, rather than refreshing every enabled
   instance on every run.
-- Confirm the Jellystat/Jellyglance/Streamystats default endpoint shapes against real
-  deployments.
+- Confirm the Jellystat/Jellyglance default endpoint shapes against real deployments.
+- Verify the Streamystats database query against a live instance — it is written against
+  their published schema but has only been exercised by
+  `MediaAdapterLiveTests.Streamystats` (opt-in, see below).
 - A live Docker build/run verification (this environment has no Docker CLI available,
   so the Dockerfile has been reviewed but not build-tested).

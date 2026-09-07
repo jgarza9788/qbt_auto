@@ -45,6 +45,9 @@ public class MediaAdapterLiveTests(ITestOutputHelper output)
             SourceType = type,
             BaseUrl = url,
             ApiKey = Environment.GetEnvironmentVariable($"{prefix}_LIVE_KEY"),
+            Username = Environment.GetEnvironmentVariable($"{prefix}_LIVE_USER"),
+            Password = Environment.GetEnvironmentVariable($"{prefix}_LIVE_PASSWORD"),
+            ExtraConfigJson = Environment.GetEnvironmentVariable($"{prefix}_LIVE_EXTRA_CONFIG"),
             TimeoutSeconds = 15,
             VerifySsl = !string.Equals(verify, "false", StringComparison.OrdinalIgnoreCase)
         };
@@ -71,6 +74,20 @@ public class MediaAdapterLiveTests(ITestOutputHelper output)
         {
             output.WriteLine($"    {mi.MediaType,-8} {mi.Title}  [{string.Join(", ", mi.FilePaths)}]");
         }
+        foreach (var wh in fetched.WatchHistory.Take(3))
+        {
+            output.WriteLine($"    {wh.WatchedAt:u}  {wh.UserName,-12} {wh.MediaTitle}  [{wh.FilePath ?? "(no path)"}]");
+        }
+
+        // A watch record with no file path can never be correlated to a torrent, so for a history
+        // source that returns rows, some of them having paths is the real success condition.
+        if (fetched.WatchHistory.Count > 0)
+        {
+            var withPath = fetched.WatchHistory.Count(w => !string.IsNullOrWhiteSpace(w.FilePath));
+            output.WriteLine($"  {withPath}/{fetched.WatchHistory.Count} watch record(s) carry a file path");
+            Assert.True(withPath > 0,
+                "No watch record carried a file path, so none could ever match a torrent.");
+        }
     }
 
     [Fact] public Task Jellyfin() => RunAsync("JF", SourceType.Jellyfin);
@@ -78,4 +95,5 @@ public class MediaAdapterLiveTests(ITestOutputHelper output)
     [Fact] public Task Tautulli() => RunAsync("TAUTULLI", SourceType.Tautulli);
     [Fact] public Task Jellystat() => RunAsync("JELLYSTAT", SourceType.Jellystat);
     [Fact] public Task Jellyglance() => RunAsync("JELLYGLANCE", SourceType.Jellyglance);
+    [Fact] public Task Streamystats() => RunAsync("STREAMYSTATS", SourceType.Streamystats);
 }

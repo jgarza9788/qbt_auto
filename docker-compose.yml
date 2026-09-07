@@ -37,6 +37,16 @@ services:
       # - /mnt/media:/mnt/media
       # - /mnt/downloads:/mnt/downloads
 
+    # A Streamystats instance is read from its PostgreSQL database rather than over
+    # HTTP (its API can't serve playback history to a server-to-server client, and
+    # carries no file path -- see README). qbitflow therefore needs to reach that
+    # database: either join the network its compose file creates, as below, and use
+    # the service name ("vectorchord:5432") as the instance's Base URL, or publish
+    # 5432 on the Streamystats side and point at the host address instead.
+    # networks:
+    #   - default
+    #   - streamystats_default
+
     restart: unless-stopped
     healthcheck:
       # wget, not curl: the Alpine image has busybox wget and no curl.
@@ -44,3 +54,10 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+
+# Uncomment alongside the networks block above when reading a Streamystats database
+# that lives in another compose project. The name is "<project-dir>_<network>", which
+# `docker network ls` will show you.
+# networks:
+#   streamystats_default:
+#     external: true
