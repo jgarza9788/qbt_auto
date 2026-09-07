@@ -19,6 +19,20 @@ public class EditModel(AppDbContext db, ISecretProtector secretProtector, ISourc
 
     public bool IsNew => Input.Id is null;
 
+    /// <summary>Help text for the type currently selected, so the hints are right before any script runs.</summary>
+    public SourceFieldGuide Guide => SourceTypeGuide.For(Input.SourceType);
+
+    /// <summary>
+    /// The same copy for every type, keyed by enum name, so the form can re-hint on change.
+    /// camelCase because the Alpine bindings in the page read it as guide.baseUrl, guide.apiKey, ...
+    /// </summary>
+    public string SourceGuideJson => JsonSerializer.Serialize(
+        SourceTypeGuide.ForType.ToDictionary(kv => kv.Key.ToString(), kv => kv.Value),
+        new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+
+    public IEnumerable<(string Value, string Label)> SourceTypeOptions =>
+        SourceTypeGuide.ForType.Select(kv => (kv.Key.ToString(), kv.Value.Label));
+
     public async Task<IActionResult> OnGetAsync(int? id, CancellationToken ct)
     {
         if (id is not null)

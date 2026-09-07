@@ -35,19 +35,16 @@ This assessment predates that change, so some names below are stale. Specificall
   compiled as correlated scalar subqueries.
 - `ExistsNode.Relation` is now `ExistsNode.Source`, a `<type>.<instance>` reference.
 
-Streamystats was subsequently reworked again: it is **not** a REST adapter. Its API cannot
-serve playback history to a server-to-server client (the only endpoint holding it is behind a
-browser session cookie, and its payload carries no file path), so `StreamystatsAdapter`
-implements `ISourceAdapter` directly against the Streamystats PostgreSQL database, joining
-`sessions` to `items` to recover the path. It is the only non-HTTP source, and the only one
-that needs `Npgsql`.
+Streamystats was added and then removed again. Its REST API cannot serve playback history to a
+server-to-server client (the only endpoint holding it sits behind a browser session cookie) and
+the payload carries no file path, so the only workable route was a direct connection to its
+PostgreSQL database — which was dropped in turn. Every source is HTTP again and there is no
+`Npgsql` dependency. Reintroducing it would mean revisiting both problems.
 
 Two items below are affected in substance, not just naming:
 
 - **1.1 still applies to Jellystat and Jellyglance.** `GetUnixSeconds` still only accepts a
-  numeric epoch, so their ISO-8601 timestamps still read as NULL. It does *not* affect
-  Streamystats: that source is read from PostgreSQL (see below), so its `start_time` comes
-  back as a real `timestamptz` and never goes through `JsonPathResolver`.
+  numeric epoch, so their ISO-8601 timestamps still read as NULL.
 - **1.2 is unchanged in substance.** `qbittorrent_files` is still never populated and still
   isn't in the field catalog; the table was renamed for consistency and nothing more.
 

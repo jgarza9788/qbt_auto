@@ -4,6 +4,16 @@
     ViewData["Title"] = Model.IsNew ? "Add instance" : "Edit instance";
 }
 
+@* Per-source-type help text. Every hint below is rendered server-side for the currently
+   selected type first, then kept in sync by Alpine as the dropdown changes -- so the form is
+   correct on first paint and without JavaScript. *@
+<div id="qf-instance-guide-data" data-source-guide="@Model.SourceGuideJson" hidden></div>
+<script>
+    (function () {
+        window.qfSourceGuide = JSON.parse(document.getElementById('qf-instance-guide-data').dataset.sourceGuide);
+    })();
+</script>
+
 <div class="qf-card" style="max-width: 640px; margin: 0 auto;">
     <div class="qf-card-header">
         <h2>@(Model.IsNew ? "Add instance" : $"Edit instance: {Model.Input.Name}")</h2>
@@ -11,7 +21,8 @@
     <div class="qf-card-body">
         <div asp-validation-summary="All" class="text-danger mb-3"></div>
 
-        <form method="post">
+        <form method="post"
+              x-data="{ sourceType: '@Model.Input.SourceType', get guide() { return window.qfSourceGuide[this.sourceType]; } }">
             <input type="hidden" asp-for="Input.Id" />
 
             <div class="row g-3">
@@ -21,37 +32,38 @@
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Input.SourceType" class="form-label"></label>
-                    <select asp-for="Input.SourceType" class="form-select" asp-items="Html.GetEnumSelectList<Qbitflow.Core.Domain.SourceType>()"></select>
+                    @* Options are built from the guide rather than GetEnumSelectList so their values are
+                       enum names, which is what keys window.qfSourceGuide. Model binding accepts names. *@
+                    <select asp-for="Input.SourceType" class="form-select" x-model="sourceType">
+                        @foreach (var (value, label) in Model.SourceTypeOptions)
+                        {
+                            <option value="@value">@label</option>
+                        }
+                    </select>
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.BaseUrl" class="form-label"></label>
-                    <input asp-for="Input.BaseUrl" class="form-control" placeholder="http://192.168.1.10:8080" />
-                    <div class="form-text">
-                        For <strong>Streamystats</strong> this is its PostgreSQL host, not a web address &mdash;
-                        e.g. <code>vectorchord:5432</code>. Pasting the whole <code>DATABASE_URL</code> works too,
-                        but any credentials in it are ignored: put those in Username/Password below so they are
-                        encrypted at rest.
-                    </div>
+                    <input asp-for="Input.BaseUrl" class="form-control"
+                           placeholder="@Model.Guide.BaseUrlPlaceholder" :placeholder="guide.baseUrlPlaceholder" />
+                    <div class="form-text" x-text="guide.baseUrl">@Model.Guide.BaseUrl</div>
                 </div>
 
                 <div class="col-md-6">
                     <label asp-for="Input.Username" class="form-label"></label>
                     <input asp-for="Input.Username" class="form-control" autocomplete="off" />
-                    <div class="form-text">qBittorrent's login, or the PostgreSQL user for Streamystats.</div>
+                    <div class="form-text" x-text="guide.username">@Model.Guide.Username</div>
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Input.Password" class="form-label"></label>
                     <input asp-for="Input.Password" type="password" class="form-control" autocomplete="new-password"
                            placeholder="@(Model.Input.HasExistingPassword ? "Leave blank to keep existing" : "")" />
+                    <div class="form-text" x-text="guide.password">@Model.Guide.Password</div>
                 </div>
                 <div class="col-12">
                     <label asp-for="Input.ApiKey" class="form-label"></label>
                     <input asp-for="Input.ApiKey" type="password" class="form-control" autocomplete="new-password"
                            placeholder="@(Model.Input.HasExistingApiKey ? "Leave blank to keep existing" : "")" />
-                    <div class="form-text">
-                        Used by Plex (X-Plex-Token), Jellyfin, Tautulli, Jellystat, and Jellyglance.
-                        Streamystats does not use it &mdash; it connects to PostgreSQL with the Username/Password above.
-                    </div>
+                    <div class="form-text" x-text="guide.apiKey">@Model.Guide.ApiKey</div>
                 </div>
 
                 <div class="col-md-4">
@@ -73,13 +85,10 @@
 
                 <div class="col-12">
                     <label asp-for="Input.ExtraConfigJson" class="form-label"></label>
-                    <textarea asp-for="Input.ExtraConfigJson" class="form-control qf-muted-mono" rows="3" placeholder='{"historyPath": "/api/getHistory"}'></textarea>
-                    <div class="form-text">
-                        Advanced, source-specific overrides. Leave blank for defaults.
-                        Jellystat / Jellyglance: <code>historyPath</code>, <code>resultsPath</code>, <code>fieldMap</code>.
-                        Streamystats: <code>database</code> (default <code>streamystats</code>),
-                        <code>serverId</code> (omit to read every server), <code>maxRows</code>, <code>sslMode</code>.
-                    </div>
+                    <textarea asp-for="Input.ExtraConfigJson" class="form-control qf-muted-mono" rows="3"
+                              placeholder="@Model.Guide.ExtraConfigPlaceholder"
+                              :placeholder="guide.extraConfigPlaceholder"></textarea>
+                    <div class="form-text" x-text="guide.extraConfig">@Model.Guide.ExtraConfig</div>
                 </div>
             </div>
 

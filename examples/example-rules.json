@@ -2,7 +2,7 @@
   "Rules": [
     {
       "Name": "Tag unwatched media (90+ days)",
-      "Description": "Tags torrents whose linked media has no watch history in the last 90 days. Uses tautulli.* (any Tautulli instance) -- change the source to jellystat / jellyglance / streamystats if that's what you run.",
+      "Description": "Tags torrents whose linked media has no watch history in the last 90 days. Uses tautulli.* (any Tautulli instance) -- change the source to jellystat or jellyglance if that's what you run.",
       "Enabled": true,
       "Priority": 10,
       "StopOnMatch": false,

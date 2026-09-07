@@ -45,9 +45,6 @@ public class MediaAdapterLiveTests(ITestOutputHelper output)
             SourceType = type,
             BaseUrl = url,
             ApiKey = Environment.GetEnvironmentVariable($"{prefix}_LIVE_KEY"),
-            Username = Environment.GetEnvironmentVariable($"{prefix}_LIVE_USER"),
-            Password = Environment.GetEnvironmentVariable($"{prefix}_LIVE_PASSWORD"),
-            ExtraConfigJson = Environment.GetEnvironmentVariable($"{prefix}_LIVE_EXTRA_CONFIG"),
             TimeoutSeconds = 15,
             VerifySsl = !string.Equals(verify, "false", StringComparison.OrdinalIgnoreCase)
         };
@@ -95,5 +92,4 @@ public class MediaAdapterLiveTests(ITestOutputHelper output)
     [Fact] public Task Tautulli() => RunAsync("TAUTULLI", SourceType.Tautulli);
     [Fact] public Task Jellystat() => RunAsync("JELLYSTAT", SourceType.Jellystat);
     [Fact] public Task Jellyglance() => RunAsync("JELLYGLANCE", SourceType.Jellyglance);
-    [Fact] public Task Streamystats() => RunAsync("STREAMYSTATS", SourceType.Streamystats);
 }

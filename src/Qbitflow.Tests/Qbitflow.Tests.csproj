@@ -25,6 +25,7 @@
     <ProjectReference Include="..\Qbitflow.Snapshot\Qbitflow.Snapshot.csproj" />
     <ProjectReference Include="..\Qbitflow.Engine\Qbitflow.Engine.csproj" />
     <ProjectReference Include="..\Qbitflow.Infrastructure\Qbitflow.Infrastructure.csproj" />
+    <ProjectReference Include="..\Qbitflow.Web\Qbitflow.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

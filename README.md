@@ -3,8 +3,8 @@
 Rule-driven automation for qBittorrent, informed by your media library and watch
 history. Define rules — a schedule, a condition, and one or more actions — and
 qbitflow evaluates them against a live snapshot of your qBittorrent, Plex, Jellyfin,
-Tautulli, Jellystat, Jellyglance, Streamystats, and disk-usage data, then tags,
-re-categorizes, moves, or throttles matching torrents.
+Tautulli, Jellystat, Jellyglance, and disk-usage data, then tags, re-categorizes,
+moves, or throttles matching torrents.
 
 Self-hosted, single Docker image, SQLite only (no external database, no Redis).
 
@@ -20,7 +20,7 @@ Open `http://<host>:8080`. The first visit takes you through a setup wizard to c
 the admin account. From there:
 
 1. **Instances** — add your qBittorrent instance (required) and, optionally, Plex,
-   Jellyfin, Tautulli, Jellystat, Jellyglance, Streamystats, and named storage paths.
+   Jellyfin, Tautulli, Jellystat, Jellyglance, and named storage paths.
    See [Setting up sources](#setting-up-sources) — **the name you give each instance
    becomes part of every field key that addresses it**, so pick short ones.
 2. **Settings** — set up **path mappings** if your qBittorrent and media-server
@@ -66,8 +66,9 @@ service) or a **storage path** (a directory whose disk usage is measured locally
 ### Instances
 
 **Instances → Add instance.** Each one needs a name, a source type, a base URL, and
-whatever credential that type uses. **Test connection** hits the real API and reports
-what it got back before you save.
+whatever credential that type uses. The form's hints and placeholders follow the source
+type you pick, so it tells you which fields that particular source actually uses.
+**Test connection** hits the real API and reports what it got back before you save.
 
 | Source type | What it contributes | Credential | Sent as |
 |---|---|---|---|
@@ -77,7 +78,6 @@ what it got back before you save.
 | `Tautulli` | Playback events — who watched what, when | API key | `?apikey=` query parameter |
 | `Jellystat` | Playback events | API key | `X-Api-Key` header |
 | `Jellyglance` | Playback events | API key | `X-Api-Key` header |
-| `Streamystats` | Playback events | PostgreSQL user + password | direct database connection, **not** HTTP — [see below](#streamystats-connects-to-postgresql) |
 
 Credentials are encrypted at rest with ASP.NET Core Data Protection (the key ring lives
 beside the database in `QBITFLOW_DATA_DIR`), are decrypted only in memory when an
@@ -123,70 +123,6 @@ starting point. If yours is shaped differently, override it per-instance in
 
 Only the keys you list are overridden; the rest keep their defaults. `filePath` is the
 one that matters most — it is what correlates a playback event back to a torrent.
-
-#### Streamystats connects to PostgreSQL
-
-Streamystats is the one source qbitflow does not reach over HTTP, because its REST API
-cannot serve this data:
-
-- The only endpoint holding playback history is `GET /api/export/<serverId>`, and it is
-  gated behind a browser session cookie (`requireAdmin` → `requireSession` → a JWT
-  cookie). Login is a Next.js server action, not a callable endpoint, so there is no way
-  for a server-to-server client to obtain that cookie.
-- Every route an API key *can* reach returns something else — item details, watchlists,
-  recommendations, the Jellyfin activity log.
-- Even the export payload has **no file path**. A Streamystats session records what was
-  played, not where the file is; the path lives on a separate `items` table.
-
-So the adapter connects to the Streamystats database and reads both at once:
-
-```sql
-SELECT s.item_name, s.user_name, s.start_time, s.percent_complete, i.path
-FROM sessions s
-LEFT JOIN items i ON i.id = s.item_id AND i.server_id = s.server_id
-```
-
-That join is the whole point — `items.path` comes straight from Jellyfin's `Path`, and
-without it a playback event could never be matched to a torrent.
-
-**Setting it up.** Add an instance of type `Streamystats` and fill in:
-
-| Field | Value |
-|---|---|
-| Base URL | the database host, e.g. `vectorchord:5432`. A bare host defaults to port 5432. |
-| Username / Password | the PostgreSQL credentials (`POSTGRES_USER` / `POSTGRES_PASSWORD`, both `postgres` by default) |
-| API key | leave blank — unused for this source |
-| Timeout | used as both the connect and command timeout |
-
-qbitflow must be able to reach that database. With both on the same Docker network the
-host is the compose service name (`vectorchord` in Streamystats' own `docker-compose.yml`);
-otherwise publish 5432 and point at the host address. You can paste the whole
-`DATABASE_URL` into Base URL if that's easier — the host, port and database name are read
-from it, but **any credentials in it are ignored**, because Base URL is stored in the
-clear while Username/Password are encrypted at rest.
-
-Optional **Extra config (JSON)**:
-
-```jsonc
-{
-  "database": "streamystats",  // default; change if you renamed it
-  "serverId": 1,               // omit to import every server in the database
-  "maxRows": 50000,            // most recent N sessions; default 50000
-  "sslMode": "VerifyFull"      // default "Prefer" — see below
-}
-```
-
-The connection is opened read-only (`default_transaction_read_only=on`), so PostgreSQL
-itself rejects a write rather than the adapter merely promising not to issue one.
-
-Note the instance's **Verify SSL certificate** checkbox does not apply here — it maps
-onto an HTTPS handler. The connection defaults to `SslMode=Prefer`, which uses TLS when
-the server offers it and stays plain when it doesn't (the normal case for a container
-Postgres). Set `"sslMode": "VerifyFull"` above to require a validated certificate.
-
-**Test connection** reports how many sessions it found *and* how many carry a file path.
-If the second number is 0, Streamystats hasn't finished its library sync and nothing will
-correlate yet.
 
 ### Storage paths
 
@@ -237,7 +173,7 @@ Every piece of source data is addressed the same way:
 
 | Segment | What it is |
 |---|---|
-| `<type>` | `qbittorrent`, `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance`, `streamystats`, or `storage` |
+| `<type>` | `qbittorrent`, `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance`, or `storage` |
 | `<instance>` | the name you gave that instance (or storage path), or `*` for any instance of that type |
 | `<field>` | one of the fields that type exposes — see [the catalog below](#field-catalog) |
 
@@ -397,13 +333,13 @@ Prefix each with `qbittorrent.<instance>.` or `qbittorrent.*.`.
 | `seen_complete` | DateTime | When a complete copy was last seen in the swarm. | `2026-07-27T06:44:34+00:00` |
 | `days_since_seen_complete` | Real | Days since a complete copy was last seen in the swarm. | `40.3` |
 
-#### `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance`, `streamystats`
+#### `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance`
 
-These six share one vocabulary, because they all describe the same two kinds of row: a
+These five share one vocabulary, because they all describe the same two kinds of row: a
 **library item** (your media server knows about this file) and a **playback event**
 (somebody watched it). Which of them a given source actually reports is up to that
-source — today Plex and Jellyfin report library items, and Tautulli, Jellystat,
-Jellyglance and Streamystats report playback events. A field a source never reports
+source — today Plex and Jellyfin report library items, and Tautulli, Jellystat
+and Jellyglance report playback events. A field a source never reports
 simply reads NULL rather than being an error.
 
 Per-row fields — usable at the top level (auto-correlated) or inside a related-source
@@ -475,7 +411,7 @@ compiles to:
 ```sql
 qbittorrent.*.active_days >= 14
   AND storage.downloads.used_percent < 90
-  AND streamystats.*.play_count = 0
+  AND tautulli.*.play_count = 0
 ```
 
 Specifics worth knowing:
@@ -587,7 +523,7 @@ Tools → Log) is the authoritative source for a rejected login.
 - **Qbitflow.Core** — domain models, the condition-tree and action types, and the
   interfaces adapters/executors implement.
 - **Qbitflow.Sources** — one adapter per data source (qBittorrent, Plex, Jellyfin,
-  Tautulli, Jellystat, Jellyglance, Streamystats) plus the storage-usage service, the
+  Tautulli, Jellystat, Jellyglance) plus the storage-usage service, the
   shared per-instance TTL cache, and the per-host concurrency limiter.
 - **Qbitflow.Snapshot** — the in-memory SQLite database rebuilt each rule run (see
   [The snapshot schema](#the-snapshot-schema)), the path normalizer, and the SQLite
@@ -615,7 +551,7 @@ The schema is addressed by source, which is what makes a field key resolve direc
 | Table | Rows | Notable columns |
 |---|---|---|
 | `qbittorrent` | one per torrent | `instance_id`, `instance`, `hash`, `path_key`, + every torrent field |
-| `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance`, `streamystats` | one per library item or playback event | `instance`, `kind` (`media` / `history`), `title`, `file_path`, `path_key`, `added_at`, `user_name`, `watched_at`, `percent_complete` |
+| `plex`, `jellyfin`, `tautulli`, `jellystat`, `jellyglance` | one per library item or playback event | `instance`, `kind` (`media` / `history`), `title`, `file_path`, `path_key`, `added_at`, `user_name`, `watched_at`, `percent_complete` |
 | `storage` | one per configured storage path | `instance`, `path`, `total_bytes`, `used_bytes`, `free_bytes`, `used_percent`, `folder_size_bytes` |
 | `qbittorrent_files` | one per file in a torrent | not populated yet; see `docs/IMPROVEMENTS.md` |
 
@@ -645,10 +581,6 @@ path mappings applied, and is what every cross-source correlation joins on.
   a single stable public API at the time of writing, so their default endpoint/field-mapping
   is a best-effort starting point, overridable per-instance via `ExtraConfigJson` without a
   code change.
-- **Streamystats is read from PostgreSQL, not HTTP** — forced, not chosen. Its API gates
-  playback history behind a browser session cookie, and the payload has no file path
-  anyway. The database has both, and `ISourceAdapter` never assumed HTTP, so this cost one
-  adapter and an `Npgsql` dependency rather than an architectural change.
 - **Source data is stored by source, not by shape.** Each source type gets its own
   snapshot table with an `instance` column, which is what makes
   `<type>.<instance>.<field>` resolve directly. The alternative — pooling every media
@@ -676,8 +608,7 @@ enum, so a new media/history source is a small, well-defined change:
    editor's source dropdown.
 2. Add an adapter in `src/Qbitflow.Sources/Adapters/`. A REST watch-history source can
    usually derive from `RestHistoryAdapterBase` and supply three defaults — see
-   `JellyglanceAdapter.cs`, which is ~35 lines. A source without a usable API can talk to
-   its database instead; `StreamystatsAdapter.cs` implements `ISourceAdapter` directly.
+   `JellyglanceAdapter.cs`, which is ~35 lines.
 3. Register it in `ServiceCollectionExtensions.cs` and give it a TTL in
    `SourceCacheOptions.cs`.
 4. Have it stamp `SourceType` on the records it emits — that is what routes each row to
@@ -711,8 +642,5 @@ instance._
   given rule's condition actually references, rather than refreshing every enabled
   instance on every run.
 - Confirm the Jellystat/Jellyglance default endpoint shapes against real deployments.
-- Verify the Streamystats database query against a live instance — it is written against
-  their published schema but has only been exercised by
-  `MediaAdapterLiveTests.Streamystats` (opt-in, see below).
 - A live Docker build/run verification (this environment has no Docker CLI available,
   so the Dockerfile has been reviewed but not build-tested).

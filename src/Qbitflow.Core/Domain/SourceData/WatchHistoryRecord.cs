@@ -1,6 +1,6 @@
 namespace Qbitflow.Core.Domain.SourceData;
 
-/// <summary>One playback/watch event as reported by Tautulli, Jellystat, Jellyglance, or Streamystats.</summary>
+/// <summary>One playback/watch event as reported by Tautulli, Jellystat, or Jellyglance.</summary>
 public class WatchHistoryRecord
 {
     public required int InstanceId { get; init; }

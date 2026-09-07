@@ -325,7 +325,7 @@ public class SnapshotDatabaseTests : IDisposable
 
         // A type with no rows still has an empty table rather than not existing.
         Assert.Empty(Rows("tautulli"));
-        Assert.Empty(Rows("streamystats"));
+        Assert.Empty(Rows("jellyglance"));
     }
 
     private List<(string Kind, string Title, string Instance)> Rows(string table)

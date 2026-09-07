@@ -11,8 +11,7 @@ public class SourceCacheOptions
         [SourceType.Jellyfin] = TimeSpan.FromMinutes(5),
         [SourceType.Tautulli] = TimeSpan.FromMinutes(5),
         [SourceType.Jellystat] = TimeSpan.FromMinutes(5),
-        [SourceType.Jellyglance] = TimeSpan.FromMinutes(5),
-        [SourceType.Streamystats] = TimeSpan.FromMinutes(5)
+        [SourceType.Jellyglance] = TimeSpan.FromMinutes(5)
     };
 
     public TimeSpan Default { get; init; } = TimeSpan.FromMinutes(5);
