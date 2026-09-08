@@ -18,4 +18,8 @@ public interface IQbtActionClient
     Task SetUploadLimitAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, long bytesPerSec, CancellationToken ct = default);
 
     Task SetDownloadLimitAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, long bytesPerSec, CancellationToken ct = default);
+
+    Task StartTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default);
+
+    Task StopTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default);
 }

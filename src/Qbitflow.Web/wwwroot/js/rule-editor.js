@@ -260,6 +260,8 @@ function actionBuilder(initialJson) {
             case 'move': return { type: 'move', DestinationPath: a.DestinationPath || '', WaitForCompletion: a.WaitForCompletion !== false };
             case 'set_upload_limit': return { type: 'set_upload_limit', LimitBytesPerSec: a.LimitBytesPerSec ?? 0 };
             case 'set_download_limit': return { type: 'set_download_limit', LimitBytesPerSec: a.LimitBytesPerSec ?? 0 };
+            case 'start': return { type: 'start' };
+            case 'stop': return { type: 'stop' };
             default: return { type: 'add_tags', _tags: '' };
         }
     }
@@ -281,6 +283,8 @@ function actionBuilder(initialJson) {
                     case 'move': return { type: 'move', DestinationPath: a.DestinationPath || '', WaitForCompletion: !!a.WaitForCompletion };
                     case 'set_upload_limit': return { type: 'set_upload_limit', LimitBytesPerSec: parseInt(a.LimitBytesPerSec, 10) || 0 };
                     case 'set_download_limit': return { type: 'set_download_limit', LimitBytesPerSec: parseInt(a.LimitBytesPerSec, 10) || 0 };
+                    case 'start': return { type: 'start' };
+                    case 'stop': return { type: 'stop' };
                     default: return null;
                 }
             }).filter(a => a !== null);
@@ -479,6 +483,7 @@ function fieldReferencePanel(catalog, udfHelpers) {
     }
 
     return {
+        tab: 'fields', // 'fields' | 'helpers'
         search: '',
         typeFilter: '',
         allRows: rows,

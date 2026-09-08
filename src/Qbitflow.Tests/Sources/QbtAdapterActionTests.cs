@@ -132,6 +132,44 @@ public class QbtAdapterActionTests
     }
 
     [Fact]
+    public async Task StartTorrentsAsync_PostsHashesToStartEndpoint()
+    {
+        string? capturedPath = null;
+        string? capturedBody = null;
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            capturedPath = req.RequestUri!.AbsolutePath;
+            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        await adapter.StartTorrentsAsync(Connection(), ["h1", "h2"]);
+
+        Assert.Equal("/api/v2/torrents/start", capturedPath);
+        Assert.Equal("hashes=h1%7Ch2", capturedBody);
+    }
+
+    [Fact]
+    public async Task StopTorrentsAsync_PostsHashesToStopEndpoint()
+    {
+        string? capturedPath = null;
+        string? capturedBody = null;
+        var handler = new FakeHttpMessageHandler(req =>
+        {
+            capturedPath = req.RequestUri!.AbsolutePath;
+            capturedBody = req.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+
+        var adapter = new QbtAdapter(new StubInstanceHttpClientFactory(handler));
+        await adapter.StopTorrentsAsync(Connection(), ["h1"]);
+
+        Assert.Equal("/api/v2/torrents/stop", capturedPath);
+        Assert.Equal("hashes=h1", capturedBody);
+    }
+
+    [Fact]
     public async Task GetCurrentStateAsync_ParsesTagsAndCategoryAndLimits()
     {
         var handler = new FakeHttpMessageHandler(req =>
@@ -141,8 +179,8 @@ public class QbtAdapterActionTests
 
             const string json = """
             [
-              {"hash":"h1","name":"A","category":"linux","tags":"done, verified","save_path":"/downloads/a","size":1,"progress":1,"up_limit":1000,"dl_limit":2000},
-              {"hash":"h2","name":"B","category":"","tags":"","save_path":"/downloads/b","size":1,"progress":1,"up_limit":0,"dl_limit":0}
+              {"hash":"h1","name":"A","category":"linux","tags":"done, verified","save_path":"/downloads/a","size":1,"progress":1,"up_limit":1000,"dl_limit":2000,"state":"stoppedUP"},
+              {"hash":"h2","name":"B","category":"","tags":"","save_path":"/downloads/b","size":1,"progress":1,"up_limit":0,"dl_limit":0,"state":"downloading"}
             ]
             """;
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
@@ -157,9 +195,11 @@ public class QbtAdapterActionTests
         Assert.Equal("linux", state["h1"].Category);
         Assert.Equal(1000, state["h1"].UploadLimitBytesPerSec);
         Assert.Equal(2000, state["h1"].DownloadLimitBytesPerSec);
+        Assert.Equal("stoppedUP", state["h1"].State);
 
         Assert.Null(state["h2"].Category);
         Assert.Empty(state["h2"].Tags);
+        Assert.Equal("downloading", state["h2"].State);
     }
 
     [Fact]

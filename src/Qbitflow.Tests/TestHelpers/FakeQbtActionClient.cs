@@ -40,7 +40,8 @@ internal class FakeQbtActionClient : IQbtActionClient
                         Category = s.Category,
                         SavePath = dest,
                         UploadLimitBytesPerSec = s.UploadLimitBytesPerSec,
-                        DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec
+                        DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec,
+                        State = s.State
                     };
                     State[h] = s;
                     _pendingMoves.Remove(h);
@@ -81,7 +82,7 @@ internal class FakeQbtActionClient : IQbtActionClient
         foreach (var h in hashes)
         {
             var s = State[h];
-            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec };
+            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec, State = s.State };
         }
         return Task.CompletedTask;
     }
@@ -103,7 +104,7 @@ internal class FakeQbtActionClient : IQbtActionClient
         foreach (var h in hashes)
         {
             var s = State[h];
-            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = bytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec };
+            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = bytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec, State = s.State };
         }
         return Task.CompletedTask;
     }
@@ -114,7 +115,29 @@ internal class FakeQbtActionClient : IQbtActionClient
         foreach (var h in hashes)
         {
             var s = State[h];
-            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = bytesPerSec };
+            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = bytesPerSec, State = s.State };
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task StartTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default)
+    {
+        Calls.Add($"Start:{string.Join(',', hashes)}");
+        foreach (var h in hashes)
+        {
+            var s = State[h];
+            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec, State = "downloading" };
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task StopTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default)
+    {
+        Calls.Add($"Stop:{string.Join(',', hashes)}");
+        foreach (var h in hashes)
+        {
+            var s = State[h];
+            State[h] = new QbtTorrentState { Hash = s.Hash, Tags = s.Tags, Category = s.Category, SavePath = s.SavePath, UploadLimitBytesPerSec = s.UploadLimitBytesPerSec, DownloadLimitBytesPerSec = s.DownloadLimitBytesPerSec, State = "stoppedDL" };
         }
         return Task.CompletedTask;
     }

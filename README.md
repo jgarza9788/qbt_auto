@@ -465,7 +465,8 @@ next scheduled run.
 ### Actions
 
 Add tag(s), remove tag(s), set category, move (with optional
-wait-for-completion verification), set upload limit, set download limit. Every action
+wait-for-completion verification), set upload limit, set download limit, start torrent,
+stop torrent. Every action
 applies to the torrents a rule matched, so a rule always resolves to a set of torrents
 no matter how many sources its condition consulted. All actions
 are idempotent — a torrent already in the desired state is skipped, not reapplied —

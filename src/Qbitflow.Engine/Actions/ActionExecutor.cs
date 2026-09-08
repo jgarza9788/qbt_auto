@@ -121,8 +121,18 @@ public class ActionExecutor(
         SetUploadLimitAction a => state.UploadLimitBytesPerSec == a.LimitBytesPerSec,
         SetDownloadLimitAction a => state.DownloadLimitBytesPerSec == a.LimitBytesPerSec,
         MoveAction a => NormalizePath(state.SavePath) == NormalizePath(a.DestinationPath),
+        StartTorrentAction => !IsStopped(state.State),
+        StopTorrentAction => IsStopped(state.State),
         _ => false
     };
+
+    // qBittorrent reports a stopped torrent as "stoppedUP"/"stoppedDL" (5.0+) or the older
+    // "pausedUP"/"pausedDL"; every other state ("downloading", "queuedUP", "checkingDL", ...)
+    // counts as running for start/stop idempotency.
+    private static bool IsStopped(string? state) =>
+        state is not null &&
+        (state.StartsWith("stopped", StringComparison.OrdinalIgnoreCase) ||
+         state.StartsWith("paused", StringComparison.OrdinalIgnoreCase));
 
     private async Task ApplyToClientAsync(SourceConnectionInfo connection, ActionDefinition action, List<string> hashes, CancellationToken ct)
     {
@@ -149,6 +159,12 @@ public class ActionExecutor(
                 {
                     await WaitForMoveAsync(connection, hashes, a.DestinationPath, ct);
                 }
+                break;
+            case StartTorrentAction:
+                await qbtClient.StartTorrentsAsync(connection, hashes, ct);
+                break;
+            case StopTorrentAction:
+                await qbtClient.StopTorrentsAsync(connection, hashes, ct);
                 break;
             default:
                 throw new NotSupportedException($"Unsupported action type '{action.GetType().Name}'.");

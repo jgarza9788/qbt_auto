@@ -180,6 +180,43 @@ public class ActionExecutorTests
     }
 
     [Fact]
+    public async Task Stop_SkipsAlreadyStoppedTorrents_StopsTheRunningOne()
+    {
+        var client = new FakeQbtActionClient();
+        client.State["running"] = new QbtTorrentState { Hash = "running", State = "downloading" };
+        client.State["stopped"] = new QbtTorrentState { Hash = "stopped", State = "stoppedDL" };
+        client.State["paused"] = new QbtTorrentState { Hash = "paused", State = "pausedUP" };
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "running"), new(1, "stopped"), new(1, "paused") };
+
+        var summary = await executor.ExecuteAsync([new StopTorrentAction()], new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(2, summary.SkippedCount);
+        var applied = Assert.Single(summary.Results, r => r.Outcome == ActionOutcome.Applied);
+        Assert.Equal("running", applied.TorrentHash);
+        Assert.Equal("Stop:running", Assert.Single(client.Calls));
+    }
+
+    [Fact]
+    public async Task Start_SkipsRunningTorrents_StartsTheStoppedOne()
+    {
+        var client = new FakeQbtActionClient();
+        client.State["running"] = new QbtTorrentState { Hash = "running", State = "uploading" };
+        client.State["stopped"] = new QbtTorrentState { Hash = "stopped", State = "stoppedUP" };
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "running"), new(1, "stopped") };
+
+        var summary = await executor.ExecuteAsync([new StartTorrentAction()], new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(1, summary.SkippedCount);
+        var applied = Assert.Single(summary.Results, r => r.Outcome == ActionOutcome.Applied);
+        Assert.Equal("stopped", applied.TorrentHash);
+        Assert.Equal("Start:stopped", Assert.Single(client.Calls));
+    }
+
+    [Fact]
     public async Task ActionsAreBatched_OneCallCoversAllHashesForAnInstance()
     {
         var client = new FakeQbtActionClient();

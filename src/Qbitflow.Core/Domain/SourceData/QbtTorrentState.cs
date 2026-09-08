@@ -9,4 +9,7 @@ public class QbtTorrentState
     public string? SavePath { get; init; }
     public long UploadLimitBytesPerSec { get; init; }
     public long DownloadLimitBytesPerSec { get; init; }
+
+    /// <summary>qBittorrent's raw <c>state</c> string (e.g. "downloading", "stoppedUP", "pausedDL"). Used for start/stop idempotency.</summary>
+    public string? State { get; init; }
 }

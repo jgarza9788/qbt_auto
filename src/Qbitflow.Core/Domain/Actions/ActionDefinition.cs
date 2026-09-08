@@ -15,6 +15,8 @@ namespace Qbitflow.Core.Domain.Actions;
 [JsonDerivedType(typeof(MoveAction), "move")]
 [JsonDerivedType(typeof(SetUploadLimitAction), "set_upload_limit")]
 [JsonDerivedType(typeof(SetDownloadLimitAction), "set_download_limit")]
+[JsonDerivedType(typeof(StartTorrentAction), "start")]
+[JsonDerivedType(typeof(StopTorrentAction), "stop")]
 public abstract class ActionDefinition
 {
 }

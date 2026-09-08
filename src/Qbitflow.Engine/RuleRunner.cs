@@ -224,6 +224,8 @@ public class RuleRunner(
         MoveAction a => $"Move to: {a.DestinationPath}",
         SetUploadLimitAction a => $"Set upload limit: {a.LimitBytesPerSec} B/s",
         SetDownloadLimitAction a => $"Set download limit: {a.LimitBytesPerSec} B/s",
+        StartTorrentAction => "Start torrent",
+        StopTorrentAction => "Stop torrent",
         _ => action.GetType().Name
     };
 

@@ -141,7 +141,8 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
             Category = string.IsNullOrEmpty(t.Category) ? null : t.Category,
             SavePath = t.SavePath,
             UploadLimitBytesPerSec = t.UpLimit,
-            DownloadLimitBytesPerSec = t.DlLimit
+            DownloadLimitBytesPerSec = t.DlLimit,
+            State = t.State
         });
     }
 
@@ -212,6 +213,20 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         {
             ["hashes"] = string.Join('|', hashes),
             ["limit"] = bytesPerSec.ToString()
+        }, ct);
+
+    // qBittorrent 5.0 renamed the /resume and /pause endpoints to /start and /stop; the rest
+    // of this adapter already assumes a modern (5.2+) WebUI, so the new names are used here.
+    public Task StartTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default) =>
+        PostFormAsync(connection, "/api/v2/torrents/start", new Dictionary<string, string>
+        {
+            ["hashes"] = string.Join('|', hashes)
+        }, ct);
+
+    public Task StopTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default) =>
+        PostFormAsync(connection, "/api/v2/torrents/stop", new Dictionary<string, string>
+        {
+            ["hashes"] = string.Join('|', hashes)
         }, ct);
 
     private async Task PostFormAsync(SourceConnectionInfo connection, string path, Dictionary<string, string> form, CancellationToken ct)
