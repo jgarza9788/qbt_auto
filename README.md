@@ -429,7 +429,25 @@ Specifics worth knowing:
   `tautulli.*.watched_at > '2026-01-01'`. There are many playback events per torrent, so
   it has no single value here; the error tells you which aggregates to use instead. If
   you want the row-level question, write your own `EXISTS (SELECT 1 FROM tautulli …)` —
-  the per-type tables are named exactly like the type segment.
+  the per-type tables are named exactly like the type segment, and each row correlates to
+  the torrent on `path_key`. So a dry run that fails with
+
+  > Advanced SQL is invalid: `'jellystat.*.days_since_watched'` is a per-row field and has
+  > no single value for a torrent. In SQL mode use an aggregate (play_count,
+  > distinct_viewers, first_watched_at, last_watched_at, days_since_last_watched,
+  > media_count), or write your own EXISTS over the jellystat table.
+
+  becomes, for "someone watched this torrent's content past 90% in the last 30 days":
+
+  ```sql
+  EXISTS (
+      SELECT 1 FROM jellystat j
+      WHERE j.path_key = t.path_key
+        AND j.kind = 'history'
+        AND j.percent_complete > 90
+        AND days_since(j.watched_at) < 30
+  )
+  ```
 - **`storage.*` is rejected** in SQL mode for the same reason — name a path, or write
   your own EXISTS over the `storage` table.
 - Keys inside string literals, quoted identifiers and comments are left alone, as are

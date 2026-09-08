@@ -26,7 +26,8 @@ public static class SourceFieldCatalog
     [
         ("days_since(timestamp)", "Days between now and an ISO-8601 timestamp column. NULL if the timestamp is NULL."),
         ("size_gb(bytes)", "Converts a byte count to gigabytes (decimal, 1e9). NULL if bytes is NULL."),
-        ("path_matches(a, b)", "True if two normalized path_keys are equal, or one contains the other.")
+        ("path_matches(a, b)", "True if two normalized path_keys are equal, or one contains the other."),
+        ("regexp(pattern, text)", "True if text matches the .NET regex pattern; also usable as 'text REGEXP pattern'. Case-insensitive unless the pattern has (?-i). NULL if either argument is NULL.")
     ];
 
     private static IReadOnlyDictionary<string, SourceTypeDefinition> BuildTypes()
