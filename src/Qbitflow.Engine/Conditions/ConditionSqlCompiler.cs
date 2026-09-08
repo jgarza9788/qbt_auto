@@ -345,6 +345,20 @@ public class ConditionSqlCompiler
                 return $"{expr} {op} {param}";
             }
 
+            case ComparisonOperator.Matches:
+            case ComparisonOperator.NotMatches:
+            {
+                if (valueType != FieldValueType.Text)
+                {
+                    throw new ConditionCompileException($"Field '{c.Field}': {c.Operator} only applies to text fields.");
+                }
+
+                var value = RequireScalarString(c);
+                var param = ctx.AddParameter(value);
+                var op = c.Operator == ComparisonOperator.Matches ? "REGEXP" : "NOT REGEXP";
+                return $"{expr} {op} {param}";
+            }
+
             default:
             {
                 var sqlOp = c.Operator switch

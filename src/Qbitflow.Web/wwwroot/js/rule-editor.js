@@ -8,7 +8,7 @@
 // here in exact sync with the C# types if either side changes.
 
 const OPERATORS_BY_TYPE = {
-    Text: ['Eq', 'Ne', 'Like', 'NotLike', 'Contains', 'In', 'NotIn', 'IsNull', 'IsNotNull'],
+    Text: ['Eq', 'Ne', 'Like', 'NotLike', 'Contains', 'Matches', 'NotMatches', 'In', 'NotIn', 'IsNull', 'IsNotNull'],
     Integer: ['Eq', 'Ne', 'Gt', 'Gte', 'Lt', 'Lte', 'In', 'NotIn', 'IsNull', 'IsNotNull'],
     Real: ['Eq', 'Ne', 'Gt', 'Gte', 'Lt', 'Lte', 'In', 'NotIn', 'IsNull', 'IsNotNull'],
     Boolean: ['Eq', 'Ne', 'IsNull', 'IsNotNull'],
@@ -18,6 +18,7 @@ const OPERATORS_BY_TYPE = {
 const OPERATOR_LABELS = {
     Eq: '=', Ne: '≠', Gt: '>', Gte: '≥', Lt: '<', Lte: '≤',
     Like: 'matches (LIKE)', NotLike: 'does not match (NOT LIKE)', Contains: 'contains',
+    Matches: 'matches regex', NotMatches: 'does not match regex',
     In: 'is one of', NotIn: 'is not one of', IsNull: 'is empty', IsNotNull: 'is not empty'
 };
 

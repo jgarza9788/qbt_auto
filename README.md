@@ -267,6 +267,11 @@ Two things to notice:
   a torrent nobody has *ever* watched does **not** match this rule. If you want those
   too, add an OR group with `tautulli.*.play_count = 0`.
 
+On text fields the operator list also has **matches regex** / **does not match regex**
+for cases `contains` and `matches (LIKE)` can't express — season/episode tags
+(`(?i)s\d{2}e\d{2}`), alternation (`1080p|2160p`), anchors. Patterns use .NET `Regex`
+syntax and match case-insensitively (`(?-i)` opts out); they compile to SQL `REGEXP`.
+
 Hit **Preview SQL** to see exactly what that compiles to, and **Dry run** to see what it
 matches against live data without changing anything. The dry run reports both the
 matched count and the total torrents in the snapshot — if the total is 0, the problem is
@@ -397,6 +402,7 @@ Callable from advanced SQL, and what the computed fields above use internally:
 | `days_since(timestamp)` | Days between now and an ISO-8601 timestamp. NULL if the timestamp is NULL. |
 | `size_gb(bytes)` | A byte count in gigabytes (decimal, 1e9). NULL if bytes is NULL. |
 | `path_matches(a, b)` | True if two normalized paths are equal, or one contains the other. |
+| `regexp(pattern, text)` | True if `text` matches the .NET regex `pattern`. Case-insensitive — put `(?-i)` in the pattern for a case-sensitive match. NULL if either argument is NULL. Also usable as the operator `text REGEXP pattern`. |
 
 ### Advanced SQL
 
@@ -428,6 +434,10 @@ Specifics worth knowing:
   your own EXISTS over the `storage` table.
 - Keys inside string literals, quoted identifiers and comments are left alone, as are
   your own aliases (`t.category`) and anything that isn't a known source type.
+- **`REGEXP` is available** — `t.name REGEXP '(?i)s\d{2}e\d{2}'` — using .NET `Regex`
+  syntax. It is case-insensitive by default (`(?-i)` in the pattern opts out) and each
+  value is matched under a 1-second timeout, so a catastrophic-backtracking pattern
+  fails the run rather than hanging it.
 
 It runs on a `PRAGMA query_only` connection, single-statement only, with a keyword
 denylist, a row cap and a timeout — and it is validated with `EXPLAIN QUERY PLAN`
@@ -577,6 +587,11 @@ path mappings applied, and is what every cross-source correlation joins on.
   both sides are normalized identically at ingest, and a UDF-based join forces SQLite
   into a row-by-row managed callback instead of an index seek. This one line is the
   difference between the benchmark passing in under a second and taking 34.
+- **`REGEXP` is a managed callback too.** Compiled patterns are cached per pattern
+  string, so the cost is the match itself, not recompilation — but SQLite still runs it
+  once per candidate row and cannot use an index for it. Reach for `contains` / `LIKE`
+  or `=` when they say what you mean, and keep regex patterns anchored; a 1-second
+  per-value match timeout stops a pathological pattern from hanging a run.
 - **Jellystat and Jellyglance adapters are config-driven, not hardcoded** — neither has
   a single stable public API at the time of writing, so their default endpoint/field-mapping
   is a best-effort starting point, overridable per-instance via `ExtraConfigJson` without a

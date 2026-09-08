@@ -69,6 +69,35 @@ public class AdvancedSqlExecutorTests : IDisposable
     }
 
     [Fact]
+    public void Validate_AcceptsRegexp_OnReadOnlyConnection()
+    {
+        // regexp is a per-connection UDF; advanced SQL must see it on the hardened connection.
+        var result = _executor.Validate(_db, "t.name REGEXP '(?i)s\\d{2}e\\d{2}'", AdvancedSqlMode.WhereClause);
+        Assert.True(result.IsValid, result.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithRegexp_ReturnsOnlyMatchingRows()
+    {
+        _db.Rebuild(new SnapshotInput
+        {
+            Torrents =
+            [
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "h1", Name = "Show.S01E02.1080p.mkv", Category = "tv", SizeBytes = 1, Progress = 1 },
+                new TorrentRecord { InstanceId = 1, InstanceName = "qbt", Hash = "h2", Name = "Movie.2026.1080p.mkv", Category = "movies", SizeBytes = 1, Progress = 1 }
+            ]
+        });
+
+        var validation = _executor.Validate(_db, "t.name REGEXP 's\\d{2}e\\d{2}'", AdvancedSqlMode.WhereClause);
+        Assert.True(validation.IsValid, validation.ErrorMessage);
+
+        var matches = await _executor.ExecuteAsync(_db, validation.CompiledSql!);
+
+        var match = Assert.Single(matches);
+        Assert.Equal("h1", match.TorrentHash);
+    }
+
+    [Fact]
     public void Validate_ExpandsStorageField_IntoScalarSubquery()
     {
         var result = _executor.Validate(_db, "storage.downloads.used_percent > 85", AdvancedSqlMode.WhereClause);

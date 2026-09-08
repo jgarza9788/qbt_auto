@@ -147,6 +147,31 @@ public class ConditionSqlCompilerTests
     }
 
     [Fact]
+    public void Compile_Matches_EmitsRegexpWithRawPattern()
+    {
+        var query = _compiler.Compile(Cmp("qbittorrent.*.name", ComparisonOperator.Matches, Json(@"(?i)s\d{2}e\d{2}")));
+
+        Assert.Equal(Select + "(t.name REGEXP $p0)", query.Sql);
+        Assert.Equal(@"(?i)s\d{2}e\d{2}", query.Parameters["$p0"]);
+    }
+
+    [Fact]
+    public void Compile_NotMatches_EmitsNotRegexp()
+    {
+        var query = _compiler.Compile(Cmp("qbittorrent.*.name", ComparisonOperator.NotMatches, Json("sample")));
+
+        Assert.Equal(Select + "(t.name NOT REGEXP $p0)", query.Sql);
+        Assert.Equal("sample", query.Parameters["$p0"]);
+    }
+
+    [Fact]
+    public void Compile_Matches_OnNonTextField_Throws()
+    {
+        Assert.Throws<ConditionCompileException>(() =>
+            _compiler.Compile(Cmp("qbittorrent.*.size_bytes", ComparisonOperator.Matches, Json("42"))));
+    }
+
+    [Fact]
     public void Compile_IsNull_NeedsNoParameter()
     {
         var query = _compiler.Compile(Cmp("qbittorrent.*.category", ComparisonOperator.IsNull));

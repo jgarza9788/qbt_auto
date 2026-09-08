@@ -238,6 +238,44 @@ public class SnapshotDatabaseTests : IDisposable
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    [InlineData("Show.S01E02.1080p.mkv", @"s\d{2}e\d{2}", 1)]      // case-insensitive by default
+    [InlineData("Show.S01E02.1080p.mkv", @"(?-i)s\d{2}e\d{2}", 0)] // inline flag forces case-sensitivity
+    [InlineData("Movie.2160p.mkv", "1080p|2160p", 1)]
+    [InlineData("Movie.720p.mkv", "1080p|2160p", 0)]
+    [InlineData("sample.mkv", "^sample", 1)]
+    [InlineData("the.sample.mkv", "^sample", 0)]
+    public void Udf_Regexp_MatchesCaseInsensitivelyByDefault(string input, string pattern, long expected)
+    {
+        using var cmd = _db.Connection.CreateCommand();
+        cmd.CommandText = "SELECT $input REGEXP $pattern";
+        cmd.Parameters.AddWithValue("$input", input);
+        cmd.Parameters.AddWithValue("$pattern", pattern);
+        var result = (long)cmd.ExecuteScalar()!;
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void Udf_Regexp_CallFormTakesPatternFirst()
+    {
+        using var cmd = _db.Connection.CreateCommand();
+        cmd.CommandText = "SELECT regexp('1080p|2160p', 'Movie.1080p.mkv')";
+        var result = (long)cmd.ExecuteScalar()!;
+
+        Assert.Equal(1L, result);
+    }
+
+    [Fact]
+    public void Udf_Regexp_ReturnsNull_ForNullInput()
+    {
+        using var cmd = _db.Connection.CreateCommand();
+        cmd.CommandText = "SELECT NULL REGEXP 'x'";
+        var result = cmd.ExecuteScalar();
+
+        Assert.Equal(DBNull.Value, result);
+    }
+
     [Fact]
     public void Schema_CreatesExpectedIndexes()
     {

@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using Qbitflow.Core.Domain;
 
@@ -26,6 +28,17 @@ internal static class SnapshotSchema
 
     /// <summary>Value of the <c>kind</c> column for a playback/watch event.</summary>
     public const string KindHistory = "history";
+
+    /// <summary>
+    /// Compiled regexes for the <c>regexp</c> UDF, keyed by pattern string. The per-row
+    /// callback runs once per torrent per rule, so recompiling would show up in the
+    /// 10k-torrent benchmark; pattern cardinality is bounded by the number of rules, so
+    /// this is never evicted.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Regex> RegexCache = new();
+
+    private static Regex CompileRegex(string pattern) => RegexCache.GetOrAdd(pattern, static p =>
+        new Regex(p, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)));
 
     private const string QbittorrentDdl = """
         CREATE TABLE qbittorrent (
@@ -181,6 +194,20 @@ internal static class SnapshotSchema
                 return 1;
             }
             return a.StartsWith(b, StringComparison.Ordinal) || b.StartsWith(a, StringComparison.Ordinal) ? 1 : 0;
+        });
+
+        // regexp(pattern, input) -> 1 if input matches the .NET regex pattern, 0 if not,
+        // NULL if either argument is NULL. SQLite calls this with the pattern first for both
+        // `input REGEXP pattern` operator syntax and direct calls. Matching is case-insensitive
+        // (an inline (?-i) in the pattern forces case-sensitivity). An invalid pattern or a
+        // match that exceeds the 1s timeout throws, surfacing as a SQLite error at rule-run time.
+        connection.CreateFunction<string?, string?, long?>("regexp", (pattern, input) =>
+        {
+            if (pattern is null || input is null)
+            {
+                return null;
+            }
+            return CompileRegex(pattern).IsMatch(input) ? 1L : 0L;
         });
     }
 }
