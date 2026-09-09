@@ -226,6 +226,8 @@ public class RuleRunner(
         SetDownloadLimitAction a => $"Set download limit: {a.LimitBytesPerSec} B/s",
         StartTorrentAction => "Start torrent",
         StopTorrentAction => "Stop torrent",
+        ExportTorrentAction a => $"Export .torrent to: {a.DestinationPath}"
+            + (a.Layout == TorrentExportLayout.PerCategory ? " (per-category folders)" : ""),
         _ => action.GetType().Name
     };
 

@@ -4,6 +4,10 @@ namespace Qbitflow.Core.Domain.SourceData;
 public class QbtTorrentState
 {
     public required string Hash { get; init; }
+
+    /// <summary>qBittorrent's torrent <c>name</c>. Used to name exported .torrent files.</summary>
+    public string? Name { get; init; }
+
     public HashSet<string> Tags { get; init; } = new(StringComparer.OrdinalIgnoreCase);
     public string? Category { get; init; }
     public string? SavePath { get; init; }

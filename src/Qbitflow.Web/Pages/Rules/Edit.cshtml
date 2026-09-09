@@ -338,6 +338,7 @@
                             <option value="move">Move</option>
                             <option value="set_upload_limit">Set upload limit</option>
                             <option value="set_download_limit">Set download limit</option>
+                            <option value="export_torrent">Export .torrent file</option>
                             <option value="start">Start torrent</option>
                             <option value="stop">Stop torrent</option>
                         </select>
@@ -358,6 +359,15 @@
                         </template>
                         <template x-if="action.type === 'set_upload_limit' || action.type === 'set_download_limit'">
                             <input type="number" class="form-control form-control-sm w-auto" placeholder="bytes/sec, 0=unlimited" x-model="action.LimitBytesPerSec" />
+                        </template>
+                        <template x-if="action.type === 'export_torrent'">
+                            <span class="d-flex flex-wrap gap-2 align-items-center">
+                                <input class="form-control form-control-sm" placeholder="/exports (a path inside the qbitflow container)" x-model="action.DestinationPath" />
+                                <select class="form-select form-select-sm w-auto" x-model="action.Layout">
+                                    <option value="Flat">flat folder</option>
+                                    <option value="PerCategory">subfolder per category</option>
+                                </select>
+                            </span>
                         </template>
 
                         <button type="button" class="btn btn-sm btn-outline-danger ms-auto" @@click="removeAction(idx)"><span class="qf-icon qf-icon--close" aria-hidden="true"></span><span class="visually-hidden">Remove</span></button>

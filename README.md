@@ -466,12 +466,14 @@ next scheduled run.
 
 Add tag(s), remove tag(s), set category, move (with optional
 wait-for-completion verification), set upload limit, set download limit, start torrent,
-stop torrent. Every action
-applies to the torrents a rule matched, so a rule always resolves to a set of torrents
-no matter how many sources its condition consulted. All actions
+stop torrent, and export the `.torrent` file (writes each matched torrent's `.torrent`
+into a directory on qbitflow's own filesystem — flat, or a subfolder per category —
+naming files `<torrent name> [<hash>].torrent` and skipping any already on disk). Every
+action applies to the torrents a rule matched, so a rule always resolves to a set of
+torrents no matter how many sources its condition consulted. All actions
 are idempotent — a torrent already in the desired state is skipped, not reapplied —
-and batched per instance (one API call covers every matched torrent on that
-instance, not one call per torrent).
+and batched per instance where the qBittorrent API allows it (one API call covers every
+matched torrent on that instance; export is necessarily one call per torrent).
 
 ### Scheduling
 

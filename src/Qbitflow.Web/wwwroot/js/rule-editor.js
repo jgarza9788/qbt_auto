@@ -260,6 +260,7 @@ function actionBuilder(initialJson) {
             case 'move': return { type: 'move', DestinationPath: a.DestinationPath || '', WaitForCompletion: a.WaitForCompletion !== false };
             case 'set_upload_limit': return { type: 'set_upload_limit', LimitBytesPerSec: a.LimitBytesPerSec ?? 0 };
             case 'set_download_limit': return { type: 'set_download_limit', LimitBytesPerSec: a.LimitBytesPerSec ?? 0 };
+            case 'export_torrent': return { type: 'export_torrent', DestinationPath: a.DestinationPath || '', Layout: a.Layout === 'PerCategory' ? 'PerCategory' : 'Flat' };
             case 'start': return { type: 'start' };
             case 'stop': return { type: 'stop' };
             default: return { type: 'add_tags', _tags: '' };
@@ -283,6 +284,7 @@ function actionBuilder(initialJson) {
                     case 'move': return { type: 'move', DestinationPath: a.DestinationPath || '', WaitForCompletion: !!a.WaitForCompletion };
                     case 'set_upload_limit': return { type: 'set_upload_limit', LimitBytesPerSec: parseInt(a.LimitBytesPerSec, 10) || 0 };
                     case 'set_download_limit': return { type: 'set_download_limit', LimitBytesPerSec: parseInt(a.LimitBytesPerSec, 10) || 0 };
+                    case 'export_torrent': return { type: 'export_torrent', DestinationPath: (a.DestinationPath || '').trim(), Layout: a.Layout === 'PerCategory' ? 'PerCategory' : 'Flat' };
                     case 'start': return { type: 'start' };
                     case 'stop': return { type: 'stop' };
                     default: return null;

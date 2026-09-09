@@ -22,4 +22,7 @@ public interface IQbtActionClient
     Task StartTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default);
 
     Task StopTorrentsAsync(SourceConnectionInfo connection, IReadOnlyList<string> hashes, CancellationToken ct = default);
+
+    /// <summary>Downloads one torrent's raw .torrent file (GET /api/v2/torrents/export). Per-hash -- qBittorrent has no batch export.</summary>
+    Task<byte[]> ExportTorrentAsync(SourceConnectionInfo connection, string hash, CancellationToken ct = default);
 }

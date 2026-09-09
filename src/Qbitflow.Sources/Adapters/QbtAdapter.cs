@@ -135,6 +135,7 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         return torrents.ToDictionary(t => t.Hash, t => new QbtTorrentState
         {
             Hash = t.Hash,
+            Name = t.Name,
             Tags = string.IsNullOrWhiteSpace(t.Tags)
                 ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 : t.Tags.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToHashSet(StringComparer.OrdinalIgnoreCase),
@@ -228,6 +229,28 @@ public class QbtAdapter(IInstanceHttpClientFactory httpClientFactory, ILogger<Qb
         {
             ["hashes"] = string.Join('|', hashes)
         }, ct);
+
+    public async Task<byte[]> ExportTorrentAsync(SourceConnectionInfo connection, string hash, CancellationToken ct = default)
+    {
+        using var client = httpClientFactory.CreateClient(connection);
+        using var cts = HttpTimeouts.Create(ct, connection.TimeoutSeconds);
+        var sid = await LoginAsync(client, connection, cts.Token);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{connection.BaseUrl.TrimEnd('/')}/api/v2/torrents/export?hash={Uri.EscapeDataString(hash)}");
+        if (sid is not null)
+        {
+            request.Headers.Add("Cookie", sid);
+        }
+
+        using var response = await client.SendAsync(request, cts.Token);
+        var hint = response.StatusCode == HttpStatusCode.NotFound
+            ? $" Torrent '{hash}' is not present on this instance."
+            : null;
+        await AdapterHttp.EnsureSuccessAsync(response, "qBittorrent (/api/v2/torrents/export)", cts.Token, hint);
+        return await response.Content.ReadAsByteArrayAsync(cts.Token);
+    }
 
     private async Task PostFormAsync(SourceConnectionInfo connection, string path, Dictionary<string, string> form, CancellationToken ct)
     {

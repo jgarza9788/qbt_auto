@@ -141,4 +141,14 @@ internal class FakeQbtActionClient : IQbtActionClient
         }
         return Task.CompletedTask;
     }
+
+    public Task<byte[]> ExportTorrentAsync(SourceConnectionInfo connection, string hash, CancellationToken ct = default)
+    {
+        Calls.Add($"Export:{hash}");
+        if (!State.ContainsKey(hash))
+        {
+            throw new InvalidOperationException($"Torrent '{hash}' not found.");
+        }
+        return Task.FromResult(System.Text.Encoding.UTF8.GetBytes($"d4:infod4:name{hash.Length}:{hash}ee"));
+    }
 }

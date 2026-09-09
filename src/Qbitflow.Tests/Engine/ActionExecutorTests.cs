@@ -234,4 +234,113 @@ public class ActionExecutorTests
         var call = Assert.Single(client.Calls);
         Assert.Equal("SetCategory:h1,h2,h3:batch", call);
     }
+
+    [Fact]
+    public async Task ExportTorrent_WritesOneFilePerTorrent_NamedFromTorrentNameAndHash()
+    {
+        using var dir = new TempDir();
+        var client = new FakeQbtActionClient();
+        client.State["hash-a"] = new QbtTorrentState { Hash = "hash-a", Name = "Ubuntu 24.04" };
+        client.State["hash-b"] = new QbtTorrentState { Hash = "hash-b", Name = "Some/Bad:Name" };
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "hash-a"), new(1, "hash-b") };
+        var actions = new List<ActionDefinition> { new ExportTorrentAction { DestinationPath = dir.Path } };
+
+        var summary = await executor.ExecuteAsync(actions, new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(2, summary.AppliedCount);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "Ubuntu 24.04 [hash-a].torrent")));
+        Assert.True(File.Exists(Path.Combine(dir.Path, "Some_Bad_Name [hash-b].torrent")));
+    }
+
+    [Fact]
+    public async Task ExportTorrent_SkipsTorrentsAlreadyOnDisk()
+    {
+        using var dir = new TempDir();
+        var client = new FakeQbtActionClient();
+        client.State["h1"] = new QbtTorrentState { Hash = "h1", Name = "already here" };
+        File.WriteAllText(Path.Combine(dir.Path, "whatever the old name was [h1].torrent"), "stale");
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "h1") };
+        var actions = new List<ActionDefinition> { new ExportTorrentAction { DestinationPath = dir.Path } };
+
+        var summary = await executor.ExecuteAsync(actions, new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(1, summary.SkippedCount);
+        Assert.Empty(client.Calls);
+    }
+
+    [Fact]
+    public async Task ExportTorrent_PerCategoryLayout_WritesIntoCategorySubfolder()
+    {
+        using var dir = new TempDir();
+        var client = new FakeQbtActionClient();
+        client.State["h1"] = new QbtTorrentState { Hash = "h1", Name = "film", Category = "movies" };
+        client.State["h2"] = new QbtTorrentState { Hash = "h2", Name = "loose" };
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "h1"), new(1, "h2") };
+        var actions = new List<ActionDefinition>
+        {
+            new ExportTorrentAction { DestinationPath = dir.Path, Layout = TorrentExportLayout.PerCategory }
+        };
+
+        var summary = await executor.ExecuteAsync(actions, new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(2, summary.AppliedCount);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "movies", "film [h1].torrent")));
+        Assert.True(File.Exists(Path.Combine(dir.Path, "loose [h2].torrent")));
+    }
+
+    [Fact]
+    public async Task ExportTorrent_DryRun_WritesNothing()
+    {
+        using var dir = new TempDir();
+        var client = new FakeQbtActionClient();
+        client.State["h1"] = new QbtTorrentState { Hash = "h1", Name = "n" };
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "h1") };
+        var actions = new List<ActionDefinition> { new ExportTorrentAction { DestinationPath = dir.Path } };
+
+        var summary = await executor.ExecuteAsync(actions, new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: true);
+
+        Assert.Equal(1, summary.DryRunCount);
+        Assert.Empty(client.Calls);
+        Assert.Empty(Directory.GetFileSystemEntries(dir.Path));
+    }
+
+    [Fact]
+    public async Task ExportTorrent_FailureForOneTorrent_DoesNotStopTheOthers()
+    {
+        using var dir = new TempDir();
+        var client = new FakeQbtActionClient();
+        client.State["good"] = new QbtTorrentState { Hash = "good", Name = "ok" };
+        // "missing" is matched but absent from the fake client -> ExportTorrentAsync throws for it.
+
+        var executor = new ActionExecutor(client, NullLogger<ActionExecutor>.Instance);
+        var matches = new List<MatchedTorrent> { new(1, "good"), new(1, "missing") };
+        var actions = new List<ActionDefinition> { new ExportTorrentAction { DestinationPath = dir.Path } };
+
+        var summary = await executor.ExecuteAsync(actions, new Dictionary<int, SourceConnectionInfo> { [1] = Connection() }, matches, dryRun: false);
+
+        Assert.Equal(1, summary.AppliedCount);
+        Assert.Equal(1, summary.FailedCount);
+        Assert.True(File.Exists(Path.Combine(dir.Path, "ok [good].torrent")));
+    }
+
+    private sealed class TempDir : IDisposable
+    {
+        public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "qbf-export-" + Guid.NewGuid().ToString("N"));
+
+        public TempDir() => Directory.CreateDirectory(Path);
+
+        public void Dispose()
+        {
+            try { Directory.Delete(Path, recursive: true); }
+            catch { /* best effort */ }
+        }
+    }
 }

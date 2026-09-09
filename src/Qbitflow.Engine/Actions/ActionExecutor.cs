@@ -99,6 +99,14 @@ public class ActionExecutor(
             return results;
         }
 
+        // Export writes a file per torrent and isolates failures per hash, so it can't go
+        // through the single batched ApplyToClientAsync call the other actions share.
+        if (action is ExportTorrentAction exportAction)
+        {
+            results.AddRange(await ExportTorrentsAsync(connection, exportAction, toApply, currentState, ct));
+            return results;
+        }
+
         try
         {
             await ApplyToClientAsync(connection, action, toApply, ct);
@@ -123,6 +131,7 @@ public class ActionExecutor(
         MoveAction a => NormalizePath(state.SavePath) == NormalizePath(a.DestinationPath),
         StartTorrentAction => !IsStopped(state.State),
         StopTorrentAction => IsStopped(state.State),
+        ExportTorrentAction a => ExportAlreadyOnDisk(a, state),
         _ => false
     };
 
@@ -189,6 +198,78 @@ public class ActionExecutor(
     // .Trim() keeps the idempotency check and the post-move poll agreeing with the adapter,
     // which trims the destination before handing it to qBittorrent.
     private static string NormalizePath(string? path) => (path ?? string.Empty).Trim().Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+
+    private async Task<List<ActionResult>> ExportTorrentsAsync(
+        SourceConnectionInfo connection,
+        ExportTorrentAction action,
+        List<string> hashes,
+        IReadOnlyDictionary<string, QbtTorrentState> currentState,
+        CancellationToken ct)
+    {
+        var results = new List<ActionResult>();
+
+        foreach (var hash in hashes)
+        {
+            currentState.TryGetValue(hash, out var state);
+            try
+            {
+                var bytes = await qbtClient.ExportTorrentAsync(connection, hash, ct);
+                var directory = ExportDirectory(action, state);
+                Directory.CreateDirectory(directory);
+                var path = Path.Combine(directory, ExportFileName(hash, state?.Name));
+                await File.WriteAllBytesAsync(path, bytes, ct);
+                results.Add(new ActionResult { InstanceId = connection.InstanceId, TorrentHash = hash, ActionType = nameof(ExportTorrentAction), Outcome = ActionOutcome.Applied });
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Exporting torrent {Hash} to {Destination} failed", hash, action.DestinationPath);
+                results.Add(new ActionResult { InstanceId = connection.InstanceId, TorrentHash = hash, ActionType = nameof(ExportTorrentAction), Outcome = ActionOutcome.Failed, Error = ex.Message });
+            }
+        }
+
+        return results;
+    }
+
+    private static bool ExportAlreadyOnDisk(ExportTorrentAction action, QbtTorrentState state)
+    {
+        var directory = ExportDirectory(action, state);
+        if (!Directory.Exists(directory))
+        {
+            return false;
+        }
+
+        // The hash suffix is the identity, not the (mutable) torrent name. "[" and "]" are
+        // literal in a search pattern (.NET only expands "*" and "?"), and the infohash is hex.
+        return Directory.EnumerateFiles(directory, $"*[{state.Hash}].torrent").Any()
+            || File.Exists(Path.Combine(directory, $"{state.Hash}.torrent"));
+    }
+
+    private static string ExportDirectory(ExportTorrentAction action, QbtTorrentState? state)
+    {
+        var root = action.DestinationPath.Trim();
+        return action.Layout == TorrentExportLayout.PerCategory && !string.IsNullOrWhiteSpace(state?.Category)
+            ? Path.Combine(root, SanitizeSegment(state.Category!))
+            : root;
+    }
+
+    private static string ExportFileName(string hash, string? torrentName) =>
+        string.IsNullOrWhiteSpace(torrentName)
+            ? $"{hash}.torrent"
+            : $"{SanitizeSegment(torrentName)} [{hash}].torrent";
+
+    // A fixed set the export files can be written on Linux and still opened on Windows,
+    // rather than Path.GetInvalidFileNameChars() which is much smaller on Linux. Control
+    // chars and the Windows-reserved punctuation become "_"; length is capped so
+    // "<name> [<40-char hash>].torrent" stays well inside the filesystem's limit.
+    private static readonly char[] ReservedNameChars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+    private static string SanitizeSegment(string value)
+    {
+        var cleaned = new string(value
+            .Select(c => c < ' ' || ReservedNameChars.Contains(c) ? '_' : c)
+            .ToArray()).Trim();
+        return cleaned.Length > 150 ? cleaned[..150].TrimEnd() : cleaned;
+    }
 
     private static ActionResult Failure(MatchedTorrent m, ActionDefinition action, string error) => new()
     {
